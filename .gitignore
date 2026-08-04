@@ -1,0 +1,22 @@
+# TRACE runtime outputs
+.trace/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/
+*.swp
+
+# Logs & temp
+*.log
+tmp/
+temp/
+
+# Secrets
+.env
+.env.*
+*.key
+*.pem
