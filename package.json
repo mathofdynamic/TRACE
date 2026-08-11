@@ -1,0 +1,43 @@
+{
+  "name": "trace",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Repository-native change intelligence and engineering governance.",
+  "packageManager": "pnpm@11.16.0",
+  "engines": {
+    "node": ">=22.14.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "lint": "eslint .",
+    "format": "prettier --write \"AGENTS.md\" \"CONTRIBUTING.md\" \"IMPLEMENTATION-LOG.md\" \"SECURITY.md\" \"package.json\" \"pnpm-workspace.yaml\" \"turbo.json\" \"tsconfig.base.json\" \"*.mjs\" \"*.ts\" \".github/**/*.{md,yml}\" \"apps/**/*.{ts,tsx,css,json}\" \"packages/**/*.{ts,tsx,css,json}\"",
+    "format:check": "prettier --check \"AGENTS.md\" \"CONTRIBUTING.md\" \"IMPLEMENTATION-LOG.md\" \"SECURITY.md\" \"package.json\" \"pnpm-workspace.yaml\" \"turbo.json\" \"tsconfig.base.json\" \"*.mjs\" \"*.ts\" \".github/**/*.{md,yml}\" \"apps/**/*.{ts,tsx,css,json}\" \"packages/**/*.{ts,tsx,css,json}\"",
+    "test": "turbo run test:unit",
+    "test:unit": "turbo run test:unit",
+    "test:e2e": "playwright test",
+    "db:generate": "pnpm --filter @trace/db db:generate",
+    "db:migrate": "pnpm --filter @trace/db db:migrate",
+    "db:studio": "pnpm --filter @trace/db db:studio",
+    "worker:dev": "pnpm --filter @trace/worker dev",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:unit && pnpm build",
+    "cf:build": "tsx scripts/cloudflare-build.ts",
+    "cf:preview": "pnpm --filter @trace/web cf:preview",
+    "cf:deploy:test": "tsx scripts/cloudflare-build.ts --deploy"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@playwright/test": "1.55.0",
+    "@types/node": "22.15.30",
+    "@typescript-eslint/eslint-plugin": "8.39.0",
+    "@typescript-eslint/parser": "8.39.0",
+    "eslint": "9.33.0",
+    "prettier": "3.6.2",
+    "tsx": "4.20.3",
+    "turbo": "2.5.6",
+    "typescript": "5.9.2",
+    "wrangler": "latest",
+    "vitest": "3.2.4"
+  }
+}

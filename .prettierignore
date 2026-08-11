@@ -1,0 +1,16 @@
+# Historical/reference documents are intentionally preserved verbatim.
+README.md
+Design-system/
+DOC/project-overview.md
+DOC/technical-overview.md
+Implementation-Prompts/
+Researchs/
+
+# Generated and dependency output.
+node_modules/
+dist/
+.next/
+coverage/
+playwright-report/
+test-results/
+pnpm-lock.yaml

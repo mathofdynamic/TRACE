@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trace.example.invalid/spec/v0.1/artifact-metadata.schema.json",
+  "title": "TRACE artifact metadata v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "artifact_type", "repository", "created_at", "updated_at", "generator", "execution_origin", "review_status", "sensitivity", "sync_policy"],
+  "properties": {
+    "schema_version": { "const": "0.1" },
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,80}$" },
+    "artifact_type": { "type": "string" },
+    "repository": { "type": "object", "required": ["provider", "owner", "name"], "properties": { "provider": { "type": "string" }, "owner": { "type": "string" }, "name": { "type": "string" }, "default_branch": { "type": "string" } }, "additionalProperties": false },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "generator": { "type": "string" },
+    "execution_origin": { "enum": ["cloud", "local", "ci", "third_party"] },
+    "review_status": { "enum": ["draft", "pending", "accepted", "rejected", "superseded"] },
+    "sensitivity": { "enum": ["public", "internal", "confidential", "restricted"] },
+    "sync_policy": { "enum": ["local_only", "allowlisted", "dashboard_overlay", "repository_authoritative"] }
+  }
+}

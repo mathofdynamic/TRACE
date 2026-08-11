@@ -1,6 +1,10 @@
 # TRACE runtime outputs
 .trace/
 
+# Local analysis workspaces
+.trace-workspaces/
+.trace-cache/
+
 # OS
 .DS_Store
 Thumbs.db
@@ -14,6 +18,27 @@ Thumbs.db
 *.log
 tmp/
 temp/
+coverage/
+playwright-report/
+test-results/
+dist/
+build/
+.turbo/
+.next/
+.open-next/
+.wrangler/
+cloudflare-env.d.ts
+worker-configuration.d.ts
+*.tsbuildinfo
+
+# Package-manager caches
+.pnpm-store/
+node_modules/
+
+# Local database data
+postgres-data/
+*.sqlite
+*.sqlite3
 
 # Secrets
 .env

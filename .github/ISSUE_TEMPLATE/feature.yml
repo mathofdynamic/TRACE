@@ -1,0 +1,39 @@
+name: Feature request
+description: Propose a product capability or behavior change.
+title: '[Feature] '
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user or engineering problem exists today?
+    validations:
+      required: true
+  - type: input
+    id: target-user
+    attributes:
+      label: Target user
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Link research, incidents, usage data, or concrete examples.
+    validations:
+      required: true
+  - type: textarea
+    id: non-goals
+    attributes:
+      label: Non-goals
+      description: What should this proposal explicitly not include?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Expected product outcome
+    validations:
+      required: true

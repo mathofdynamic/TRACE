@@ -1,0 +1,32 @@
+name: Research request
+description: Request evidence-backed product, technical, or market research.
+title: '[Research] '
+labels:
+  - research
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Research question
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and decision
+      description: Explain what decision this research should inform and what is out of scope.
+    validations:
+      required: true
+  - type: textarea
+    id: sources
+    attributes:
+      label: Known sources
+      description: Include links or datasets. Separate verified facts from hypotheses.
+    validations:
+      required: true
+  - type: textarea
+    id: deliverable
+    attributes:
+      label: Desired deliverable
+    validations:
+      required: true

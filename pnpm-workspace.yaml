@@ -1,0 +1,10 @@
+packages:
+  - apps/*
+  - packages/*
+  - tooling/*
+allowBuilds:
+  esbuild: true
+  sharp: true
+  workerd: true
+patchedDependencies:
+  pg-cloudflare@1.4.0: patches/pg-cloudflare@1.4.0.patch

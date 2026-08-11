@@ -1,0 +1,53 @@
+name: TRACE CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17.5
+        env:
+          POSTGRES_USER: trace
+          POSTGRES_PASSWORD: change-me
+          POSTGRES_DB: trace_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U trace -d trace_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://trace:change-me@127.0.0.1:5432/trace_test
+      TRACE_AUTH_SECRET: ci-only-secret-change-me-which-is-at-least-32-characters
+      TRACE_PUBLIC_URL: http://127.0.0.1:3001
+      GITHUB_OAUTH_CLIENT_ID: ci-placeholder
+      GITHUB_OAUTH_CLIENT_SECRET: ci-placeholder
+      GITHUB_APP_ID: '1'
+      GITHUB_APP_CLIENT_ID: ci-app-client-placeholder
+      GITHUB_APP_CLIENT_SECRET: ci-app-secret-placeholder
+      GITHUB_APP_PRIVATE_KEY: ci-placeholder
+      GITHUB_WEBHOOK_SECRET: ci-placeholder
+      GITHUB_APP_SLUG: ci-trace-app
+      GITHUB_APP_CALLBACK_URL: http://127.0.0.1:3001/api/github/setup
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.16.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:migrate
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test:unit
+      - run: pnpm build
+      - run: pnpm test:e2e

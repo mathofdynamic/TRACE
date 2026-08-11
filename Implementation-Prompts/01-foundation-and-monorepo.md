@@ -30,7 +30,7 @@ Use:
 - Tailwind CSS consuming shared design tokens;
 - Vitest;
 - Playwright;
-- Docker Compose for PostgreSQL and any strictly required local services.
+- Native PostgreSQL for the required Windows local runtime; Docker Compose may be added as an optional convenience but must not be required.
 
 Do not add Redis, a graph database, a vector database, Kafka, or Kubernetes.
 
@@ -186,15 +186,19 @@ Do not log request bodies, OAuth tokens, cookies, repository source, or model pr
 
 ### 9. Local infrastructure
 
-Create `docker-compose.yml` for PostgreSQL.
+Use native PostgreSQL on Windows. Docker is not a required prerequisite for this repository.
 
-Requirements:
+Provide:
 
-- persistent local volume;
-- health check;
+- `scripts/postgres/install.ps1` to install PostgreSQL through `winget`;
+- `scripts/postgres/bootstrap-local.ps1` to initialize an unprivileged project-local cluster when the Windows service cannot be started by the current user;
+- `scripts/postgres/health.ps1` for explicit readiness checks;
+- `scripts/postgres/migrate.ps1` and `scripts/postgres/reset.ps1` for database lifecycle operations;
+- persistent local data under ignored `.trace-cache/postgres-data`;
 - non-production credentials clearly marked for local use;
-- no port collisions hidden through random mappings;
-- documentation for starting and resetting local data.
+- explicit ports and troubleshooting documentation; no random port mappings.
+
+The standard local example uses `127.0.0.1:3002` to avoid common collisions with web development ports. A privileged PostgreSQL Windows service remains supported when the owner chooses to start it.
 
 ### 10. Testing foundation
 
@@ -245,6 +249,8 @@ Run and record:
 
 ```bash
 pnpm install
+scripts/postgres/bootstrap-local.ps1
+scripts/postgres/health.ps1
 pnpm db:migrate
 pnpm typecheck
 pnpm lint

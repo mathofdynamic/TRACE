@@ -216,21 +216,16 @@ A light mode should use warm neutral whites, thin gray borders, black text, and 
 
 ## 5.1 Typeface direction
 
-Use a high-quality neutral system sans-serif stack or a properly licensed equivalent.
-
-Preferred behavior:
+Use Kunst Grotesk throughout the interface. Load the webfont from the public
+project-provided WOFF2 URLs:
 
 ```text
--apple-system
-BlinkMacSystemFont
-Segoe UI
-system-ui
-sans-serif
+Kunst Grotesk Regular (400)
+Kunst Grotesk Medium (500)
 ```
 
-Do not bundle or imitate unlicensed Apple typefaces.
-
-A neutral monospace font may be used for:
+Do not introduce system-font fallbacks or additional bundled typefaces. Kunst
+Grotesk is also used for:
 
 - commit hashes;
 - file paths;
@@ -238,7 +233,7 @@ A neutral monospace font may be used for:
 - code symbols;
 - structured values.
 
-Monospace must not dominate the interface.
+These technical values must not dominate the interface.
 
 ## 5.2 Scale
 

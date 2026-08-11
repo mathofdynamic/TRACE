@@ -1,0 +1,22 @@
+[Unit]
+Description=TRACE Next.js web
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=trace
+Group=trace
+WorkingDirectory=/srv/trace/current
+EnvironmentFile=/etc/trace/production.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node apps/web/node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3000
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/trace/current/.next /var/lib/trace
+
+[Install]
+WantedBy=multi-user.target

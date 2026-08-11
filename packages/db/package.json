@@ -1,0 +1,34 @@
+{
+  "name": "@trace/db",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:unit": "vitest run --config vitest.config.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "@trace/env": "workspace:*",
+    "drizzle-orm": "0.44.5",
+    "pg": "8.16.3",
+    "pg-cloudflare": "1.4.0"
+  },
+  "devDependencies": {
+    "@types/pg": "8.15.5",
+    "drizzle-kit": "0.31.4",
+    "typescript": "5.9.2",
+    "vitest": "3.2.4"
+  }
+}

@@ -1,0 +1,41 @@
+export const traceTokens = {
+  color: {
+    canvas: '#080809',
+    sidebar: '#0b0b0c',
+    topbar: '#0a0a0b',
+    surface1: '#111112',
+    surface2: '#151516',
+    surface3: '#1a1a1c',
+    control: '#1e1e20',
+    hover: '#202023',
+    selected: '#242428',
+    textPrimary: '#f5f5f7',
+    textSecondary: '#b7b7bc',
+    textTertiary: '#8b8b92',
+    textMuted: '#66666d',
+    textDisabled: '#4b4b51',
+    blueBright: '#1688ff',
+    bluePrimary: '#087cf0',
+    blueDeep: '#0068d7',
+    success: '#32d17d',
+    warning: '#f5b942',
+    danger: '#ff5a5f',
+    info: '#58a6ff',
+  },
+  spacing: [2, 4, 6, 8, 12, 16, 20, 24, 32, 40, 48, 64, 80],
+  radius: {
+    small: 6,
+    control: 8,
+    card: 10,
+    panel: 12,
+    modal: 14,
+  },
+  motion: {
+    micro: 110,
+    control: 150,
+    panel: 200,
+    page: 240,
+  },
+} as const;
+
+export type TraceTokens = typeof traceTokens;

@@ -138,9 +138,9 @@ TRACE/
 
 ## Current status
 
-TRACE is in product-definition, architecture, design-system, and implementation-planning stage. It is not yet a functioning product.
+TRACE is in active implementation. The current web surface is a foundation shell and does not claim product functionality that has not been implemented.
 
-The next implementation step is Phase 00 in [`Implementation-Prompts/00-project-rules-and-workflow.md`](Implementation-Prompts/00-project-rules-and-workflow.md).
+Phases 01-04 establish the TypeScript monorepo, native PostgreSQL local runtime, authentication boundary, design system, public site, onboarding, and dashboard shell. Phase 05 is the current GitHub App connection phase. The Cloudflare test deployment is live at `https://trace-code.pages.dev`; GitHub App installation and repository synchronization still require owner configuration. Docker is not required for local development.
 
 ---
 

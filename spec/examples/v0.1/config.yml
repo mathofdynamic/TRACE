@@ -1,0 +1,14 @@
+schema_version: '0.1'
+execution_mode: local
+repository:
+  provider: github
+  owner: example
+  name: atlas-ts
+workflows:
+  daily_reports: true
+  weekly_reports: true
+model_provider: openai
+model_credentials_env: OPENAI_API_KEY
+git_write_policy: disabled
+comment_publication: disabled
+sync_policy: local_only

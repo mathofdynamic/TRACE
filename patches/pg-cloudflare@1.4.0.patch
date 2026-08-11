@@ -1,0 +1,29 @@
+diff --git a/dist/index.js b/dist/index.js
+index 7f0933ec1b3a5f3ce4a0d7d5b8fa00f9a1fe553e..e0120c2b09f26cc38a6e51e40ee16da71bc4f3b6 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -35,7 +35,7 @@ class CloudflareSocket extends events_1.EventEmitter {
+             if (connectListener)
+                 this.once('connect', connectListener);
+             const options = this.ssl ? { secureTransport: 'starttls' } : {};
+-            const mod = await import('cloudflare:sockets');
++            const mod = await import(/* webpackIgnore: true */ ["cloudflare", "sockets"].join(":"));
+             const connect = mod.connect;
+             this._cfSocket = connect(`${host}:${port}`, options);
+             this._cfWriter = this._cfSocket.writable.getWriter();
+diff --git a/src/index.ts b/src/index.ts
+index 9b1e517ba3881462144cd1f9ecb825b957094327..c9dbfb18f3b14311abf389cf0ef4028582302c56 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -37,7 +37,10 @@ export class CloudflareSocket extends EventEmitter {
+       if (connectListener) this.once('connect', connectListener)
+ 
+       const options: SocketOptions = this.ssl ? { secureTransport: 'starttls' } : {}
+-      const mod = await import('cloudflare:sockets')
++      const mod = await import(
++        /* webpackIgnore: true */
++        ['cloudflare', 'sockets'].join(':'),
++      )
+       const connect = mod.connect
+       this._cfSocket = connect(`${host}:${port}`, options)
+       this._cfWriter = this._cfSocket.writable.getWriter()

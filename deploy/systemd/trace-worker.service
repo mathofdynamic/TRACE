@@ -1,0 +1,22 @@
+[Unit]
+Description=TRACE pg-boss worker
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=trace
+Group=trace
+WorkingDirectory=/srv/trace/current
+EnvironmentFile=/etc/trace/production.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node apps/worker/dist/index.js
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/trace
+
+[Install]
+WantedBy=multi-user.target

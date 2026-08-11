@@ -1,0 +1,46 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "trace-test",
+  "account_id": "c5d6cf110905c91fc3eed1abaf8236a2",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-08-08",
+  "compatibility_flags": ["nodejs_compat"],
+  "preview_urls": true,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+  },
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS",
+  },
+  "vars": {
+    "TRACE_DEPLOYMENT_ENV": "test",
+    "NEXT_PRIVATE_MINIMAL_MODE": "1",
+    "TRACE_FEATURE_SEMANTIC_PR_FINDINGS": "false",
+    "TRACE_FEATURE_SEMANTIC_CONFLICTS": "false",
+    "TRACE_FEATURE_GITHUB_COMMENTS": "false",
+    "TRACE_FEATURE_HYBRID_SYNC": "false",
+  },
+  "env": {
+    "staging": {
+      "name": "trace-test-staging",
+      "workers_dev": true,
+      "vars": {
+        "TRACE_DEPLOYMENT_ENV": "staging",
+        "NEXT_PRIVATE_MINIMAL_MODE": "1",
+        "TRACE_PUBLIC_URL": "https://trace-code.pages.dev",
+        "TRACE_FEATURE_SEMANTIC_PR_FINDINGS": "false",
+        "TRACE_FEATURE_SEMANTIC_CONFLICTS": "false",
+        "TRACE_FEATURE_GITHUB_COMMENTS": "false",
+        "TRACE_FEATURE_HYBRID_SYNC": "false",
+      },
+      "hyperdrive": [
+        {
+          "binding": "HYPERDRIVE",
+          "id": "2d1e4821c1484d6299d88e29f2884310",
+        },
+      ],
+    },
+  },
+}

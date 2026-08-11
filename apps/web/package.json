@@ -1,0 +1,35 @@
+{
+  "name": "@trace/web",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test:unit": "vitest run --config vitest.config.ts",
+    "cf:build": "opennextjs-cloudflare build",
+    "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "cf:deploy:test": "opennextjs-cloudflare build && opennextjs-cloudflare deploy --env staging",
+    "cf:typegen": "wrangler types --config wrangler.jsonc --env staging"
+  },
+  "dependencies": {
+    "@trace/auth": "workspace:*",
+    "@trace/db": "workspace:*",
+    "@trace/env": "workspace:*",
+    "@trace/github": "workspace:*",
+    "@trace/ui": "workspace:*",
+    "drizzle-orm": "0.44.5",
+    "pg-boss": "12.5.0",
+    "next": "15.5.0",
+    "react": "19.1.1",
+    "react-dom": "19.1.1"
+  },
+  "devDependencies": {
+    "@opennextjs/cloudflare": "latest",
+    "@types/react": "19.1.10",
+    "@types/react-dom": "19.1.7",
+    "typescript": "5.9.2",
+    "vitest": "3.2.4"
+  }
+}

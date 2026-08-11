@@ -1,0 +1,47 @@
+name: Bug report
+description: Report a reproducible defect in TRACE.
+title: '[Bug] '
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: Remove secrets, tokens, private source code, and personal data before submitting.
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Provide the smallest reproducible sequence.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, browser, TRACE version or commit, and execution mode.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized logs
+      description: Include relevant logs with secrets and private source removed.
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Privacy or security impact
+      description: Explain whether source code, credentials, tenant data, or artifacts may be exposed.
+    validations:
+      required: true
