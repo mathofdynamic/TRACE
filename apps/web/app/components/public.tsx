@@ -43,7 +43,7 @@ export function PublicHeader() {
           <Link className="header-signin" href="/sign-in">
             Sign in
           </Link>
-          <Link className="trace-button trace-button--primary header-cta" href="/sign-up">
+          <Link className="trace-button trace-button--primary header-cta" href="/sign-in">
             Start with TRACE
           </Link>
         </div>
@@ -56,7 +56,7 @@ export function PublicHeader() {
               </Link>
             ))}
             <Link href="/sign-in">Sign in</Link>
-            <Link className="trace-button trace-button--primary" href="/sign-up">
+            <Link className="trace-button trace-button--primary" href="/sign-in">
               Start with TRACE
             </Link>
           </nav>

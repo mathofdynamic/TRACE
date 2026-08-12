@@ -10,9 +10,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
         <Link href="/">Back to TRACE</Link>
       </div>
       <section className="auth-card">{children}</section>
-      <p className="auth-shell__footer">
-        No password flow is enabled. GitHub is the configured identity provider.
-      </p>
+      <p className="auth-shell__footer">One account. Repository access stays under your control.</p>
     </main>
   );
 }

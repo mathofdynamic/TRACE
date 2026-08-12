@@ -19,8 +19,12 @@ afterAll(() => {
 describe('direct GitHub OAuth session boundary', () => {
   it('only accepts safe same-origin redirect paths', () => {
     expect(safeAuthNext('/app')).toBe('/app');
+    expect(safeAuthNext('/app/repositories?setup=connected')).toBe(
+      '/app/repositories?setup=connected',
+    );
     expect(safeAuthNext('https://evil.example')).toBe('/onboarding');
     expect(safeAuthNext('//evil.example')).toBe('/onboarding');
+    expect(safeAuthNext('/\\evil.example')).toBe('/onboarding');
   });
 
   it('validates OAuth state without accepting a different value', async () => {

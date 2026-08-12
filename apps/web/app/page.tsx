@@ -32,7 +32,7 @@ export default function HomePage() {
               — then keeps the durable record portable inside `.trace`.
             </p>
             <div className="hero__actions">
-              <Link className="trace-button trace-button--primary" href="/sign-up">
+              <Link className="trace-button trace-button--primary" href="/sign-in">
                 Start with TRACE
               </Link>
               <Link className="trace-button trace-button--secondary" href="/specification">
@@ -161,7 +161,7 @@ export default function HomePage() {
         <section className="final-cta public-container">
           <SectionLabel>Start with the evidence trail</SectionLabel>
           <h2>Make the reasoning around change durable.</h2>
-          <Link className="trace-button trace-button--primary" href="/sign-up">
+          <Link className="trace-button trace-button--primary" href="/sign-in">
             Join the early build
           </Link>
         </section>

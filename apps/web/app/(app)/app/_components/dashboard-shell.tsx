@@ -12,6 +12,7 @@ import {
   secondaryNavigation,
 } from './navigation';
 import type { NavigationItem } from './navigation';
+import type { NavigationCapabilities } from './navigation';
 
 function NavigationIcon({ name }: { name: NavigationItem['icon'] }) {
   const paths: Record<NavigationItem['icon'], ReactNode> = {
@@ -91,15 +92,32 @@ function NavigationLinks({
   pathname,
   pendingHref,
   onNavigate,
+  capabilities,
 }: {
   items: readonly NavigationItem[];
   pathname: string;
   pendingHref: string | null;
   onNavigate: (href: string) => void;
+  capabilities: NavigationCapabilities;
 }) {
   return items.map((item) => {
+    const available = !item.requires || capabilities[item.requires];
     const active = isNavigationItemActive(pathname, item.href);
     const pending = pendingHref === item.href;
+    if (!available) {
+      return (
+        <span
+          key={item.href}
+          className="dashboard-nav__link dashboard-nav__link--unavailable"
+          aria-disabled="true"
+          title="Available when TRACE has relevant project data"
+        >
+          <NavigationIcon name={item.icon} />
+          <span>{item.label}</span>
+          <small>Later</small>
+        </span>
+      );
+    }
     return (
       <Link
         key={item.href}
@@ -118,7 +136,19 @@ function NavigationLinks({
   });
 }
 
-export function DashboardShell({ children, userName }: { children: ReactNode; userName: string }) {
+export function DashboardShell({
+  children,
+  userName,
+  workspaceName,
+  capabilities,
+  repositoryCount,
+}: {
+  children: ReactNode;
+  userName: string;
+  workspaceName: string;
+  capabilities: NavigationCapabilities;
+  repositoryCount: number;
+}) {
   const pathname = usePathname();
   const [pendingHref, setPendingHref] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -147,7 +177,7 @@ export function DashboardShell({ children, userName }: { children: ReactNode; us
     if (!isNavigationItemActive(pathname, href)) setPendingHref(href);
   }
 
-  const navigationProps = { pathname, pendingHref, onNavigate: navigate };
+  const navigationProps = { pathname, pendingHref, onNavigate: navigate, capabilities };
 
   return (
     <div className="dashboard-frame">
@@ -163,9 +193,13 @@ export function DashboardShell({ children, userName }: { children: ReactNode; us
           <span className="workspace-switcher__dot" />
           <span>
             <small>Workspace</small>
-            <strong>Personal pilot</strong>
+            <strong>{workspaceName}</strong>
           </span>
-          <span className="workspace-switcher__scope">Pilot</span>
+          <span className="workspace-switcher__scope">
+            {repositoryCount
+              ? `${repositoryCount} repo${repositoryCount === 1 ? '' : 's'}`
+              : 'Setup'}
+          </span>
         </div>
         <button
           className="dashboard-search"
@@ -206,7 +240,7 @@ export function DashboardShell({ children, userName }: { children: ReactNode; us
             aria-label="Mobile workspace navigation"
           >
             <div className="dashboard-mobile-drawer__header">
-              <span>Personal pilot</span>
+              <span>{workspaceName}</span>
               <button
                 ref={closeButtonRef}
                 type="button"
@@ -240,7 +274,7 @@ export function DashboardShell({ children, userName }: { children: ReactNode; us
             <span />
           </button>
           <span className="breadcrumb">
-            <span>Personal pilot</span>
+            <span>{workspaceName}</span>
             <i aria-hidden="true">/</i>
             <strong>{routeLabel}</strong>
           </span>

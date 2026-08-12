@@ -4,13 +4,9 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const tabs = [
-  ['Summary', ''],
+  ['Overview', ''],
   ['Pull requests', '/pull-requests'],
-  ['Changes', '/changes'],
-  ['Conflicts', '/conflicts'],
-  ['Reports', '/reports'],
-  ['Decisions', '/decisions'],
-  ['Risks', '/risks'],
+  ['Findings', '/findings'],
 ] as const;
 
 export function RepositoryTabs({ repositoryId }: { repositoryId: string }) {

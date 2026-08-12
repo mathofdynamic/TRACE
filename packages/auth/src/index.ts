@@ -124,7 +124,18 @@ export function getAuthRuntimeStatus(): AuthRuntimeStatus {
 }
 
 export function safeAuthNext(value: string | null | undefined) {
-  return value?.startsWith('/') && !value.startsWith('//') ? value : '/onboarding';
+  if (
+    !value?.startsWith('/') ||
+    value.startsWith('//') ||
+    value.includes('\\') ||
+    Array.from(value).some((character) => {
+      const code = character.charCodeAt(0);
+      return code <= 31 || code === 127;
+    })
+  ) {
+    return '/onboarding';
+  }
+  return value;
 }
 
 function randomToken() {

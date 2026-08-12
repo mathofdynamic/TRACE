@@ -181,6 +181,13 @@ export async function GET(request: Request) {
             set: { permissions: repository.permissions, updatedAt: now },
           });
       }
+      await db.insert(schema.auditEvents).values({
+        organizationId: workspace.id,
+        actorUserId: session.user.id,
+        action: 'github.connected',
+        subjectType: 'github_installation',
+        subjectId: installation.id,
+      });
     } finally {
       await client.end();
     }

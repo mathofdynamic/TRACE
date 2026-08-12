@@ -1,29 +1,50 @@
 import Link from 'next/link';
-import { FixtureBadge } from '../_components/fixture-badge';
-export default function ChangesPage() {
+import { getAuthenticatedDashboardSummary } from '../../../../lib/dashboard-server';
+
+export default async function ChangesPage() {
+  const { summary } = await getAuthenticatedDashboardSummary();
   return (
     <div className="dashboard-page">
       <div className="dashboard-page-header">
         <div>
           <p className="section-label">Active changes</p>
-          <h1>Changes across the workspace.</h1>
+          <h1>Work currently moving through the project.</h1>
           <p>
-            Cross-repository change intelligence will appear here after signed GitHub events are
-            connected.
+            Pull request snapshots stored from connected GitHub repositories. This is project
+            context, not individual activity scoring.
           </p>
         </div>
-        <FixtureBadge />
       </div>
-      <div className="empty-panel empty-panel--large">
-        <span>↗</span>
-        <h2>No active changes</h2>
-        <p>
-          This is an intentional empty state, not a zero-count claim about connected repositories.
-        </p>
-        <Link className="trace-button trace-button--secondary" href="/app/repositories">
-          Review repository setup
-        </Link>
-      </div>
+      {summary.latestChanges.length ? (
+        <div className="record-list">
+          {summary.latestChanges.map((change) => (
+            <article key={change.id}>
+              <span className="record-index">#{change.number}</span>
+              <div>
+                <p className="record-context">{change.repositoryName}</p>
+                <h2>{change.title}</h2>
+                <p>
+                  {change.state} · {change.authorLogin ?? 'Author unavailable'}
+                </p>
+              </div>
+              {change.url ? <a href={change.url}>Open on GitHub</a> : null}
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="empty-panel empty-panel--large">
+          <span aria-hidden="true">↗</span>
+          <h2>No active changes stored</h2>
+          <p>
+            {summary.setup.repositorySelected
+              ? 'This is normal when no pull request webhook snapshots have reached TRACE.'
+              : 'Connect a repository before TRACE can receive project changes.'}
+          </p>
+          <Link className="trace-button trace-button--secondary" href="/app/repositories">
+            {summary.setup.repositorySelected ? 'View repositories' : 'Connect repository'}
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

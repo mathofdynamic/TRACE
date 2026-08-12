@@ -77,6 +77,14 @@ export async function POST(request: Request) {
           ),
         );
     }
+    for (const organizationId of organizationIds) {
+      await db.insert(schema.auditEvents).values({
+        organizationId,
+        actorUserId: session.user.id,
+        action: 'repositories.selection.updated',
+        subjectType: 'github_repository',
+      });
+    }
     return Response.json({ status: 'saved', selected: body.repositoryIds.length });
   } finally {
     await client.end();

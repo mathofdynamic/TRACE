@@ -1,28 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
 type Usage = 'individual' | 'team' | 'organization';
-type Mode = 'cloud' | 'local' | 'hybrid' | 'undecided';
 
 export function OnboardingForm() {
   const router = useRouter();
   const [usage, setUsage] = useState<Usage>('individual');
-  const [mode, setMode] = useState<Mode>('undecided');
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
-
-  useEffect(() => {
-    void fetch('/api/onboarding').then(async (response) => {
-      if (!response.ok) return;
-      const data = (await response.json()) as {
-        profile?: { intendedUsage?: Usage; executionMode?: Mode } | null;
-      };
-      if (data.profile?.intendedUsage) setUsage(data.profile.intendedUsage);
-      if (data.profile?.executionMode) setMode(data.profile.executionMode);
-    });
-  }, []);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -31,7 +18,7 @@ export function OnboardingForm() {
       const response = await fetch('/api/onboarding', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ intendedUsage: usage, executionMode: mode }),
+        body: JSON.stringify({ intendedUsage: usage }),
       });
       if (!response.ok) {
         setStatus('error');
@@ -70,33 +57,16 @@ export function OnboardingForm() {
           </label>
         ))}
       </fieldset>
-      <fieldset>
-        <legend>Preferred execution mode</legend>
-        <div className="choice-grid">
-          {(['cloud', 'local', 'hybrid', 'undecided'] as const).map((value) => (
-            <label className="choice-tile" key={value}>
-              <input
-                type="radio"
-                name="mode"
-                value={value}
-                checked={mode === value}
-                onChange={() => setMode(value)}
-              />
-              <span>{value.charAt(0).toUpperCase() + value.slice(1)}</span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
       <button
         className="trace-button trace-button--primary"
         type="submit"
         disabled={status === 'loading'}
       >
-        {status === 'loading' ? 'Saving workspace…' : 'Save and continue'}
+        {status === 'loading' ? 'Saving workspace…' : 'Continue to GitHub'}
       </button>
       {status === 'error' ? (
         <p className="auth-error" role="alert">
-          Could not save onboarding choices. Try again.
+          We could not save this workspace. Your choices are still here; try again.
         </p>
       ) : null}
     </form>

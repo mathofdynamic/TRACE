@@ -12,19 +12,25 @@ export type NavigationItem = {
     | 'settings'
     | 'docs';
   external?: boolean;
+  requires?: 'changes' | 'conflicts' | 'reports' | 'rules' | 'activity';
 };
+
+export type NavigationCapabilities = Record<
+  'changes' | 'conflicts' | 'reports' | 'rules' | 'activity',
+  boolean
+>;
 
 export const primaryNavigation: readonly NavigationItem[] = [
   { label: 'Overview', href: '/app', icon: 'overview' },
   { label: 'Repositories', href: '/app/repositories', icon: 'repository' },
-  { label: 'Active changes', href: '/app/changes', icon: 'change' },
-  { label: 'Conflicts', href: '/app/conflicts', icon: 'conflict' },
-  { label: 'Reports', href: '/app/reports', icon: 'report' },
-  { label: 'Rules', href: '/app/rules', icon: 'rule' },
+  { label: 'Active changes', href: '/app/changes', icon: 'change', requires: 'changes' },
+  { label: 'Conflicts', href: '/app/conflicts', icon: 'conflict', requires: 'conflicts' },
+  { label: 'Reports', href: '/app/reports', icon: 'report', requires: 'reports' },
+  { label: 'Rules', href: '/app/rules', icon: 'rule', requires: 'rules' },
 ] as const;
 
 export const secondaryNavigation: readonly NavigationItem[] = [
-  { label: 'Activity', href: '/app/activity', icon: 'activity' },
+  { label: 'Activity', href: '/app/activity', icon: 'activity', requires: 'activity' },
   { label: 'Settings', href: '/app/settings', icon: 'settings' },
   { label: 'Documentation', href: '/docs', icon: 'docs', external: true },
 ] as const;

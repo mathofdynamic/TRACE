@@ -13,14 +13,13 @@ export async function POST(request: Request) {
   }
 
   const body = (await request.json()) as { intendedUsage?: unknown; executionMode?: unknown };
-  if (
-    typeof body.intendedUsage !== 'string' ||
-    !usageValues.has(body.intendedUsage) ||
-    typeof body.executionMode !== 'string' ||
-    !modeValues.has(body.executionMode)
-  ) {
+  if (typeof body.intendedUsage !== 'string' || !usageValues.has(body.intendedUsage)) {
     return Response.json({ error: 'Onboarding choices are invalid.' }, { status: 400 });
   }
+  const executionMode =
+    typeof body.executionMode === 'string' && modeValues.has(body.executionMode)
+      ? body.executionMode
+      : 'undecided';
 
   const { db, client } = await createRequestDatabase();
   try {
@@ -29,18 +28,23 @@ export async function POST(request: Request) {
       .values({
         userId: session.user.id,
         intendedUsage: body.intendedUsage,
-        executionMode: body.executionMode,
+        executionMode,
         completed: true,
       })
       .onConflictDoUpdate({
         target: schema.onboardingProfiles.userId,
         set: {
           intendedUsage: body.intendedUsage,
-          executionMode: body.executionMode,
+          executionMode,
           completed: true,
           updatedAt: new Date(),
         },
       });
+    await db.insert(schema.auditEvents).values({
+      actorUserId: session.user.id,
+      action: 'workspace.profile.completed',
+      subjectType: 'onboarding_profile',
+    });
     return Response.json({ status: 'saved' });
   } finally {
     await client.end();

@@ -33,6 +33,36 @@ export default function DocsPage() {
             <span>Permissions, callbacks, webhooks, and staging secrets.</span>
           </a>
         </div>
+        <section className="docs-local" id="local-analysis">
+          <p className="section-label">Local analysis</p>
+          <h2>Build the project record without uploading source.</h2>
+          <p>
+            The current cloud dashboard can store repository and persisted analysis state, but it
+            does not execute the analysis engine. Run the CLI from the repository you want TRACE to
+            understand.
+          </p>
+          <ol>
+            <li>
+              <code>trace init</code>
+              <span>Create the portable `.trace` structure.</span>
+            </li>
+            <li>
+              <code>trace analyze changes</code>
+              <span>Collect deterministic change evidence.</span>
+            </li>
+            <li>
+              <code>trace report daily --write --yes</code>
+              <span>Write a deterministic daily report.</span>
+            </li>
+            <li>
+              <code>trace validate</code>
+              <span>Validate generated TRACE artifacts.</span>
+            </li>
+          </ol>
+          <p className="docs-local__note">
+            Dashboard artifact upload is not enabled yet. Generated files remain in the repository.
+          </p>
+        </section>
       </main>
     </PublicLayout>
   );

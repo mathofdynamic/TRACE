@@ -30,6 +30,9 @@ export function GithubAuthButton({ callbackURL = '/onboarding' }: { callbackURL?
           GitHub sign-in is unavailable. Check the configured OAuth callback and try again.
         </p>
       ) : null}
+      <span className="sr-only" aria-live="polite">
+        {state === 'loading' ? 'Opening GitHub authorization' : ''}
+      </span>
     </div>
   );
 }

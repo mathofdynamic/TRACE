@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { getTraceSession } from '@trace/auth';
 import { schema } from '@trace/db';
 import { OnboardingForm } from '../components/onboarding-form';
+import { SetupProgress } from '../components/setup-progress';
 import { createRequestDatabase } from '../../lib/request-database';
 
 export const dynamic = 'force-dynamic';
@@ -35,14 +36,15 @@ export default async function OnboardingPage() {
           </span>
           <span>TRACE</span>
         </span>
-        <span className="onboarding-step">Step 1 of 2</span>
+        <span className="onboarding-step">Setup</span>
       </div>
+      <SetupProgress current={1} />
       <section className="onboarding-card">
-        <p className="section-label">Workspace setup</p>
-        <h1>Choose the shape of your first TRACE workspace.</h1>
+        <p className="section-label">Your workspace</p>
+        <h1>Who will use this TRACE workspace?</h1>
         <p>
-          These choices help us resume your setup. GitHub App connection comes next and is not
-          performed here.
+          This sets the workspace context. Execution and synchronization preferences can be changed
+          later.
         </p>
         <OnboardingForm />
       </section>

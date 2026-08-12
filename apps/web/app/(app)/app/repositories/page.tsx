@@ -5,6 +5,7 @@ import { inArray } from 'drizzle-orm';
 import { getTraceSession } from '@trace/auth';
 import { schema } from '@trace/db';
 import { RepositorySelector } from '../../../components/repository-selector';
+import { SetupProgress } from '../../../components/setup-progress';
 import { createRequestDatabase } from '../../../../lib/request-database';
 import { getUserOrganizationIds } from '../../../../lib/workspace';
 
@@ -15,13 +16,13 @@ type RepositoriesPageProps = {
 function setupMessage(value: string | string[] | undefined) {
   const setup = Array.isArray(value) ? value[0] : value;
   return setup === 'connected'
-    ? 'GitHub App connected. Choose the repositories TRACE may read.'
+    ? 'GitHub connected. Now choose the repositories TRACE should understand.'
     : setup === 'cancelled'
       ? 'GitHub App installation was cancelled.'
       : setup === 'not-configured'
-        ? 'GitHub App connection is not configured on this test deployment yet.'
+        ? 'Repository connection is not configured in this environment yet.'
         : setup === 'github-app'
-          ? 'GitHub App setup could not be completed. Check the App credentials and try again.'
+          ? 'We could not finish connecting GitHub. Your account is still signed in.'
           : null;
 }
 
@@ -56,15 +57,21 @@ export default async function RepositoriesPage({ searchParams }: RepositoriesPag
           .from(schema.githubRepositories)
           .where(inArray(schema.githubRepositories.organizationId, organizationIds))
       : [];
+    const activeRepositories = repositories.filter((repository) => repository.state === 'active');
+    const currentStep = activeRepositories.length ? 4 : installations.length ? 3 : 2;
     return (
       <div className="dashboard-page">
+        <SetupProgress current={currentStep} />
         <div className="dashboard-page-header">
           <div>
-            <p className="section-label">Step 2 of 2 · GitHub connection</p>
-            <h1>Choose the work TRACE can understand.</h1>
+            <p className="section-label">Repository setup</p>
+            <h1>
+              {installations.length ? 'Choose your repositories.' : 'Connect your repositories.'}
+            </h1>
             <p>
-              Install the TRACE GitHub App, then select repositories. Authentication and repository
-              access remain separate permissions.
+              {installations.length
+                ? 'GitHub is connected. Select which projects should become part of this TRACE workspace.'
+                : 'TRACE uses read-only access to understand commits, pull requests, issues, and project changes. You choose which repositories it can access.'}
             </p>
           </div>
           <span className="connection-state">
@@ -82,17 +89,24 @@ export default async function RepositoriesPage({ searchParams }: RepositoriesPag
         {!installations.length ? (
           <section className="empty-panel empty-panel--large repository-connect-panel">
             <span aria-hidden="true">↗</span>
-            <h2>Connect your GitHub App</h2>
+            <h2>Connect GitHub</h2>
             <p>
-              The App must request read-only metadata, contents, pull requests, and issues access.
-              TRACE will not request repository write permissions in this step.
+              Choose the GitHub account and repositories TRACE may read. No source write access is
+              requested.
             </p>
             <Link
               className="trace-button trace-button--primary"
               href="/api/github/install?next=/app/repositories"
             >
-              Install GitHub App
+              Connect GitHub
             </Link>
+            <details className="access-disclosure">
+              <summary>What TRACE can access</summary>
+              <p>
+                Repository metadata, contents, pull requests, and issues for repositories you
+                select.
+              </p>
+            </details>
           </section>
         ) : repositories.length ? (
           <>
@@ -107,6 +121,33 @@ export default async function RepositoriesPage({ searchParams }: RepositoriesPag
                 </article>
               ))}
             </div>
+            {activeRepositories.length ? (
+              <section className="connected-summary">
+                <div>
+                  <span className="success-mark" aria-hidden="true">
+                    ✓
+                  </span>
+                  <div>
+                    <p className="section-label">TRACE is connected</p>
+                    <h2>
+                      {activeRepositories.length === 1
+                        ? activeRepositories[0]!.fullName
+                        : `${activeRepositories.length} repositories connected`}
+                    </h2>
+                    <p>
+                      Repository access is active. Cloud analysis is not enabled in this
+                      environment.
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  className="trace-button trace-button--secondary"
+                  href={`/app/repositories/${activeRepositories[0]!.id}`}
+                >
+                  Open repository
+                </Link>
+              </section>
+            ) : null}
             <RepositorySelector repositories={repositories} />
           </>
         ) : (

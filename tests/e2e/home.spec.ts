@@ -1,5 +1,157 @@
 import { expect, test } from '@playwright/test';
-import { createHmac } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
+import { Client } from 'pg';
+
+const databaseUrl = 'postgresql://trace:change-me@127.0.0.1:3002/trace_dev';
+const authSecret = 'trace-playwright-secret-change-this-32-chars';
+
+type SeedOptions = {
+  profileComplete?: boolean;
+  installation?: boolean;
+  repositoryState?: 'available' | 'active';
+  analysis?: 'completed' | 'running' | 'failed';
+  finding?: boolean;
+  pullRequest?: boolean;
+};
+
+function sessionCookie(user: { id: string; name: string; email: string; githubLogin: string }) {
+  const now = Math.floor(Date.now() / 1000);
+  const payload = Buffer.from(
+    JSON.stringify({
+      user: { ...user, image: null },
+      issuedAt: now,
+      expiresAt: now + 3600,
+    }),
+  ).toString('base64url');
+  const signature = createHmac('sha256', authSecret).update(payload).digest('base64url');
+  return `${payload}.${signature}`;
+}
+
+async function seedWorkspace(options: SeedOptions = {}) {
+  const client = new Client({ connectionString: databaseUrl });
+  await client.connect();
+  const suffix = randomUUID().slice(0, 8);
+  const user = {
+    id: randomUUID(),
+    name: `TRACE ${suffix}`,
+    email: `trace-${suffix}@example.com`,
+    githubLogin: `trace-${suffix}`,
+  };
+  let organizationId: string | null = null;
+  let repositoryId: string | null = null;
+  try {
+    await client.query('INSERT INTO users (id, email, name) VALUES ($1, $2, $3)', [
+      user.id,
+      user.email,
+      user.name,
+    ]);
+    if (options.profileComplete !== false) {
+      await client.query(
+        'INSERT INTO onboarding_profiles (user_id, intended_usage, execution_mode, completed) VALUES ($1, $2, $3, true)',
+        [user.id, 'individual', 'undecided'],
+      );
+    }
+    if (options.installation) {
+      const organization = await client.query<{ id: string }>(
+        'INSERT INTO organizations (name, slug) VALUES ($1, $2) RETURNING id',
+        [`TRACE ${suffix}`, `trace-${suffix}`],
+      );
+      organizationId = organization.rows[0]!.id;
+      await client.query(
+        'INSERT INTO memberships (organization_id, user_id, role) VALUES ($1, $2, $3)',
+        [organizationId, user.id, 'owner'],
+      );
+      const installation = await client.query<{ id: string }>(
+        'INSERT INTO github_installations (organization_id, github_installation_id, account_login, account_type, state) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+        [organizationId, Number.parseInt(suffix, 16) + 10_000, `trace-${suffix}`, 'User', 'active'],
+      );
+      const installationId = installation.rows[0]!.id;
+      if (options.repositoryState) {
+        const githubRepositoryId = Number.parseInt(suffix, 16) + 100_000;
+        const repository = await client.query<{ id: string }>(
+          'INSERT INTO github_repositories (organization_id, installation_id, github_repository_id, owner, name, full_name, default_branch, visibility, state, last_synchronized_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW()) RETURNING id',
+          [
+            organizationId,
+            installationId,
+            githubRepositoryId,
+            `trace-${suffix}`,
+            'project',
+            `trace-${suffix}/project`,
+            'main',
+            'private',
+            options.repositoryState,
+          ],
+        );
+        repositoryId = repository.rows[0]!.id;
+        await client.query(
+          'INSERT INTO github_installation_repositories (installation_id, github_repository_id, selected, permissions) VALUES ($1, $2, $3, $4::jsonb)',
+          [
+            installationId,
+            githubRepositoryId,
+            options.repositoryState === 'active',
+            JSON.stringify({ metadata: 'read', contents: 'read' }),
+          ],
+        );
+        if (options.analysis) {
+          const run = await client.query<{ id: string }>(
+            'INSERT INTO analysis_runs (organization_id, repository_id, idempotency_key, status) VALUES ($1, $2, $3, $4) RETURNING id',
+            [organizationId, repositoryId, `e2e-${suffix}`, options.analysis],
+          );
+          const analysisRunId = run.rows[0]!.id;
+          if (options.finding) {
+            await client.query(
+              'INSERT INTO analysis_findings (analysis_run_id, external_id, title, detail, severity, classification, evidence) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)',
+              [
+                analysisRunId,
+                `finding-${suffix}`,
+                'Session invalidation needs review',
+                'Two persisted changes affect the session lifecycle.',
+                'high',
+                'deterministic',
+                JSON.stringify(['auth/session.ts']),
+              ],
+            );
+          }
+        }
+        if (options.pullRequest) {
+          await client.query(
+            'INSERT INTO github_pull_requests (organization_id, repository_id, github_pull_request_id, number, title, state, author_login, url) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+            [
+              organizationId,
+              repositoryId,
+              Number.parseInt(suffix, 16) + 200_000,
+              42,
+              'Refine session lifecycle',
+              'open',
+              'trace-author',
+              'https://github.com/example/project/pull/42',
+            ],
+          );
+        }
+      }
+    }
+  } finally {
+    await client.end();
+  }
+
+  return {
+    user,
+    repositoryId,
+    cookie: sessionCookie(user),
+    async cleanup() {
+      const cleanupDatabase = new Client({ connectionString: databaseUrl });
+      await cleanupDatabase.connect();
+      try {
+        if (organizationId) {
+          await cleanupDatabase.query('DELETE FROM organizations WHERE id = $1', [organizationId]);
+        }
+        await cleanupDatabase.query('DELETE FROM users WHERE id = $1', [user.id]);
+      } finally {
+        await cleanupDatabase.end();
+      }
+    },
+  };
+}
 
 test('foundation home page identifies the current phase', async ({ page }) => {
   await page.goto('/');
@@ -26,14 +178,27 @@ test('public navigation exposes the documented routes', async ({ page }) => {
   }
   await expect(page.getByRole('link', { name: 'Start with TRACE' }).first()).toHaveAttribute(
     'href',
-    '/sign-up',
+    '/sign-in',
   );
 });
 
 test('protected application routes redirect unauthenticated visitors', async ({ page }) => {
   await page.goto('/app');
   await expect(page).toHaveURL(/\/sign-in\?next=%2Fapp|\/sign-in\?next=\/app/);
-  await expect(page.getByRole('heading', { name: 'Sign in to continue.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Understand what changed/i })).toBeVisible();
+});
+
+test('sign-up redirects to the canonical sign-in path and preserves a safe next route', async ({
+  page,
+}) => {
+  await page.goto('/sign-up?next=%2Fapp%2Frepositories');
+  await expect(page).toHaveURL(/\/sign-in\?next=%2Fapp%2Frepositories/);
+  await expect(page.getByRole('button', { name: 'Continue with GitHub' })).toBeVisible();
+});
+
+test('sign-up rejects an external next destination', async ({ page }) => {
+  await page.goto('/sign-up?next=https%3A%2F%2Fevil.example');
+  await expect(page).toHaveURL(/\/sign-in\?next=%2Fonboarding/);
 });
 
 test('direct GitHub OAuth and onboarding APIs keep unauthenticated state explicit', async ({
@@ -93,4 +258,170 @@ test('invalid GitHub webhook signatures are rejected before parsing', async ({ r
     },
   });
   expect(response.status()).toBe(401);
+});
+
+test.describe('authenticated product journey', () => {
+  test('completed users skip onboarding while saving a new workspace advances automatically', async ({
+    page,
+  }) => {
+    const completed = await seedWorkspace();
+    try {
+      await page
+        .context()
+        .addCookies([
+          { name: 'trace_session', value: completed.cookie, url: 'http://127.0.0.1:3001' },
+        ]);
+      await page.goto('/onboarding');
+      await expect(page).toHaveURL(/\/app\/repositories/);
+    } finally {
+      await completed.cleanup();
+    }
+
+    const fresh = await seedWorkspace({ profileComplete: false });
+    try {
+      await page.context().clearCookies();
+      await page
+        .context()
+        .addCookies([{ name: 'trace_session', value: fresh.cookie, url: 'http://127.0.0.1:3001' }]);
+      await page.goto('/onboarding');
+      await page.getByRole('radio', { name: /Team/ }).check();
+      await page.getByRole('button', { name: 'Continue to GitHub' }).click();
+      await expect(page).toHaveURL(/\/app\/repositories/);
+      await expect(page.getByRole('heading', { name: 'Connect your repositories.' })).toBeVisible();
+    } finally {
+      await fresh.cleanup();
+    }
+  });
+
+  test('GitHub setup distinguishes disconnected, connected, and repository-available states', async ({
+    page,
+  }) => {
+    const disconnected = await seedWorkspace();
+    try {
+      await page
+        .context()
+        .addCookies([
+          { name: 'trace_session', value: disconnected.cookie, url: 'http://127.0.0.1:3001' },
+        ]);
+      await page.goto('/app/repositories');
+      await expect(page.getByRole('link', { name: 'Connect GitHub' })).toBeVisible();
+    } finally {
+      await disconnected.cleanup();
+    }
+
+    const connected = await seedWorkspace({ installation: true });
+    try {
+      await page.context().clearCookies();
+      await page
+        .context()
+        .addCookies([
+          { name: 'trace_session', value: connected.cookie, url: 'http://127.0.0.1:3001' },
+        ]);
+      await page.goto('/app/repositories');
+      await expect(
+        page.getByRole('heading', { name: 'No repositories were granted' }),
+      ).toBeVisible();
+    } finally {
+      await connected.cleanup();
+    }
+
+    const available = await seedWorkspace({ installation: true, repositoryState: 'available' });
+    try {
+      await page.context().clearCookies();
+      await page
+        .context()
+        .addCookies([
+          { name: 'trace_session', value: available.cookie, url: 'http://127.0.0.1:3001' },
+        ]);
+      await page.goto('/app/repositories');
+      await expect(
+        page.getByRole('heading', { name: 'Which projects should TRACE understand?' }),
+      ).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Finish setup' })).toBeVisible();
+    } finally {
+      await available.cleanup();
+    }
+  });
+
+  test('dashboard and repository pages render persisted project state', async ({ page }) => {
+    const seeded = await seedWorkspace({
+      installation: true,
+      repositoryState: 'active',
+      analysis: 'completed',
+      finding: true,
+      pullRequest: true,
+    });
+    try {
+      await page
+        .context()
+        .addCookies([
+          { name: 'trace_session', value: seeded.cookie, url: 'http://127.0.0.1:3001' },
+        ]);
+      await page.goto('/app');
+      await expect(page.getByRole('heading', { name: '1 thing needs attention' })).toBeVisible();
+      await expect(page.getByText('Session invalidation needs review')).toBeVisible();
+      await expect(page.getByText('Refine session lifecycle')).toBeVisible();
+      await page.goto(`/app/repositories/${seeded.repositoryId}`);
+      await expect(page.getByText('Persisted analysis state is available')).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Findings' })).toBeVisible();
+    } finally {
+      await seeded.cleanup();
+    }
+  });
+
+  test('mobile navigation exposes the current route and progressive availability', async ({
+    page,
+  }) => {
+    const seeded = await seedWorkspace({ installation: true, repositoryState: 'active' });
+    try {
+      await page
+        .context()
+        .addCookies([
+          { name: 'trace_session', value: seeded.cookie, url: 'http://127.0.0.1:3001' },
+        ]);
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto('/app/repositories');
+      await page.getByRole('button', { name: 'Open navigation' }).click();
+      const navigation = page.getByRole('navigation', { name: 'Mobile application navigation' });
+      await expect(navigation.getByRole('link', { name: 'Repositories' })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
+      await expect(navigation.getByText('Reports')).toBeVisible();
+      await expect(navigation.getByText('Reports').locator('..')).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+    } finally {
+      await seeded.cleanup();
+    }
+  });
+
+  test('authenticated overview remains usable at the required responsive widths', async ({
+    page,
+  }, testInfo) => {
+    const seeded = await seedWorkspace({ installation: true, repositoryState: 'active' });
+    try {
+      await page
+        .context()
+        .addCookies([
+          { name: 'trace_session', value: seeded.cookie, url: 'http://127.0.0.1:3001' },
+        ]);
+      for (const width of [1440, 1024, 768, 390]) {
+        await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+        await page.goto('/app');
+        await expect(page.getByRole('heading', { name: 'What needs attention' })).toBeVisible();
+        await page.waitForTimeout(250);
+        expect(
+          await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth),
+        ).toBe(false);
+        await page.screenshot({
+          path: testInfo.outputPath(`dashboard-${width}.png`),
+          fullPage: true,
+        });
+      }
+    } finally {
+      await seeded.cleanup();
+    }
+  });
 });
