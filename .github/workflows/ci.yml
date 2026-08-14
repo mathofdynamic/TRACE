@@ -44,6 +44,7 @@ jobs:
           node-version: 22.14.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm db:migrate
       - run: pnpm format:check
       - run: pnpm lint
