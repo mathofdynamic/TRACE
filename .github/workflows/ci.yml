@@ -14,15 +14,15 @@ jobs:
         env:
           POSTGRES_USER: trace
           POSTGRES_PASSWORD: change-me
-          POSTGRES_DB: trace_test
-        ports: ['5432:5432']
+          POSTGRES_DB: trace_dev
+        ports: ['3002:5432']
         options: >-
-          --health-cmd "pg_isready -U trace -d trace_test"
+          --health-cmd "pg_isready -U trace -d trace_dev"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
     env:
-      DATABASE_URL: postgresql://trace:change-me@127.0.0.1:5432/trace_test
+      DATABASE_URL: postgresql://trace:change-me@127.0.0.1:3002/trace_dev
       TRACE_AUTH_SECRET: ci-only-secret-change-me-which-is-at-least-32-characters
       TRACE_PUBLIC_URL: http://127.0.0.1:3001
       GITHUB_OAUTH_CLIENT_ID: ci-placeholder
