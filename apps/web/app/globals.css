@@ -9,6 +9,217 @@
   font-display: swap;
 }
 
+/* Local-to-dashboard bridge */
+.cli-auth-card {
+  max-width: 680px;
+}
+.cli-auth-form {
+  display: grid;
+  gap: 10px;
+  margin: 28px 0;
+}
+.cli-auth-form label {
+  color: var(--trace-text-secondary);
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+.cli-auth-form input,
+.cli-auth-form select {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid var(--trace-border);
+  border-radius: 10px;
+  background: #0b0b0c;
+  color: var(--trace-text);
+  padding: 0 14px;
+  font: inherit;
+}
+.cli-auth-form input:focus-visible,
+.cli-auth-form select:focus-visible {
+  outline: 2px solid var(--trace-blue);
+  outline-offset: 2px;
+}
+.record-groups {
+  display: grid;
+  gap: 36px;
+}
+.record-group-title {
+  margin: 0 0 14px;
+  color: var(--trace-text-secondary);
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.report-list,
+.conflict-list {
+  display: grid;
+  gap: 14px;
+}
+.synced-record h3 {
+  margin: 6px 0 0;
+}
+.synced-record > p {
+  max-width: 76ch;
+  color: var(--trace-text-secondary);
+}
+.synced-record ul {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  list-style: none;
+}
+.synced-record li {
+  display: grid;
+  gap: 3px;
+  padding-top: 10px;
+  border-top: 1px solid var(--trace-border-subtle);
+}
+.synced-record li span {
+  color: var(--trace-text-secondary);
+}
+.origin-label {
+  color: var(--trace-success);
+  font-size: 0.75rem;
+}
+.safe-markdown {
+  max-height: 360px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 16px;
+  border: 1px solid var(--trace-border-subtle);
+  border-radius: 8px;
+  background: #080809;
+  color: var(--trace-text-secondary);
+  font:
+    12px/1.6 ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
+}
+.conflict-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 16px;
+  padding: 18px 0;
+  border-top: 1px solid var(--trace-border-subtle);
+}
+.conflict-item > span {
+  height: fit-content;
+  border: 1px solid var(--trace-border);
+  border-radius: 4px;
+  padding: 3px 7px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+.conflict-item h3,
+.conflict-item h4 {
+  margin: 0 0 8px;
+}
+.sync-provenance {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.4fr) repeat(4, minmax(110px, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--trace-border);
+  border-radius: 12px;
+  background: var(--trace-border);
+}
+.sync-provenance > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 15px;
+  background: var(--trace-surface-1);
+}
+.sync-provenance span {
+  color: var(--trace-muted);
+  font-size: 0.72rem;
+}
+.sync-provenance strong,
+.sync-provenance code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--trace-text);
+  font-size: 0.82rem;
+}
+.settings-wide {
+  grid-column: 1 / -1;
+}
+.connection-list {
+  display: grid;
+  gap: 0;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.connection-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 0;
+  border-top: 1px solid var(--trace-border-subtle);
+}
+.connection-list li > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+.connection-list li span {
+  color: var(--trace-muted);
+  font-size: 0.78rem;
+}
+.connection-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.connection-actions button {
+  border: 1px solid var(--trace-border);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--trace-text-secondary);
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+.connection-actions button:last-of-type {
+  color: var(--trace-danger);
+}
+.connection-actions span {
+  color: var(--trace-danger);
+}
+.local-command {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 900px) {
+  .sync-provenance {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .sync-provenance > div:first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .sync-provenance {
+    grid-template-columns: 1fr;
+  }
+  .sync-provenance > div:first-child {
+    grid-column: auto;
+  }
+  .connection-list li {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .connection-actions {
+    flex-wrap: wrap;
+  }
+}
+
 @font-face {
   font-family: 'Kunst Grotesk';
   src:

@@ -1,8 +1,11 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { getTraceSession } from '@trace/auth';
 import { schema } from '@trace/db';
+import { parseGitHubAppEnv } from '@trace/env';
+import { getGitHubRepositoryHead, type GitHubAppConfig } from '@trace/github';
 import { createRequestDatabase } from '../../../../lib/request-database';
 import { getUserOrganizationIds } from '../../../../lib/workspace';
+import { isTrustedBrowserMutation } from '../../../../lib/browser-origin';
 
 function isUuid(value: unknown): value is string {
   return (
@@ -14,6 +17,8 @@ function isUuid(value: unknown): value is string {
 export async function POST(request: Request) {
   const session = await getTraceSession(request.headers);
   if (!session?.user) return Response.json({ error: 'Authentication required.' }, { status: 401 });
+  if (!isTrustedBrowserMutation(request))
+    return Response.json({ error: 'Cross-origin request rejected.' }, { status: 403 });
 
   let body: { repositoryIds?: unknown };
   try {
@@ -43,9 +48,17 @@ export async function POST(request: Request) {
         id: schema.githubRepositories.id,
         installationId: schema.githubRepositories.installationId,
         githubRepositoryId: schema.githubRepositories.githubRepositoryId,
+        githubInstallationId: schema.githubInstallations.githubInstallationId,
+        owner: schema.githubRepositories.owner,
+        name: schema.githubRepositories.name,
+        defaultBranch: schema.githubRepositories.defaultBranch,
         state: schema.githubRepositories.state,
       })
       .from(schema.githubRepositories)
+      .innerJoin(
+        schema.githubInstallations,
+        eq(schema.githubRepositories.installationId, schema.githubInstallations.id),
+      )
       .where(inArray(schema.githubRepositories.organizationId, organizationIds));
     const allowedIds = new Set(repositories.map((repository) => repository.id));
     if (body.repositoryIds.some((id) => !allowedIds.has(id))) {
@@ -54,13 +67,40 @@ export async function POST(request: Request) {
 
     const selected = new Set(body.repositoryIds);
     const now = new Date();
+    let githubAppConfig: GitHubAppConfig | null = null;
+    try {
+      const appEnv = parseGitHubAppEnv();
+      githubAppConfig = {
+        appId: appEnv.GITHUB_APP_ID,
+        privateKey: appEnv.GITHUB_APP_PRIVATE_KEY,
+        clientId: appEnv.GITHUB_APP_CLIENT_ID,
+        clientSecret: appEnv.GITHUB_APP_CLIENT_SECRET,
+      };
+    } catch {
+      // Repository selection remains available when the optional GitHub App refresh is not configured.
+    }
     for (const repository of repositories) {
       const isSelected = selected.has(repository.id);
+      let remoteHeadSha: string | null = null;
+      if (isSelected && repository.defaultBranch && githubAppConfig) {
+        try {
+          remoteHeadSha = await getGitHubRepositoryHead(
+            githubAppConfig,
+            repository.githubInstallationId,
+            repository.owner,
+            repository.name,
+            repository.defaultBranch,
+          );
+        } catch {
+          // A temporary GitHub metadata failure must not disconnect or block the repository.
+        }
+      }
       await db
         .update(schema.githubRepositories)
         .set({
           state: isSelected ? 'active' : 'available',
           disconnectedAt: isSelected ? null : repository.state === 'active' ? now : null,
+          ...(remoteHeadSha ? { remoteHeadSha } : {}),
           updatedAt: now,
         })
         .where(eq(schema.githubRepositories.id, repository.id));

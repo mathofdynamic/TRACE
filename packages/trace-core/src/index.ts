@@ -56,8 +56,16 @@ export type ArtifactManifestEntry = {
 export type SyncManifest = {
   protocolVersion: '0.1';
   repository: string;
+  repositoryId?: string;
+  syncId?: string;
+  schemaVersion?: '0.1';
+  traceVersion?: string;
+  executionOrigin?: 'local';
+  baseOperationId?: string | null;
+  git?: { branch: string; headCommit: string };
   generatedAt: string;
   sourceCodeIncluded: false;
+  codeSnippetsIncluded?: false;
   artifacts: ArtifactManifestEntry[];
 };
 
@@ -126,3 +134,23 @@ export function redactSyncText(text: string, patterns: RegExp[] = []) {
   }
   return { text: redacted, categories: [...categories] };
 }
+
+export const defaultLocalSyncPolicy: SyncPolicy = {
+  allowedArtifactTypes: [
+    'analysis',
+    'daily_report',
+    'weekly_report',
+    'pr_brief',
+    'decision',
+    'risk',
+    'debt',
+    'conflict',
+    'rule',
+    'index',
+  ],
+  maximumSensitivity: 'internal',
+  localOnlyPaths: ['state', 'cache', 'logs', 'prompts', 'transcripts'],
+  structuredOnly: false,
+  requireApproval: true,
+  allowedOrigins: ['local'],
+};

@@ -150,6 +150,7 @@ export const auditEvents = pgTable(
     action: text('action').notNull(),
     subjectType: text('subject_type').notNull(),
     subjectId: uuid('subject_id'),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>(),
     ...timestamps,
   },
   (table) => [index('audit_events_org_created_idx').on(table.organizationId, table.createdAt)],
@@ -192,6 +193,7 @@ export const githubRepositories = pgTable(
     defaultBranch: text('default_branch'),
     visibility: text('visibility'),
     state: text('state').notNull().default('active'),
+    remoteHeadSha: text('remote_head_sha'),
     lastSynchronizedAt: timestamp('last_synchronized_at', { withTimezone: true }),
     disconnectedAt: timestamp('disconnected_at', { withTimezone: true }),
     ...timestamps,
@@ -320,6 +322,160 @@ export const analysisRuns = pgTable(
     uniqueIndex('analysis_runs_idempotency_unique').on(table.idempotencyKey),
     index('analysis_runs_org_idx').on(table.organizationId),
     index('analysis_runs_repository_idx').on(table.repositoryId),
+  ],
+);
+
+export const cliDeviceAuthorizations = pgTable(
+  'cli_device_authorizations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    deviceCodeHash: text('device_code_hash').notNull(),
+    userCodeHash: text('user_code_hash').notNull(),
+    requestKeyHash: text('request_key_hash').notNull(),
+    deviceLabel: text('device_label').notNull(),
+    status: text('status').notNull().default('pending'),
+    approvedOrganizationId: uuid('approved_organization_id').references(() => organizations.id, {
+      onDelete: 'cascade',
+    }),
+    approvedUserId: uuid('approved_user_id').references(() => users.id, {
+      onDelete: 'cascade',
+    }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex('cli_device_authorizations_device_code_unique').on(table.deviceCodeHash),
+    uniqueIndex('cli_device_authorizations_user_code_unique').on(table.userCodeHash),
+    index('cli_device_authorizations_expiry_idx').on(table.expiresAt),
+    index('cli_device_authorizations_request_created_idx').on(
+      table.requestKeyHash,
+      table.createdAt,
+    ),
+  ],
+);
+
+export const cliConnections = pgTable(
+  'cli_connections',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    label: text('label').notNull(),
+    tokenHash: text('token_hash').notNull(),
+    scopes: jsonb('scopes').$type<string[]>().notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex('cli_connections_token_unique').on(table.tokenHash),
+    index('cli_connections_org_idx').on(table.organizationId),
+    index('cli_connections_user_idx').on(table.userId),
+  ],
+);
+
+export const syncOperations = pgTable(
+  'sync_operations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    repositoryId: uuid('repository_id')
+      .notNull()
+      .references(() => githubRepositories.id, { onDelete: 'cascade' }),
+    connectionId: uuid('connection_id')
+      .notNull()
+      .references(() => cliConnections.id, { onDelete: 'restrict' }),
+    syncId: text('sync_id').notNull(),
+    idempotencyKey: text('idempotency_key').notNull(),
+    status: text('status').notNull().default('negotiating'),
+    branch: text('branch'),
+    headCommit: text('head_commit'),
+    traceVersion: text('trace_version').notNull(),
+    schemaVersion: text('schema_version').notNull(),
+    manifest: jsonb('manifest').$type<Record<string, unknown>>().notNull(),
+    totalBytes: integer('total_bytes').notNull().default(0),
+    artifactCount: integer('artifact_count').notNull().default(0),
+    errorCode: text('error_code'),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex('sync_operations_idempotency_unique').on(table.idempotencyKey),
+    uniqueIndex('sync_operations_repo_sync_unique').on(table.repositoryId, table.syncId),
+    index('sync_operations_repo_created_idx').on(table.repositoryId, table.createdAt),
+    index('sync_operations_connection_idx').on(table.connectionId),
+  ],
+);
+
+export const syncUploads = pgTable(
+  'sync_uploads',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    operationId: uuid('operation_id')
+      .notNull()
+      .references(() => syncOperations.id, { onDelete: 'cascade' }),
+    artifactId: text('artifact_id').notNull(),
+    artifactType: text('artifact_type').notNull(),
+    path: text('path').notNull(),
+    checksum: text('checksum').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    sensitivity: text('sensitivity').notNull(),
+    schemaVersion: text('schema_version').notNull(),
+    content: text('content').notNull(),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull(),
+    projection: jsonb('projection').$type<Record<string, unknown>>().notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex('sync_uploads_operation_artifact_unique').on(table.operationId, table.artifactId),
+    index('sync_uploads_operation_idx').on(table.operationId),
+  ],
+);
+
+export const syncedArtifacts = pgTable(
+  'synced_artifacts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    repositoryId: uuid('repository_id')
+      .notNull()
+      .references(() => githubRepositories.id, { onDelete: 'cascade' }),
+    operationId: uuid('operation_id')
+      .notNull()
+      .references(() => syncOperations.id, { onDelete: 'restrict' }),
+    artifactId: text('artifact_id').notNull(),
+    artifactType: text('artifact_type').notNull(),
+    path: text('path').notNull(),
+    checksum: text('checksum').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    sensitivity: text('sensitivity').notNull(),
+    schemaVersion: text('schema_version').notNull(),
+    executionOrigin: text('execution_origin').notNull().default('local'),
+    content: text('content').notNull(),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull(),
+    projection: jsonb('projection').$type<Record<string, unknown>>().notNull(),
+    generatedAt: timestamp('generated_at', { withTimezone: true }).notNull(),
+    syncedAt: timestamp('synced_at', { withTimezone: true }).notNull().defaultNow(),
+    supersededAt: timestamp('superseded_at', { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex('synced_artifacts_operation_artifact_unique').on(
+      table.operationId,
+      table.artifactId,
+    ),
+    uniqueIndex('synced_artifacts_operation_path_unique').on(table.operationId, table.path),
+    index('synced_artifacts_repo_type_idx').on(table.repositoryId, table.artifactType),
   ],
 );
 

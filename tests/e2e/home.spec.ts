@@ -12,6 +12,7 @@ type SeedOptions = {
   analysis?: 'completed' | 'running' | 'failed';
   finding?: boolean;
   pullRequest?: boolean;
+  localSync?: boolean;
 };
 
 function sessionCookie(user: { id: string; name: string; email: string; githubLogin: string }) {
@@ -109,6 +110,105 @@ async function seedWorkspace(options: SeedOptions = {}) {
                 'high',
                 'deterministic',
                 JSON.stringify(['auth/session.ts']),
+              ],
+            );
+          }
+        }
+        if (options.localSync) {
+          const connection = await client.query<{ id: string }>(
+            'INSERT INTO cli_connections (organization_id, user_id, label, token_hash, scopes, expires_at) VALUES ($1, $2, $3, $4, $5::jsonb, NOW() + INTERVAL \'30 days\') RETURNING id',
+            [
+              organizationId,
+              user.id,
+              'Playwright local connection',
+              `playwright-${suffix}`,
+              JSON.stringify(['repository:read', 'sync:write']),
+            ],
+          );
+          const operation = await client.query<{ id: string }>(
+            'INSERT INTO sync_operations (organization_id, repository_id, connection_id, sync_id, idempotency_key, status, branch, head_commit, trace_version, schema_version, manifest, total_bytes, artifact_count, completed_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, NOW()) RETURNING id',
+            [
+              organizationId,
+              repositoryId,
+              connection.rows[0]!.id,
+              `sync-${suffix}`,
+              `sync-key-${suffix}`,
+              'completed',
+              'main',
+              'abcdef1234567890abcdef1234567890abcdef12',
+              '0.1.0',
+              '0.1',
+              JSON.stringify({ fixture: true }),
+              600,
+              2,
+            ],
+          );
+          const operationId = operation.rows[0]!.id;
+          await client.query(
+            'UPDATE github_repositories SET remote_head_sha = $1, last_synchronized_at = NOW() WHERE id = $2',
+            ['abcdef1234567890abcdef1234567890abcdef12', repositoryId],
+          );
+          const records = [
+            {
+              id: `analysis-${suffix}`,
+              type: 'analysis',
+              path: `analyses/analysis-${suffix}.md`,
+              projection: {
+                title: 'Local repository analysis',
+                summary: 'Deterministic findings generated locally. Source code remained local.',
+                status: 'completed',
+                items: [
+                  {
+                    id: `local-finding-${suffix}`,
+                    title: 'Local schema change needs review',
+                    detail: 'A migration changed in the synchronized project record.',
+                    severity: 'medium',
+                    classification: 'deterministic',
+                    evidence: ['commit:abcdef1234567890abcdef1234567890abcdef12'],
+                  },
+                ],
+              },
+              content: '# Local analysis\n\nApproved source-free analysis record.\n',
+            },
+            {
+              id: `daily-${suffix}`,
+              type: 'daily_report',
+              path: `reports/daily/2026-08-12-${suffix}.md`,
+              projection: {
+                title: 'Daily project report',
+                summary: 'One meaningful local change was synchronized.',
+                status: 'completed',
+                items: [
+                  {
+                    id: `change-${suffix}`,
+                    title: 'Sync protocol hardened',
+                    detail: 'Manifest validation now rejects stale bases.',
+                    classification: 'deterministic',
+                    evidence: ['commit:abcdef1234567890abcdef1234567890abcdef12'],
+                  },
+                ],
+              },
+              content: '# Daily report\n\nApproved source-free report.\n',
+            },
+          ];
+          for (const record of records) {
+            await client.query(
+              'INSERT INTO synced_artifacts (organization_id, repository_id, operation_id, artifact_id, artifact_type, path, checksum, size_bytes, sensitivity, schema_version, execution_origin, content, metadata, projection, generated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14::jsonb, NOW())',
+              [
+                organizationId,
+                repositoryId,
+                operationId,
+                record.id,
+                record.type,
+                record.path,
+                'a'.repeat(64),
+                record.content.length,
+                'internal',
+                '0.1',
+                'local',
+                record.content,
+                JSON.stringify({ updated_at: new Date().toISOString(), fixture: true }),
+                JSON.stringify(record.projection),
               ],
             );
           }
@@ -225,6 +325,46 @@ test('GitHub App installation and repository selection keep the auth boundary ex
     data: { repositoryIds: [] },
   });
   expect(repositories.status()).toBe(401);
+});
+
+test('CLI device authorization is separate from browser auth and sync requires its own token', async ({
+  page,
+  request,
+}) => {
+  const requestAddress = `192.0.2.${Math.floor(Math.random() * 200) + 1}`;
+  const started = await request.post('/api/cli/device/start', {
+    data: { label: 'Playwright terminal' },
+    headers: { 'x-forwarded-for': requestAddress },
+  });
+  expect(started.status()).toBe(200);
+  const authorization = (await started.json()) as {
+    deviceCode: string;
+    userCode: string;
+    verificationUri: string;
+    verificationUriComplete: string;
+  };
+  expect(authorization.deviceCode).toMatch(/^trcd_/);
+  expect(authorization.userCode).toMatch(/^[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{2}$/);
+  expect(authorization.verificationUri).toBe('http://127.0.0.1:3001/cli/authorize');
+  expect(authorization.verificationUriComplete).toContain(
+    `/cli/authorize?code=${authorization.userCode}`,
+  );
+
+  const pending = await request.post('/api/cli/device/token', {
+    data: { deviceCode: authorization.deviceCode },
+  });
+  expect(pending.status()).toBe(202);
+  await expect(pending.json()).resolves.toEqual({ status: 'authorization_pending' });
+
+  const sync = await request.post('/api/sync/negotiate', {
+    data: {},
+  });
+  expect(sync.status()).toBe(401);
+  await expect(sync.json()).resolves.toEqual({ error: 'CLI authentication required.' });
+
+  await page.goto(`/cli/authorize?code=${authorization.userCode}`);
+  await expect(page).toHaveURL(/\/sign-in\?next=/);
+  await expect(page.getByRole('button', { name: 'Continue with GitHub' })).toBeVisible();
 });
 
 test('signed GitHub webhook deliveries are acknowledged and deduplicated', async ({ request }) => {
@@ -364,6 +504,50 @@ test.describe('authenticated product journey', () => {
       await page.goto(`/app/repositories/${seeded.repositoryId}`);
       await expect(page.getByText('Persisted analysis state is available')).toBeVisible();
       await expect(page.getByRole('link', { name: 'Findings' })).toBeVisible();
+    } finally {
+      await seeded.cleanup();
+    }
+  });
+
+  test('a completed local sync powers overview, repository provenance, reports, findings, and mobile navigation', async ({
+    page,
+  }) => {
+    const seeded = await seedWorkspace({
+      installation: true,
+      repositoryState: 'active',
+      analysis: 'completed',
+      finding: true,
+      localSync: true,
+    });
+    try {
+      await page
+        .context()
+        .addCookies([
+          { name: 'trace_session', value: seeded.cookie, url: 'http://127.0.0.1:3001' },
+        ]);
+      await page.goto('/app');
+      await expect(page.getByText('Daily project report')).toBeVisible();
+      await page.goto(`/app/repositories/${seeded.repositoryId}`);
+      await expect(page.getByRole('region', { name: 'Local sync provenance' })).toContainText(
+        'Local analysis',
+      );
+      await expect(page.getByRole('region', { name: 'Local sync provenance' })).toContainText(
+        'abcdef123456',
+      );
+      await page.goto('/app/reports');
+      await expect(page.getByRole('heading', { name: 'Daily project report' })).toBeVisible();
+      await expect(page.getByText('Approved source-free report.')).toBeHidden();
+      await page.getByText('View approved Markdown').click();
+      await expect(page.getByText('Approved source-free report.')).toBeVisible();
+
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto('/app/reports');
+      await page.getByRole('button', { name: 'Open navigation' }).click();
+      const navigation = page.getByRole('navigation', { name: 'Mobile application navigation' });
+      await expect(navigation.getByRole('link', { name: 'Reports' })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
     } finally {
       await seeded.cleanup();
     }

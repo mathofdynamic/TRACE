@@ -14,6 +14,8 @@ Include the affected component, reproduction steps, impact, and sanitized eviden
 
 Security review covers the dashboard, authentication, GitHub App, webhook receiver, worker, local CLI, `.trace` artifact schema, model-provider integration, and synchronization paths.
 
+Hybrid sync accepts only validated source-free `.trace` artifacts. Review the exact eligibility set with `trace sync --dry-run`. Device credentials are separate from browser sessions, scoped, expiring, hashed at rest on the server, and revocable from Dashboard Settings. See `DOC/local-dashboard-workflow.md` for storage and recovery details.
+
 ## Data handling expectations
 
 - Never commit secrets, private keys, OAuth tokens, or production credentials.

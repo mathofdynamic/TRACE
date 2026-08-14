@@ -13,7 +13,24 @@ import {
 } from '@trace/analysis';
 import type { NormalizedChangeSet } from '@trace/core';
 import { evaluateRules, initialRules, mergeEffectiveRules, validateRule } from '@trace/rules';
-import { parseArtifact, validateTraceDirectory, writeArtifact } from '@trace/schema';
+import {
+  parseArtifact,
+  stableArtifactId,
+  validateTraceDirectory,
+  writeArtifact,
+} from '@trace/schema';
+import {
+  connect as connectDashboard,
+  login as loginDashboard,
+  logout as logoutDashboard,
+  normalizeGitHubRemote,
+  readBinding,
+  sync as syncDashboard,
+  syncStatus as dashboardSyncStatus,
+  cloudEnvironmentForServer,
+  whoami as dashboardWhoami,
+  resolveCloudTarget,
+} from './cloud.js';
 
 const run = promisify(execFile);
 
@@ -55,7 +72,20 @@ async function init(args: string[]): Promise<CliResult> {
         execution_mode: 'local',
         repository: { provider: 'git', name: resolve(root).split(/[\\/]/).pop() ?? 'repository' },
         git_write_policy: 'disabled',
-        sync_policy: 'local_only',
+        sync_policy: {
+          enabled: true,
+          default: 'local_only',
+          allow: [
+            'analysis',
+            'daily_report',
+            'weekly_report',
+            'pr_brief',
+            'decision',
+            'risk',
+            'conflict',
+          ],
+          include_code_snippets: false,
+        },
       }),
     ],
   ]);
@@ -107,6 +137,7 @@ async function changes(args: string[]): Promise<NormalizedChangeSet> {
   const status = await git(['status', '--porcelain'], root);
   const branch = await git(['branch', '--show-current'], root).catch(() => '');
   const remote = await git(['config', '--get', 'remote.origin.url'], root).catch(() => '');
+  const githubIdentity = normalizeGitHubRemote(remote);
   const name = resolve(root).split(/[\\/]/).pop() ?? 'repository';
   const commitsRaw = await git(['log', '-10', '--format=%H%x1f%s%x1f%an%x1f%aI'], root).catch(
     () => '',
@@ -137,7 +168,12 @@ async function changes(args: string[]): Promise<NormalizedChangeSet> {
       }))
     : [];
   return {
-    repository: { provider: remote.includes('github') ? 'github' : 'git', name, root },
+    repository: {
+      provider: githubIdentity ? 'github' : 'git',
+      owner: githubIdentity?.split('/')[0],
+      name: githubIdentity?.split('/')[1] ?? name,
+      root,
+    },
     headRef: branch,
     commits,
     changedFiles: statusFiles,
@@ -168,7 +204,14 @@ async function daily(args: string[]): Promise<CliResult> {
     evidence: changeSet.evidence,
     review_status: 'draft' as const,
     sensitivity: 'internal' as const,
-    sync_policy: 'local_only' as const,
+    sync_policy: 'allowlisted' as const,
+    dashboard: {
+      title: `Daily report — ${date}`,
+      summary: `${changeSet.commits.length} recent commits and ${changeSet.changedFiles.length} changed paths were observed locally.`,
+      branch: changeSet.headRef || undefined,
+      status: 'completed',
+      items: [],
+    },
   };
   const analysis = args.includes('--with-ai')
     ? await analyzeChanges({ root, changeSet, withSemantic: true })
@@ -218,7 +261,21 @@ async function weekly(args: string[]): Promise<CliResult> {
     evidence: changeSet.evidence,
     review_status: 'draft' as const,
     sensitivity: 'internal' as const,
-    sync_policy: 'local_only' as const,
+    sync_policy: 'allowlisted' as const,
+    dashboard: {
+      title: `Weekly report — ${window.startUtc.slice(0, 10)}`,
+      summary: `${items.length} local change records are included in this deterministic report.`,
+      branch: changeSet.headRef || undefined,
+      status: 'completed',
+      items: items.slice(0, 100).map((item) => ({
+        id: item.id.replace(/[^a-z0-9-]/gi, '-').toLowerCase(),
+        title: item.title,
+        detail: item.detail,
+        severity: 'info' as const,
+        classification: 'deterministic' as const,
+        evidence: item.evidenceIds,
+      })),
+    },
   };
   const artifact = await writeArtifact({
     traceRoot: join(root, '.trace'),
@@ -231,9 +288,8 @@ async function weekly(args: string[]): Promise<CliResult> {
 }
 
 async function analyzeCommand(args: string[]): Promise<CliResult> {
-  if (args[1] !== 'changes') {
-    return { code: 2, value: { error: 'Use: trace analyze changes [--with-ai]' } };
-  }
+  if (args[1] && args[1] !== 'changes' && !args[1].startsWith('--'))
+    return { code: 2, value: { error: 'Use: trace analyze [changes] [--with-ai]' } };
   const root = await repoRoot();
   const changeSet = await changes(args);
   const result = await analyzeChanges({
@@ -241,7 +297,71 @@ async function analyzeCommand(args: string[]): Promise<CliResult> {
     changeSet,
     withSemantic: args.includes('--with-ai'),
   });
-  return { code: 0, value: result };
+  const now = new Date().toISOString();
+  const headCommit = changeSet.commits[0]?.sha;
+  const artifactId = stableArtifactId(
+    'analysis',
+    `${changeSet.repository.provider}:${changeSet.repository.owner ?? 'local'}:${changeSet.repository.name}:${headCommit ?? changeSet.headRef ?? result.analysisId}`,
+  );
+  const artifact = await writeArtifact({
+    traceRoot: join(root, '.trace'),
+    relativePath: `analyses/${artifactId}.md`,
+    overwrite: true,
+    dryRun: args.includes('--dry-run'),
+    metadata: {
+      schema_version: '0.1',
+      id: artifactId,
+      artifact_type: 'analysis',
+      repository: {
+        provider: changeSet.repository.provider,
+        owner: changeSet.repository.owner ?? 'local',
+        name: changeSet.repository.name,
+      },
+      created_at: now,
+      updated_at: now,
+      generator: 'trace-cli/0.1',
+      execution_origin: 'local',
+      source_refs: changeSet.evidence,
+      evidence: changeSet.evidence,
+      review_status: 'draft',
+      sensitivity: 'internal',
+      sync_policy: 'allowlisted',
+      dashboard: {
+        title: `Local analysis of ${changeSet.repository.name}`,
+        summary: `${result.findings.length} deterministic findings from ${result.parserCoverage.supportedFiles} supported files. Source code remains local.`,
+        branch: changeSet.headRef || undefined,
+        head_commit: headCommit,
+        status: 'completed',
+        items: result.findings.slice(0, 100).map((finding) => ({
+          id: finding.id,
+          title: finding.title,
+          detail: finding.detail,
+          severity: finding.severity,
+          classification: finding.classification,
+          evidence: finding.evidenceIds.slice(0, 20),
+        })),
+      },
+    },
+    markdown: `# Local analysis\n\n## Known\n\n- Deterministic findings: **${result.findings.length}**.\n- Supported files: **${result.parserCoverage.supportedFiles}**.\n- Working tree: **${changeSet.workingTree}**.\n\n## Provenance\n\n- Engine: ${result.provenance.engine}.\n- Parser: ${result.provenance.parser}.\n- Source code sent to a model: **${result.provenance.sourceCodeSentToProvider ? 'yes' : 'no'}**.\n\n## Findings\n\n${result.findings.map((finding) => `- **${finding.title}** — ${finding.detail}`).join('\n') || '- No deterministic findings.'}\n`,
+  });
+  return {
+    code: 0,
+    value: {
+      analysis: {
+        id: result.analysisId,
+        parserCoverage: result.parserCoverage,
+        findings: result.findings,
+        conflicts: result.conflicts,
+        warnings: result.warnings,
+        provenance: result.provenance,
+      },
+      artifact: {
+        path: artifact.path,
+        checksum: artifact.checksum,
+        dryRun: artifact.dryRun,
+      },
+    },
+  };
 }
 
 async function prCommand(args: string[]): Promise<CliResult> {
@@ -327,17 +447,45 @@ async function rulesCommand(args: string[]): Promise<CliResult> {
   };
 }
 
-async function main(args: string[]): Promise<CliResult> {
+export async function main(args: string[]): Promise<CliResult> {
   const [command, subcommand] = args;
   if (command === '--version' || command === '-v') return { code: 0, value: 'trace 0.1.0' };
   if (command === 'init') return init(args);
+  if (command === 'login') return { code: 0, value: await loginDashboard(args) };
+  if (command === 'whoami') return { code: 0, value: await dashboardWhoami() };
+  if (command === 'logout') return { code: 0, value: await logoutDashboard() };
+  if (command === 'connect') {
+    const root = await repoRoot();
+    const remote = await git(['config', '--get', 'remote.origin.url'], root).catch(() => '');
+    return { code: 0, value: await connectDashboard(root, remote) };
+  }
   if (command === 'status') {
     const root = await repoRoot();
     const trace = join(root, '.trace');
     const issues = await validateTraceDirectory(trace);
+    const remote = await git(['config', '--get', 'remote.origin.url'], root).catch(() => '');
+    const binding = await readBinding(root);
+    const target = binding ? undefined : resolveCloudTarget();
     return {
       code: issues.length ? 1 : 0,
-      value: { repository: root, trace, valid: issues.length === 0, issues },
+      value: {
+        repository: { root, github: normalizeGitHubRemote(remote) },
+        trace: { path: trace, valid: issues.length === 0, issues },
+        dashboard: binding
+          ? {
+              connected: true,
+              environment: cloudEnvironmentForServer(binding.server),
+              repository: binding.repository,
+              workspace: binding.workspaceName,
+              server: binding.server,
+            }
+          : {
+              connected: false,
+              environment: target!.environment,
+              server: target!.server,
+              next: 'Run trace login, then trace connect.',
+            },
+      },
     };
   }
   if (command === 'changes') return { code: 0, value: await changes(args) };
@@ -349,11 +497,20 @@ async function main(args: string[]): Promise<CliResult> {
     };
   if (command === 'report' && subcommand === 'daily') return daily(args);
   if (command === 'report' && subcommand === 'weekly') return weekly(args);
-  if (command === 'sync' && subcommand === 'status')
+  if (command === 'sync') {
+    const root = await repoRoot();
+    if (subcommand === 'status')
+      return {
+        code: 0,
+        value: await dashboardSyncStatus(root, args.includes('--accept-dashboard-base')),
+      };
+    const branch = await git(['branch', '--show-current'], root);
+    const headCommit = await git(['rev-parse', 'HEAD'], root);
     return {
       code: 0,
-      value: { configured: false, mode: 'local', message: 'No sync endpoint is configured.' },
+      value: await syncDashboard(root, branch, headCommit, args.includes('--dry-run')),
     };
+  }
   if (command === 'config' && subcommand === 'show') {
     const root = await repoRoot();
     const source = await readFile(join(root, '.trace/config.yml'), 'utf8').catch(() => '');
@@ -373,6 +530,7 @@ async function main(args: string[]): Promise<CliResult> {
         .catch(() => false),
       repository: root,
       trace: (await validateTraceDirectory(join(root, '.trace'))).length === 0,
+      dashboard: await readBinding(root),
     };
     return { code: checks.git && checks.trace ? 0 : 1, value: checks };
   }
@@ -388,15 +546,20 @@ async function main(args: string[]): Promise<CliResult> {
       error: 'Unknown command.',
       commands: [
         'init',
+        'login',
+        'whoami',
+        'logout',
+        'connect',
         'status',
         'validate',
         'inspect',
         'changes',
-        'analyze changes [--with-ai]',
+        'analyze [changes] [--with-ai]',
         'report daily',
         'pr',
         'rules list|explain|validate|test|effective|diff',
-        'sync status',
+        'sync [--dry-run]',
+        'sync status [--accept-dashboard-base]',
         'config show',
         'doctor',
       ],
@@ -404,6 +567,14 @@ async function main(args: string[]): Promise<CliResult> {
   };
 }
 
-const result = await main(process.argv.slice(2));
-console.log(output(result.value, jsonFlag(process.argv.slice(2))));
-process.exitCode = result.code;
+const invokedDirectly = process.argv[1]?.replaceAll('\\', '/').endsWith('/cli.js');
+if (invokedDirectly) {
+  try {
+    const result = await main(process.argv.slice(2));
+    console.log(output(result.value, jsonFlag(process.argv.slice(2))));
+    process.exitCode = result.code;
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
+}
