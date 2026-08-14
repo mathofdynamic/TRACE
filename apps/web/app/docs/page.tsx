@@ -60,7 +60,42 @@ export default function DocsPage() {
             </li>
           </ol>
           <p className="docs-local__note">
-            Dashboard artifact upload is not enabled yet. Generated files remain in the repository.
+            Generated files remain durable repository records. Dashboard sync is explicit and
+            source-free.
+          </p>
+        </section>
+        <section className="docs-local" id="local-dashboard">
+          <p className="section-label">Local to dashboard</p>
+          <h2>Analyze locally. Sync only the record you approve.</h2>
+          <p>
+            Connect the CLI to the exact GitHub repository, inspect the source-free dry run, then
+            publish a completed artifact snapshot.
+          </p>
+          <ol>
+            <li>
+              <code>trace login</code>
+              <span>Approve a separate, revocable CLI credential.</span>
+            </li>
+            <li>
+              <code>trace connect</code>
+              <span>Bind the exact GitHub remote to its selected dashboard repository.</span>
+            </li>
+            <li>
+              <code>trace analyze</code>
+              <span>Analyze source inside the repository and write `.trace` output.</span>
+            </li>
+            <li>
+              <code>trace sync --dry-run</code>
+              <span>Review every included and excluded artifact.</span>
+            </li>
+            <li>
+              <code>trace sync</code>
+              <span>Upload the approved source-free snapshot.</span>
+            </li>
+          </ol>
+          <p className="docs-local__note">
+            Source files, code snippets, secrets, confidential artifacts, and browser credentials
+            are excluded.
           </p>
         </section>
       </main>

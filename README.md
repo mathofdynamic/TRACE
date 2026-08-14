@@ -105,6 +105,7 @@ Analysis remains local or inside the customer’s CI/VPC. Only explicitly permit
 - [Nontechnical product overview](DOC/project-overview.md)
 - [Technical overview](DOC/technical-overview.md)
 - [TRACE design specification](Design-system/TRACE-DESIGN-SPEC.md)
+- [Local-to-dashboard workflow](DOC/local-dashboard-workflow.md)
 - [Implementation prompt roadmap](Implementation-Prompts/README.md)
 - [Research library](Researchs/)
 
@@ -138,9 +139,9 @@ TRACE/
 
 ## Current status
 
-TRACE is in active implementation. The current web surface is a foundation shell and does not claim product functionality that has not been implemented.
+TRACE is in active pilot implementation. Authentication, onboarding, GitHub App repository selection, local deterministic analysis, versioned `.trace` artifacts, explicit source-free synchronization, and data-backed dashboard projections now have executable local paths. Cloud source analysis remains disabled; the supported bridge analyzes locally and sends only policy-approved artifacts.
 
-Phases 01-04 establish the TypeScript monorepo, native PostgreSQL local runtime, authentication boundary, design system, public site, onboarding, and dashboard shell. Phase 05 is the current GitHub App connection phase. The Cloudflare test deployment is live at `https://trace-code.pages.dev`; GitHub App installation and repository synchronization still require owner configuration. Docker is not required for local development.
+The staging Worker at `https://trace-test-staging.mathofdynamic2.workers.dev` serves acceptance version `2a87b573-fb0b-4938-9419-de74dc273a7e`; health, unauthenticated route boundaries, and the real CLI-to-dashboard path were verified after staging migrations `0004`–`0006` were applied. The latest freshness and retry hardening is local pending a new staging Worker deployment. Docker is not required for local development.
 
 ---
 

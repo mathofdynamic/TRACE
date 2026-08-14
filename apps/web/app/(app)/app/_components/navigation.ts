@@ -7,16 +7,17 @@ export type NavigationItem = {
     | 'change'
     | 'conflict'
     | 'report'
+    | 'decision'
     | 'rule'
     | 'activity'
     | 'settings'
     | 'docs';
   external?: boolean;
-  requires?: 'changes' | 'conflicts' | 'reports' | 'rules' | 'activity';
+  requires?: 'changes' | 'conflicts' | 'reports' | 'decisions' | 'rules' | 'activity';
 };
 
 export type NavigationCapabilities = Record<
-  'changes' | 'conflicts' | 'reports' | 'rules' | 'activity',
+  'changes' | 'conflicts' | 'reports' | 'decisions' | 'rules' | 'activity',
   boolean
 >;
 
@@ -26,6 +27,7 @@ export const primaryNavigation: readonly NavigationItem[] = [
   { label: 'Active changes', href: '/app/changes', icon: 'change', requires: 'changes' },
   { label: 'Conflicts', href: '/app/conflicts', icon: 'conflict', requires: 'conflicts' },
   { label: 'Reports', href: '/app/reports', icon: 'report', requires: 'reports' },
+  { label: 'Decisions', href: '/app/decisions', icon: 'decision', requires: 'decisions' },
   { label: 'Rules', href: '/app/rules', icon: 'rule', requires: 'rules' },
 ] as const;
 

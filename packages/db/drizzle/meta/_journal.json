@@ -29,6 +29,27 @@
       "when": 1786170137981,
       "tag": "0003_fair_nomad",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786526421018,
+      "tag": "0004_slim_iron_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786533359413,
+      "tag": "0005_nappy_jazinda",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786539165823,
+      "tag": "0006_perfect_falcon",
+      "breakpoints": true
     }
   ]
 }

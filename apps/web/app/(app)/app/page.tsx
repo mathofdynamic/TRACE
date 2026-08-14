@@ -51,7 +51,8 @@ export default async function DashboardOverviewPage() {
     actionLabel = 'Review failure';
   } else if (summary.attention.length) {
     attentionTitle = `${summary.attention.length} ${summary.attention.length === 1 ? 'thing needs' : 'things need'} attention`;
-    attentionBody = 'These are unresolved findings from persisted analysis runs.';
+    attentionBody =
+      'These are unresolved findings or failed operations from persisted project state.';
     actionHref = repository ? `/app/repositories/${repository.id}/findings` : '/app/repositories';
     actionLabel = 'Review findings';
   } else if (analysis?.status === 'completed') {
@@ -113,7 +114,7 @@ export default async function DashboardOverviewPage() {
             </div>
             <div>
               <dt>Latest report</dt>
-              <dd>Not synchronized</dd>
+              <dd>{summary.latestReports[0]?.title ?? 'Not synchronized'}</dd>
             </div>
           </dl>
         </section>
@@ -152,7 +153,7 @@ export default async function DashboardOverviewPage() {
         <div className="section-heading-row">
           <div>
             <span className="card-label">Attention</span>
-            <h2 id="attention-list-title">Risks, findings, and failed analysis</h2>
+            <h2 id="attention-list-title">Risks, findings, and failed operations</h2>
           </div>
           <span>{summary.attention.length} unresolved</span>
         </div>

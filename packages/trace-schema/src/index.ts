@@ -5,6 +5,20 @@ import { parse, stringify } from 'yaml';
 import { z } from 'zod';
 
 export const schemaVersion = '0.1';
+export const syncProtocolVersion = '0.1';
+
+export const syncableArtifactTypes = [
+  'analysis',
+  'daily_report',
+  'weekly_report',
+  'pr_brief',
+  'decision',
+  'risk',
+  'debt',
+  'conflict',
+  'rule',
+  'index',
+] as const;
 
 export const evidenceReferenceSchema = z.object({
   type: z.enum([
@@ -34,12 +48,43 @@ export const repositoryIdentitySchema = z.object({
   default_branch: z.string().min(1).optional(),
 });
 
+const dashboardItemSchema = z
+  .object({
+    id: z.string().min(1).max(100),
+    title: z.string().min(1).max(240),
+    detail: z.string().max(2000),
+    severity: z.enum(['info', 'low', 'medium', 'high']).optional(),
+    classification: z.enum(['deterministic', 'correlated', 'semantic', 'uncertain']).optional(),
+    evidence: z.array(z.string().min(1).max(300)).max(20).default([]),
+    status: z.string().max(80).optional(),
+  })
+  .strict();
+
+export const dashboardProjectionSchema = z
+  .object({
+    title: z.string().min(1).max(240),
+    summary: z.string().max(4000),
+    branch: z.string().max(255).optional(),
+    head_commit: z
+      .string()
+      .regex(/^[a-f0-9]{7,64}$/i)
+      .optional(),
+    base_commit: z
+      .string()
+      .regex(/^[a-f0-9]{7,64}$/i)
+      .optional(),
+    status: z.string().max(80).optional(),
+    items: z.array(dashboardItemSchema).max(100).default([]),
+  })
+  .strict();
+
 export const artifactMetadataSchema = z
   .object({
     schema_version: z.literal(schemaVersion),
     id: z.string().regex(/^[a-z][a-z0-9-]{2,80}$/),
     artifact_type: z.enum([
       'config',
+      'analysis',
       'daily_report',
       'weekly_report',
       'pr_brief',
@@ -81,6 +126,7 @@ export const artifactMetadataSchema = z
       .string()
       .regex(/^[a-f0-9]{64}$/)
       .optional(),
+    dashboard: dashboardProjectionSchema.optional(),
   })
   .strict();
 
@@ -98,6 +144,84 @@ export type ValidationIssue = {
   message: string;
   remediation: string;
 };
+
+export const syncArtifactManifestSchema = z
+  .object({
+    id: z.string().regex(/^[a-z][a-z0-9-]{2,80}$/),
+    type: z.enum(syncableArtifactTypes),
+    path: z.string().min(1).max(240),
+    sha256: z.string().regex(/^[a-f0-9]{64}$/),
+    size: z.number().int().positive().max(262_144),
+    schemaVersion: z.literal(schemaVersion),
+    sensitivity: z.enum(['public', 'internal', 'confidential', 'restricted']),
+    revision: z.string().datetime(),
+  })
+  .strict();
+
+export const syncManifestSchema = z
+  .object({
+    protocolVersion: z.literal(syncProtocolVersion),
+    schemaVersion: z.literal(schemaVersion),
+    syncId: z.string().uuid(),
+    repositoryId: z.string().uuid(),
+    repository: z.string().regex(/^[^/\s]+\/[^/\s]+$/),
+    executionOrigin: z.literal('local'),
+    traceVersion: z.string().regex(/^\d+\.\d+\.\d+$/),
+    createdAt: z.string().datetime(),
+    baseOperationId: z.string().uuid().nullable(),
+    git: z
+      .object({
+        branch: z.string().min(1).max(255),
+        headCommit: z.string().regex(/^[a-f0-9]{7,64}$/i),
+      })
+      .strict(),
+    artifacts: z.array(syncArtifactManifestSchema).max(64),
+    sourceCodeIncluded: z.literal(false),
+    codeSnippetsIncluded: z.literal(false),
+  })
+  .strict()
+  .superRefine((manifest, context) => {
+    const total = manifest.artifacts.reduce((sum, artifact) => sum + artifact.size, 0);
+    if (total > 2_097_152) {
+      context.addIssue({ code: 'custom', path: ['artifacts'], message: 'Sync exceeds 2 MiB.' });
+    }
+    for (const [index, artifact] of manifest.artifacts.entries()) {
+      if (!isSafeTraceRelativePath(artifact.path)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['artifacts', index, 'path'],
+          message: 'Artifact path is not a safe .trace relative path.',
+        });
+      }
+    }
+  });
+
+export const syncArtifactUploadSchema = z
+  .object({
+    operationId: z.string().uuid(),
+    artifact: syncArtifactManifestSchema,
+    content: z.string().min(1).max(262_144),
+  })
+  .strict();
+
+export type SyncManifest = z.infer<typeof syncManifestSchema>;
+export type SyncArtifactManifest = z.infer<typeof syncArtifactManifestSchema>;
+
+export function isSafeTraceRelativePath(candidate: string) {
+  if (!candidate || candidate.includes('\\') || candidate.includes('\0')) return false;
+  if (candidate.startsWith('/') || candidate.startsWith('~') || /^[a-z]:/i.test(candidate))
+    return false;
+  let decoded = candidate;
+  try {
+    decoded = decodeURIComponent(candidate);
+    if (decodeURIComponent(decoded) !== decoded) return false;
+  } catch {
+    return false;
+  }
+  if (decoded !== candidate || decoded.split('/').some((part) => part === '..' || part === '.'))
+    return false;
+  return /^[a-z0-9][a-z0-9._/-]*\.md$/i.test(candidate);
+}
 
 export function validateArtifactMetadata(input: unknown) {
   return artifactMetadataSchema.safeParse(input);
@@ -210,11 +334,13 @@ export async function validateTraceDirectory(traceRoot: string) {
         });
       } else if (entry.isDirectory()) await walk(fullPath);
       else if (entry.name.endsWith('.md')) {
+        const artifactPath = relative(root, fullPath).replaceAll('\\', '/');
+        if (artifactPath === 'README.md') continue;
         try {
           parseArtifact(await readFile(fullPath, 'utf8'));
         } catch (error) {
           issues.push({
-            path: relative(root, fullPath),
+            path: artifactPath,
             message: error instanceof Error ? error.message : String(error),
             remediation: 'Repair YAML front matter and validate against spec v0.1.',
           });

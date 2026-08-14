@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   exchangeGitHubAppCode,
   normalizeGitHubEvent,
+  normalizeGitHubRepositoryHead,
   normalizeGitHubRepository,
   verifyGitHubSignature,
   verifyUserInstallationAccess,
@@ -59,6 +60,12 @@ describe('GitHub webhook security and normalization', () => {
       visibility: 'private',
       permissions: { metadata: 'read', contents: 'read' },
     });
+  });
+
+  it('accepts only a real GitHub commit pointer for freshness', () => {
+    expect(normalizeGitHubRepositoryHead({ object: { sha: 'a'.repeat(40) } })).toBe('a'.repeat(40));
+    expect(normalizeGitHubRepositoryHead({ object: { sha: '0'.repeat(40) } })).toBeNull();
+    expect(normalizeGitHubRepositoryHead({ object: { sha: 'not-a-sha' } })).toBeNull();
   });
 
   it('exchanges an App authorization code server-side', async () => {

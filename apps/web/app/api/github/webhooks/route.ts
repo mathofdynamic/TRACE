@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { PgBoss } from 'pg-boss';
 import { createDatabase, schema } from '@trace/db';
 import { parseGitHubWebhookEnv } from '@trace/env';
@@ -63,6 +63,32 @@ export async function POST(request: Request) {
       .onConflictDoNothing({ target: schema.githubWebhookDeliveries.deliveryId })
       .returning({ id: schema.githubWebhookDeliveries.id });
     if (!delivery) return Response.json({ accepted: true, duplicate: true });
+
+    if (normalized?.type === 'BranchPushed') {
+      const [repository] = await db
+        .select({
+          id: schema.githubRepositories.id,
+          defaultBranch: schema.githubRepositories.defaultBranch,
+        })
+        .from(schema.githubRepositories)
+        .where(eq(schema.githubRepositories.githubRepositoryId, normalized.repositoryId))
+        .limit(1);
+      if (
+        repository?.defaultBranch &&
+        normalized.ref === `refs/heads/${repository.defaultBranch}` &&
+        /^[a-f0-9]{40}$/i.test(normalized.after)
+      ) {
+        await db
+          .update(schema.githubRepositories)
+          .set({ remoteHeadSha: normalized.after, updatedAt: new Date() })
+          .where(
+            and(
+              eq(schema.githubRepositories.id, repository.id),
+              eq(schema.githubRepositories.state, 'active'),
+            ),
+          );
+      }
+    }
 
     const boss = new PgBoss({ connectionString: databaseUrl });
     await boss.start();

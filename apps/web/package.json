@@ -18,6 +18,7 @@
     "@trace/db": "workspace:*",
     "@trace/env": "workspace:*",
     "@trace/github": "workspace:*",
+    "@trace/schema": "workspace:*",
     "@trace/ui": "workspace:*",
     "drizzle-orm": "0.44.5",
     "pg-boss": "12.5.0",

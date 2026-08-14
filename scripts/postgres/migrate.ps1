@@ -10,4 +10,12 @@ if (-not $DatabaseUrl) {
 }
 
 $env:DATABASE_URL = $DatabaseUrl
-pnpm db:migrate
+if ($env:OS -eq 'Windows_NT') {
+  & cmd.exe /d /c 'pnpm.cmd db:migrate 2>&1'
+} else {
+  & pnpm db:migrate
+}
+$migrationExitCode = $LASTEXITCODE
+if ($migrationExitCode -ne 0) {
+  exit $migrationExitCode
+}

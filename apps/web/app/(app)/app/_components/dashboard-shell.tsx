@@ -53,6 +53,12 @@ function NavigationIcon({ name }: { name: NavigationItem['icon'] }) {
         <path d="M8 12h8M8 16h8" />
       </>
     ),
+    decision: (
+      <>
+        <path d="M5 4h14v16H5z" />
+        <path d="M8 8h8M8 12h8M8 16h5" />
+      </>
+    ),
     rule: (
       <>
         <path d="M5 5h14M5 12h14M5 19h14" />

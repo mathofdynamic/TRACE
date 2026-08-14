@@ -340,6 +340,53 @@ export function normalizeGitHubRepository(value: unknown): GitHubRepositorySnaps
   };
 }
 
+function isCommitSha(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-f0-9]{40}$/i.test(value) && !/^0{40}$/i.test(value);
+}
+
+export function normalizeGitHubRepositoryHead(value: unknown) {
+  const root = asRecord(value);
+  const object = asRecord(root.object);
+  return isCommitSha(object.sha) ? object.sha : null;
+}
+
+async function createInstallationToken(config: GitHubAppConfig, installationId: number) {
+  const appJwt = await createGitHubAppJwt(config.appId, config.privateKey);
+  const tokenResponse = await githubRequest<{ token?: string }>(
+    `https://api.github.com/app/installations/${installationId}/access_tokens`,
+    { method: 'POST', token: appJwt, body: JSON.stringify({}) },
+  );
+  if (!tokenResponse.token) throw new Error('GitHub App installation token missing');
+  return tokenResponse.token;
+}
+
+/**
+ * Reads only the trusted default-branch commit pointer from GitHub.
+ * No repository contents are requested or retained.
+ */
+export async function getGitHubRepositoryHead(
+  config: GitHubAppConfig,
+  installationId: number,
+  owner: string,
+  repo: string,
+  branch: string,
+) {
+  if (
+    branch.length < 1 ||
+    branch.length > 255 ||
+    [...branch].some((character) => character.charCodeAt(0) <= 0x1f || character === '\u007f')
+  )
+    throw new Error('GitHub default branch is invalid');
+  const token = await createInstallationToken(config, installationId);
+  const ref = await githubRequest<{ object?: { sha?: unknown } }>(
+    `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/ref/heads/${encodeURIComponent(branch)}`,
+    { token },
+  );
+  const head = normalizeGitHubRepositoryHead(ref);
+  if (!head) throw new Error('GitHub repository head response invalid');
+  return head;
+}
+
 export async function getGitHubInstallationSnapshot(
   config: GitHubAppConfig,
   installationId: number,
@@ -358,17 +405,13 @@ export async function getGitHubInstallationSnapshot(
   ) {
     throw new Error('GitHub App installation response invalid');
   }
-  const tokenResponse = await githubRequest<{ token?: string }>(
-    `https://api.github.com/app/installations/${installationId}/access_tokens`,
-    { method: 'POST', token: appJwt, body: JSON.stringify({}) },
-  );
-  if (!tokenResponse.token) throw new Error('GitHub App installation token missing');
+  const token = await createInstallationToken(config, installationId);
 
   const repositories: GitHubRepositorySnapshot[] = [];
   for (let page = 1; page <= 5; page += 1) {
     const pageResponse = await githubRequest<{ repositories?: unknown[] }>(
       `https://api.github.com/installation/repositories?per_page=100&page=${page}`,
-      { token: tokenResponse.token },
+      { token },
     );
     const pageRepositories = (pageResponse.repositories ?? [])
       .map(normalizeGitHubRepository)

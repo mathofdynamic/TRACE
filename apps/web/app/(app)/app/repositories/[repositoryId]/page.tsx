@@ -24,6 +24,7 @@ export default async function RepositoryPage({
   if (!repository) notFound();
   const findings = summary.attention.filter((item) => item.repositoryId === repository.id);
   const changes = summary.latestChanges.filter((item) => item.repositoryId === repository.id);
+  const reports = summary.latestReports.filter((item) => item.repositoryId === repository.id);
 
   return (
     <div className="dashboard-page repository-page">
@@ -37,6 +38,9 @@ export default async function RepositoryPage({
             <span data-state="connected">Connected</span>
             <span>{repository.defaultBranch ?? 'Default branch unavailable'}</span>
             <span>Last synchronized {formattedDate(repository.lastSynchronizedAt)}</span>
+            {repository.latestSync ? (
+              <span>Local · TRACE {repository.latestSync.traceVersion}</span>
+            ) : null}
           </div>
         </div>
         <Link className="trace-button trace-button--secondary" href="/app/repositories">
@@ -56,8 +60,12 @@ export default async function RepositoryPage({
             </p>
           </div>
           <div className="local-command">
-            <code>trace analyze changes</code>
-            <Link href="/docs#local-analysis">Local setup</Link>
+            <code>trace login</code>
+            <code>trace connect</code>
+            <code>trace analyze</code>
+            <code>trace sync --dry-run</code>
+            <code>trace sync</code>
+            <Link href="/docs#local-dashboard">Local setup</Link>
           </div>
         </section>
       ) : (
@@ -71,6 +79,37 @@ export default async function RepositoryPage({
           </time>
         </section>
       )}
+
+      {repository.latestSync ? (
+        <section className="sync-provenance" aria-label="Local sync provenance">
+          <div>
+            <span className="card-label">Latest local sync</span>
+            <strong>{formattedDate(repository.latestSync.completedAt)}</strong>
+          </div>
+          <div>
+            <span>Branch</span>
+            <strong>{repository.latestSync.branch ?? 'Unavailable'}</strong>
+          </div>
+          <div>
+            <span>Commit</span>
+            <code>{repository.latestSync.headCommit?.slice(0, 12) ?? 'Unavailable'}</code>
+          </div>
+          <div>
+            <span>Freshness</span>
+            <strong>
+              {repository.latestSync.stale === true
+                ? 'Behind GitHub'
+                : repository.latestSync.stale === false
+                  ? 'Current'
+                  : 'Freshness unknown'}
+            </strong>
+          </div>
+          <div>
+            <span>Origin</span>
+            <strong>Local analysis</strong>
+          </div>
+        </section>
+      ) : null}
 
       <div className="overview-grid">
         <section className="dashboard-card">
@@ -90,7 +129,7 @@ export default async function RepositoryPage({
             </div>
             <div>
               <dt>Reports</dt>
-              <dd>Not synchronized</dd>
+              <dd>{reports.length || 'Not synchronized'}</dd>
             </div>
           </dl>
         </section>
