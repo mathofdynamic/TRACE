@@ -1,5 +1,7 @@
 import { notFound } from 'next/navigation';
 import { getAuthenticatedDashboardSummary } from '../../../../../../lib/dashboard-server';
+import { FindingDisclosure, ProjectContextSummary } from '../../../_components/trace-redesign';
+import { presentFindingDetail } from '../../../../../../lib/dashboard-state';
 import { RepositoryTabs } from '../../../_components/repository-tabs';
 
 export default async function RepositoryViewPage({
@@ -13,74 +15,84 @@ export default async function RepositoryViewPage({
   const repository = summary.repositories.find((item) => item.id === repositoryId);
   if (!repository) notFound();
   const changes = summary.latestChanges.filter((item) => item.repositoryId === repository.id);
-  const findings = summary.attention.filter((item) => item.repositoryId === repository.id);
+  const findings = summary.attention.filter(
+    (item) =>
+      item.repositoryId === repository.id && ['finding', 'risk', 'conflict'].includes(item.kind),
+  );
 
   return (
-    <div className="dashboard-page repository-page">
-      <div className="dashboard-page-header">
+    <div className="dashboard-page redesign-page repository-page">
+      <header className="redesign-header">
         <div>
-          <p className="section-label">{repository.fullName}</p>
-          <h1>{view === 'pull-requests' ? 'Pull requests' : 'Analysis findings'}</h1>
-          <p>
-            {view === 'pull-requests'
-              ? 'Pull request snapshots stored from authorized GitHub repository activity.'
-              : 'Unresolved findings from persisted analysis runs. Evidence and interpretation remain labeled.'}
-          </p>
+          <span className="eyebrow">{repository.fullName}</span>
+          <h1>{view === 'pull-requests' ? 'Changes' : 'Findings'}</h1>
+          <ProjectContextSummary repository={repository} attention={summary.attention} />
         </div>
-      </div>
+      </header>
       <RepositoryTabs repositoryId={repositoryId} />
       {view === 'pull-requests' ? (
         changes.length ? (
-          <div className="record-list">
+          <div className="redesign-list record-list-redesign">
             {changes.map((change) => (
-              <article key={change.id}>
-                <span className="record-index">#{change.number}</span>
+              <article className="redesign-list-row" key={change.id}>
                 <div>
-                  <h2>{change.title}</h2>
-                  <p>
-                    {change.state} · {change.authorLogin ?? 'Author unavailable'}
-                  </p>
+                  <span className="record-index">#{change.number}</span>
+                  <strong>{change.title}</strong>
+                  <small>
+                    {change.state} - {change.authorLogin ?? 'Author unavailable'}
+                  </small>
                 </div>
                 {change.url ? <a href={change.url}>Open on GitHub</a> : null}
               </article>
             ))}
           </div>
         ) : (
-          <div className="empty-panel empty-panel--large">
-            <span aria-hidden="true">↗</span>
-            <h2>No pull request snapshots yet</h2>
-            <p>
-              This is normal until signed GitHub events have been processed for this repository.
-            </p>
+          <div className="inline-empty redesign-empty redesign-empty--large">
+            <strong>No pull request snapshots yet</strong>
+            <p>Signed GitHub activity will appear here when it is processed for this repository.</p>
           </div>
         )
       ) : findings.length ? (
-        <div className="finding-list finding-list--standalone">
+        <div className="redesign-list finding-list-redesign finding-list-redesign--standalone">
           {findings.map((finding) => (
-            <article className="finding-row" key={finding.id}>
-              <span data-severity={finding.severity}>{finding.severity}</span>
-              <div>
-                <h2>{finding.title}</h2>
-                <p>{finding.detail}</p>
+            <div className="finding-row-redesign" key={finding.id}>
+              <div className="finding-row-redesign__severity">
+                <span className="severity-label" data-severity={finding.severity}>
+                  {finding.severity}
+                </span>
                 <small>
-                  {finding.classification === 'deterministic'
-                    ? 'Verified evidence'
-                    : `${finding.classification} interpretation`}{' '}
-                  · {finding.evidence.length} evidence reference
+                  {finding.evidence.length} evidence reference
                   {finding.evidence.length === 1 ? '' : 's'}
                 </small>
               </div>
-            </article>
+              <div className="finding-row-redesign__body">
+                <h2>{finding.title}</h2>
+                <p>{presentFindingDetail(finding.detail)}</p>
+                <small>
+                  {finding.classification === 'deterministic'
+                    ? 'Verified local evidence'
+                    : `${finding.classification} interpretation`}
+                </small>
+              </div>
+              <FindingDisclosure
+                finding={finding}
+                repositoryName={repository.fullName}
+                repository={repository}
+              />
+            </div>
           ))}
         </div>
       ) : (
-        <div className="empty-panel empty-panel--large">
-          <span aria-hidden="true">✓</span>
-          <h2>No unresolved findings</h2>
+        <div className="inline-empty redesign-empty redesign-empty--large">
+          <strong>
+            {repository.analysis?.status === 'completed'
+              ? 'No unresolved findings'
+              : 'No findings yet'}
+          </strong>
           <p>
             {repository.analysis?.status === 'completed'
-              ? 'Nothing from the latest persisted run currently needs attention.'
-              : 'Run TRACE locally to create the first validated analysis record.'}
+              ? 'The latest persisted run has nothing requiring review.'
+              : 'Run local TRACE analysis before expecting findings here.'}
           </p>
         </div>
       )}

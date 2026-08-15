@@ -24,7 +24,7 @@ export type NavigationCapabilities = Record<
 export const primaryNavigation: readonly NavigationItem[] = [
   { label: 'Overview', href: '/app', icon: 'overview' },
   { label: 'Repositories', href: '/app/repositories', icon: 'repository' },
-  { label: 'Active changes', href: '/app/changes', icon: 'change', requires: 'changes' },
+  { label: 'Changes', href: '/app/changes', icon: 'change', requires: 'changes' },
   { label: 'Conflicts', href: '/app/conflicts', icon: 'conflict', requires: 'conflicts' },
   { label: 'Reports', href: '/app/reports', icon: 'report', requires: 'reports' },
   { label: 'Decisions', href: '/app/decisions', icon: 'decision', requires: 'decisions' },

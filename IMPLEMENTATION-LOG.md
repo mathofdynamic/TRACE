@@ -45,12 +45,12 @@
 
 ## Current status
 
-- Implementation frontier: Phase 05 GitHub App connection and repository access. Earlier Cloudflare authentication and onboarding slices are deployed; production deployment remains credential- and VPS-gated.
-
-- Current phase: 05 — GitHub App Integration
-- Last completed phase: 04
-- Branch: `main`
-- Known blockers: GitHub App registration/secrets and owner installation are pending for live repository sync; production deployment also requires a Linux VPS, domain, credentials, and operational ownership.
+- Implementation frontier: Local-to-dashboard intelligence bridge and UX redesign. The bridge is merged, accepted against staging, and the hardening Worker is deployed to 100% of staging traffic.
+- Current staging Worker: `4817dae0-dd68-4e7b-9a7a-51ef00260882` on `trace-test-staging`.
+- Current phase: Staging-accepted bridge; local UX redesign implementation is in review.
+- Last completed phase: Local-to-dashboard bridge and staging hardening.
+- Branch: `main` (local redesign work remains intentionally unstaged).
+- Production remains outside this phase and requires separate infrastructure, credentials, migration, and operational authorization.
 
 ## Architecture decisions
 

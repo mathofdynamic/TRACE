@@ -4,6 +4,7 @@ import { Client } from 'pg';
 
 const databaseUrl = 'postgresql://trace:change-me@127.0.0.1:3002/trace_dev';
 const authSecret = 'trace-playwright-secret-change-this-32-chars';
+const appBaseUrl = process.env.TRACE_E2E_BASE_URL ?? 'http://127.0.0.1:3001';
 
 type SeedOptions = {
   profileComplete?: boolean;
@@ -116,7 +117,7 @@ async function seedWorkspace(options: SeedOptions = {}) {
         }
         if (options.localSync) {
           const connection = await client.query<{ id: string }>(
-            'INSERT INTO cli_connections (organization_id, user_id, label, token_hash, scopes, expires_at) VALUES ($1, $2, $3, $4, $5::jsonb, NOW() + INTERVAL \'30 days\') RETURNING id',
+            "INSERT INTO cli_connections (organization_id, user_id, label, token_hash, scopes, expires_at) VALUES ($1, $2, $3, $4, $5::jsonb, NOW() + INTERVAL '30 days') RETURNING id",
             [
               organizationId,
               user.id,
@@ -308,7 +309,7 @@ test('direct GitHub OAuth and onboarding APIs keep unauthenticated state explici
   expect(authStart.status()).toBe(302);
   expect(authStart.headers().location).toMatch(/^https:\/\/github\.com\/login\/oauth\/authorize\?/);
   expect(authStart.headers().location).toContain(
-    encodeURIComponent('http://127.0.0.1:3001/api/auth/github/callback'),
+    encodeURIComponent(`${appBaseUrl}/api/auth/github/callback`),
   );
   expect(authStart.headers()['set-cookie']).toContain('trace_github_state=');
   const onboarding = await request.get('/api/onboarding');
@@ -345,7 +346,7 @@ test('CLI device authorization is separate from browser auth and sync requires i
   };
   expect(authorization.deviceCode).toMatch(/^trcd_/);
   expect(authorization.userCode).toMatch(/^[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{2}$/);
-  expect(authorization.verificationUri).toBe('http://127.0.0.1:3001/cli/authorize');
+  expect(authorization.verificationUri).toBe(`${appBaseUrl}/cli/authorize`);
   expect(authorization.verificationUriComplete).toContain(
     `/cli/authorize?code=${authorization.userCode}`,
   );
@@ -408,9 +409,7 @@ test.describe('authenticated product journey', () => {
     try {
       await page
         .context()
-        .addCookies([
-          { name: 'trace_session', value: completed.cookie, url: 'http://127.0.0.1:3001' },
-        ]);
+        .addCookies([{ name: 'trace_session', value: completed.cookie, url: appBaseUrl }]);
       await page.goto('/onboarding');
       await expect(page).toHaveURL(/\/app\/repositories/);
     } finally {
@@ -422,7 +421,7 @@ test.describe('authenticated product journey', () => {
       await page.context().clearCookies();
       await page
         .context()
-        .addCookies([{ name: 'trace_session', value: fresh.cookie, url: 'http://127.0.0.1:3001' }]);
+        .addCookies([{ name: 'trace_session', value: fresh.cookie, url: appBaseUrl }]);
       await page.goto('/onboarding');
       await page.getByRole('radio', { name: /Team/ }).check();
       await page.getByRole('button', { name: 'Continue to GitHub' }).click();
@@ -440,9 +439,7 @@ test.describe('authenticated product journey', () => {
     try {
       await page
         .context()
-        .addCookies([
-          { name: 'trace_session', value: disconnected.cookie, url: 'http://127.0.0.1:3001' },
-        ]);
+        .addCookies([{ name: 'trace_session', value: disconnected.cookie, url: appBaseUrl }]);
       await page.goto('/app/repositories');
       await expect(page.getByRole('link', { name: 'Connect GitHub' })).toBeVisible();
     } finally {
@@ -454,9 +451,7 @@ test.describe('authenticated product journey', () => {
       await page.context().clearCookies();
       await page
         .context()
-        .addCookies([
-          { name: 'trace_session', value: connected.cookie, url: 'http://127.0.0.1:3001' },
-        ]);
+        .addCookies([{ name: 'trace_session', value: connected.cookie, url: appBaseUrl }]);
       await page.goto('/app/repositories');
       await expect(
         page.getByRole('heading', { name: 'No repositories were granted' }),
@@ -470,14 +465,12 @@ test.describe('authenticated product journey', () => {
       await page.context().clearCookies();
       await page
         .context()
-        .addCookies([
-          { name: 'trace_session', value: available.cookie, url: 'http://127.0.0.1:3001' },
-        ]);
+        .addCookies([{ name: 'trace_session', value: available.cookie, url: appBaseUrl }]);
       await page.goto('/app/repositories');
       await expect(
         page.getByRole('heading', { name: 'Which projects should TRACE understand?' }),
       ).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Finish setup' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Save repository access' })).toBeVisible();
     } finally {
       await available.cleanup();
     }
@@ -494,15 +487,13 @@ test.describe('authenticated product journey', () => {
     try {
       await page
         .context()
-        .addCookies([
-          { name: 'trace_session', value: seeded.cookie, url: 'http://127.0.0.1:3001' },
-        ]);
+        .addCookies([{ name: 'trace_session', value: seeded.cookie, url: appBaseUrl }]);
       await page.goto('/app');
-      await expect(page.getByRole('heading', { name: '1 thing needs attention' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'What needs your attention' })).toBeVisible();
       await expect(page.getByText('Session invalidation needs review')).toBeVisible();
       await expect(page.getByText('Refine session lifecycle')).toBeVisible();
       await page.goto(`/app/repositories/${seeded.repositoryId}`);
-      await expect(page.getByText('Persisted analysis state is available')).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'What TRACE knows' })).toBeVisible();
       await expect(page.getByRole('link', { name: 'Findings' })).toBeVisible();
     } finally {
       await seeded.cleanup();
@@ -522,23 +513,23 @@ test.describe('authenticated product journey', () => {
     try {
       await page
         .context()
-        .addCookies([
-          { name: 'trace_session', value: seeded.cookie, url: 'http://127.0.0.1:3001' },
-        ]);
+        .addCookies([{ name: 'trace_session', value: seeded.cookie, url: appBaseUrl }]);
       await page.goto('/app');
-      await expect(page.getByText('Daily project report')).toBeVisible();
+      await expect(page.getByText('Approved local records')).toBeVisible();
       await page.goto(`/app/repositories/${seeded.repositoryId}`);
-      await expect(page.getByRole('region', { name: 'Local sync provenance' })).toContainText(
-        'Local analysis',
-      );
-      await expect(page.getByRole('region', { name: 'Local sync provenance' })).toContainText(
-        'abcdef123456',
-      );
+      await expect(page.getByText('Local analysis').first()).toBeVisible();
+      await expect(page.getByText('abcdef123456').first()).toBeVisible();
       await page.goto('/app/reports');
-      await expect(page.getByRole('heading', { name: 'Daily project report' })).toBeVisible();
-      await expect(page.getByText('Approved source-free report.')).toBeHidden();
-      await page.getByText('View approved Markdown').click();
-      await expect(page.getByText('Approved source-free report.')).toBeVisible();
+      const dailyReport = page
+        .locator('article.report-row')
+        .filter({ hasText: 'Daily project report' })
+        .first();
+      await expect(
+        dailyReport.getByRole('heading', { name: 'Daily project report' }).first(),
+      ).toBeVisible();
+      await expect(dailyReport.locator('pre.safe-markdown')).toBeHidden();
+      await dailyReport.getByText('View approved TRACE record').click();
+      await expect(dailyReport.locator('pre.safe-markdown')).toBeVisible();
 
       await page.setViewportSize({ width: 390, height: 844 });
       await page.goto('/app/reports');
@@ -560,9 +551,7 @@ test.describe('authenticated product journey', () => {
     try {
       await page
         .context()
-        .addCookies([
-          { name: 'trace_session', value: seeded.cookie, url: 'http://127.0.0.1:3001' },
-        ]);
+        .addCookies([{ name: 'trace_session', value: seeded.cookie, url: appBaseUrl }]);
       await page.setViewportSize({ width: 390, height: 844 });
       await page.goto('/app/repositories');
       await page.getByRole('button', { name: 'Open navigation' }).click();
@@ -588,13 +577,13 @@ test.describe('authenticated product journey', () => {
     try {
       await page
         .context()
-        .addCookies([
-          { name: 'trace_session', value: seeded.cookie, url: 'http://127.0.0.1:3001' },
-        ]);
+        .addCookies([{ name: 'trace_session', value: seeded.cookie, url: appBaseUrl }]);
       for (const width of [1440, 1024, 768, 390]) {
         await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
         await page.goto('/app');
-        await expect(page.getByRole('heading', { name: 'What needs attention' })).toBeVisible();
+        await expect(
+          page.getByRole('heading', { name: 'What needs your attention' }),
+        ).toBeVisible();
         await page.waitForTimeout(250);
         expect(
           await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth),
