@@ -571,6 +571,8 @@ h1 {
 .report-native-detail {
   display: grid;
   gap: 18px;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   margin-top: 20px;
   padding-top: 18px;
   border-top: 1px solid var(--redesign-line-soft);
@@ -580,6 +582,7 @@ h1 {
   align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
+  min-width: 0;
 }
 .report-native-detail__header h4 {
   margin: 5px 0 0;
@@ -615,6 +618,8 @@ h1 {
 .report-native-detail__section {
   display: grid;
   gap: 7px;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
 }
 .report-native-detail__section h5 {
   margin: 0;
@@ -631,6 +636,8 @@ h1 {
 .report-native-detail__item {
   display: grid;
   gap: 4px;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   padding: 10px 0;
   border-top: 1px solid var(--redesign-line-soft);
 }
