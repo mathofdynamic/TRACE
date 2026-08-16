@@ -97,6 +97,9 @@ jobs:
           console.log(`Previous staging version: ${versionId || 'none'}`);
           NODE
 
+      - name: Build workspace packages
+        run: pnpm build
+
       - name: Build the Cloudflare bundle
         run: pnpm cf:build
 
