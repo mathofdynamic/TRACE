@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { getAuthenticatedDashboardSummary } from '../../../../lib/dashboard-server';
+import { activityContextLabel } from '../../../../lib/dashboard-state';
 
 export default async function ActivityPage() {
   const { summary } = await getAuthenticatedDashboardSummary();
@@ -7,11 +8,11 @@ export default async function ActivityPage() {
     <div className="dashboard-page">
       <div className="dashboard-page-header">
         <div>
-          <p className="section-label">Project record</p>
-          <h1>Meaningful TRACE events.</h1>
+          <p className="section-label">Workspace record</p>
+          <h1>Workspace activity.</h1>
           <p>
-            Repository connections, analysis state, findings, reports, and rule changes belong here.
-            Commit-by-commit employee activity does not.
+            This feed is workspace-wide, not filtered by the selected repository. Each
+            repository-specific event is labeled so project context stays explicit.
           </p>
         </div>
       </div>
@@ -22,7 +23,13 @@ export default async function ActivityPage() {
               <span aria-hidden="true" />
               <div>
                 <strong>{item.title}</strong>
-                <p>{item.detail}</p>
+                <p>
+                  <span className="activity-context">
+                    {activityContextLabel(item.repositoryName)}
+                  </span>
+                  {' - '}
+                  {item.detail}
+                </p>
               </div>
               <time dateTime={item.occurredAt}>
                 {new Date(item.occurredAt).toLocaleString('en', {

@@ -13,6 +13,8 @@ import {
 } from './navigation';
 import type { NavigationItem } from './navigation';
 import type { NavigationCapabilities } from './navigation';
+import { RepositorySwitcher } from './trace-redesign';
+import type { DashboardAttention, DashboardRepository } from '../../../../lib/dashboard';
 
 function NavigationIcon({ name }: { name: NavigationItem['icon'] }) {
   const paths: Record<NavigationItem['icon'], ReactNode> = {
@@ -120,7 +122,7 @@ function NavigationLinks({
         >
           <NavigationIcon name={item.icon} />
           <span>{item.label}</span>
-          <small>Later</small>
+          <small>Unavailable</small>
         </span>
       );
     }
@@ -148,12 +150,18 @@ export function DashboardShell({
   workspaceName,
   capabilities,
   repositoryCount,
+  repositories,
+  attention,
+  preferredRepositoryId,
 }: {
   children: ReactNode;
   userName: string;
   workspaceName: string;
   capabilities: NavigationCapabilities;
   repositoryCount: number;
+  repositories: DashboardRepository[];
+  attention: DashboardAttention[];
+  preferredRepositoryId: string | null;
 }) {
   const pathname = usePathname();
   const [pendingHref, setPendingHref] = useState<string | null>(null);
@@ -190,7 +198,7 @@ export function DashboardShell({
       <a className="skip-link" href="#main-content">
         Skip to content
       </a>
-      <aside className="dashboard-sidebar" aria-label="Workspace">
+      <aside className="dashboard-sidebar" aria-label="Workspace" aria-hidden={mobileOpen}>
         <Link className="dashboard-brand" href="/app" aria-label="TRACE overview">
           <TraceMark />
           <span>TRACE</span>
@@ -207,16 +215,6 @@ export function DashboardShell({
               : 'Setup'}
           </span>
         </div>
-        <button
-          className="dashboard-search"
-          type="button"
-          disabled
-          title="Search is not available yet"
-        >
-          <span className="dashboard-search__key">⌘ K</span>
-          <span>Search workspace</span>
-          <small>Soon</small>
-        </button>
         <nav className="dashboard-nav" aria-label="Application navigation">
           <p>Workspace</p>
           <NavigationLinks items={primaryNavigation} {...navigationProps} />
@@ -284,6 +282,13 @@ export function DashboardShell({
             <i aria-hidden="true">/</i>
             <strong>{routeLabel}</strong>
           </span>
+          {repositories.length ? (
+            <RepositorySwitcher
+              repositories={repositories}
+              attention={attention}
+              preferredRepositoryId={preferredRepositoryId}
+            />
+          ) : null}
           <span className="topbar-status">
             <i /> Early pilot
           </span>

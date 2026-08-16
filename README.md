@@ -141,7 +141,7 @@ TRACE/
 
 TRACE is in active pilot implementation. Authentication, onboarding, GitHub App repository selection, local deterministic analysis, versioned `.trace` artifacts, explicit source-free synchronization, and data-backed dashboard projections now have executable local paths. Cloud source analysis remains disabled; the supported bridge analyzes locally and sends only policy-approved artifacts.
 
-The staging Worker at `https://trace-test-staging.mathofdynamic2.workers.dev` serves acceptance version `2a87b573-fb0b-4938-9419-de74dc273a7e`; health, unauthenticated route boundaries, and the real CLI-to-dashboard path were verified after staging migrations `0004`–`0006` were applied. The latest freshness and retry hardening is local pending a new staging Worker deployment. Docker is not required for local development.
+The staging Worker at `https://trace-test-staging.mathofdynamic2.workers.dev` serves hardening version `4817dae0-dd68-4e7b-9a7a-51ef00260882` on 100% of staging traffic; health, unauthenticated route boundaries, and the real CLI-to-dashboard path were verified after staging migrations `0004`–`0006` were applied. GitHub-backed freshness and transactional retry hardening are live in staging. Docker is not required for local development.
 
 ---
 

@@ -13,6 +13,9 @@ export default async function AppLayout({ children }: Readonly<{ children: React
       workspaceName={summary.workspace.name}
       capabilities={summary.capabilities}
       repositoryCount={summary.repositories.length}
+      repositories={summary.repositories}
+      attention={summary.attention}
+      preferredRepositoryId={summary.preferredRepositoryId}
     >
       {children}
     </DashboardShell>

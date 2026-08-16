@@ -1,224 +1,250 @@
 import Link from 'next/link';
 import { getAuthenticatedDashboardSummary } from '../../../lib/dashboard-server';
-
-function relativeDate(value: string | null) {
-  if (!value) return 'Not yet';
-  const date = new Date(value);
-  const delta = Date.now() - date.getTime();
-  const minutes = Math.max(0, Math.round(delta / 60_000));
-  if (minutes < 1) return 'Just now';
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours} hr ago`;
-  return date.toLocaleDateString('en', { month: 'short', day: 'numeric' });
-}
+import {
+  FindingDisclosure,
+  LocalActionPanel,
+  ProjectContextSummary,
+  TraceRail,
+} from './_components/trace-redesign';
+import {
+  activityContextLabel,
+  deriveTraceProjectState,
+  formatRelativeDate,
+  localTraceCommandsForState,
+  presentFindingDetail,
+  stateToneClass,
+} from '../../../lib/dashboard-state';
 
 export default async function DashboardOverviewPage() {
   const { summary } = await getAuthenticatedDashboardSummary();
-  const repository = summary.repositories[0];
-  const analysis = repository?.analysis;
-
-  let attentionTitle = 'Connect your first repository';
-  let attentionBody =
-    'TRACE needs repository access before it can understand project activity and build a change record.';
-  let actionHref = '/app/repositories';
-  let actionLabel = 'Connect repository';
-
-  if (summary.setup.githubConnected && !summary.setup.repositorySelected) {
-    attentionTitle = 'Choose a repository for TRACE';
-    attentionBody =
-      'GitHub is connected. Select the repositories that should become part of this workspace.';
-    actionLabel = 'Choose repository';
-  } else if (repository && !analysis) {
-    attentionTitle = `${repository.fullName} is connected`;
-    attentionBody =
-      'Cloud analysis is not enabled in this environment. Run the local CLI to build the first evidence-backed project record.';
-    actionHref = '/docs#local-analysis';
-    actionLabel = 'View local setup';
-  } else if (analysis?.status === 'queued' || analysis?.status === 'running') {
-    attentionTitle = `Understanding ${repository?.fullName ?? 'your repository'}…`;
-    attentionBody =
-      analysis.status === 'queued'
-        ? 'The persisted analysis is waiting for a worker.'
-        : 'The persisted analysis is currently running. TRACE will show findings only after validation.';
-    actionHref = repository ? `/app/repositories/${repository.id}` : '/app/repositories';
-    actionLabel = 'View repository';
-  } else if (analysis?.status === 'failed') {
-    attentionTitle = `Analysis needs attention`;
-    attentionBody =
-      'The latest persisted analysis failed. Review the repository state before running it again.';
-    actionHref = repository ? `/app/repositories/${repository.id}` : '/app/repositories';
-    actionLabel = 'Review failure';
-  } else if (summary.attention.length) {
-    attentionTitle = `${summary.attention.length} ${summary.attention.length === 1 ? 'thing needs' : 'things need'} attention`;
-    attentionBody =
-      'These are unresolved findings or failed operations from persisted project state.';
-    actionHref = repository ? `/app/repositories/${repository.id}/findings` : '/app/repositories';
-    actionLabel = 'Review findings';
-  } else if (analysis?.status === 'completed') {
-    attentionTitle = 'Nothing currently needs attention';
-    attentionBody =
-      'The latest persisted analysis completed without unresolved findings in this workspace.';
-    actionHref = repository ? `/app/repositories/${repository.id}` : '/app/repositories';
-    actionLabel = 'View project record';
-  }
+  const repository =
+    summary.repositories.find((item) => item.id === summary.preferredRepositoryId) ??
+    summary.repositories[0] ??
+    null;
+  const state = deriveTraceProjectState(repository, summary.attention);
+  const repositoryAttention = summary.attention.filter(
+    (item) => !item.repositoryId || item.repositoryId === repository?.id,
+  );
+  const operations = repositoryAttention.filter((item) =>
+    ['sync-failed', 'analysis-failed'].includes(item.kind),
+  );
+  const engineering = repositoryAttention.filter((item) =>
+    ['finding', 'risk', 'conflict'].includes(item.kind),
+  );
+  const localCommands = localTraceCommandsForState(state.key);
 
   return (
-    <div className="dashboard-page overview-page">
-      <header className="overview-heading">
+    <div className="dashboard-page redesign-page overview-page">
+      <header className="redesign-header overview-header">
         <div>
-          <p className="section-label">{summary.workspace.name}</p>
-          <h1>What needs attention</h1>
+          <span className="eyebrow">Project overview</span>
+          <h1>{repository?.fullName ?? 'Choose a repository'}</h1>
+          <p>One clear view of what TRACE knows, when it was generated, and what to do next.</p>
         </div>
-        <span className="overview-source">Live workspace data</span>
+        <span className="source-note">Live workspace data</span>
       </header>
 
-      <section
-        className="attention-panel attention-panel--primary"
-        aria-labelledby="attention-title"
-      >
-        <div>
-          <span className="attention-kicker">
-            {analysis?.status === 'completed' ? 'Current state' : 'Next step'}
-          </span>
-          <h2 id="attention-title">{attentionTitle}</h2>
-          <p>{attentionBody}</p>
+      <section className="project-command-surface" aria-labelledby="overview-state-title">
+        <div className="project-command-surface__topline">
+          <div>
+            <span className="eyebrow">Project state</span>
+            <h2 id="overview-state-title">{state.label}</h2>
+            <ProjectContextSummary repository={repository} attention={summary.attention} />
+          </div>
+          {state.actionKind === 'local' ? (
+            <LocalActionPanel
+              repositoryName={repository?.fullName}
+              title={state.actionLabel ?? 'Update TRACE intelligence'}
+              description={state.description}
+              commands={localCommands}
+              triggerLabel={state.actionLabel ?? 'Update TRACE'}
+            />
+          ) : repository ? (
+            <Link
+              className="trace-button trace-button--secondary"
+              href={`/app/repositories/${repository.id}`}
+            >
+              Open project
+            </Link>
+          ) : (
+            <Link className="trace-button trace-button--primary" href="/app/repositories">
+              Connect repository
+            </Link>
+          )}
         </div>
-        <Link className="trace-button trace-button--primary" href={actionHref}>
-          {actionLabel}
-        </Link>
+        <TraceRail state={state.key} />
+        <div className="project-command-surface__footer">
+          <span>Connect - analyze locally - sync approved records - understand the change</span>
+          {repository?.latestSync ? (
+            <time dateTime={repository.latestSync.completedAt}>
+              Last sync {formatRelativeDate(repository.latestSync.completedAt)}
+            </time>
+          ) : null}
+        </div>
       </section>
 
-      <div className="overview-grid">
-        <section className="dashboard-card project-state" aria-labelledby="project-state-title">
-          <div className="card-heading">
-            <div>
-              <span className="card-label">Project state</span>
-              <h2 id="project-state-title">{repository?.fullName ?? 'No repository selected'}</h2>
-            </div>
+      <section className="attention-board" aria-labelledby="overview-attention-title">
+        <div className="section-heading-row redesign-section-heading">
+          <div>
+            <span className="eyebrow">Attention</span>
+            <h2 id="overview-attention-title">What needs your attention</h2>
           </div>
-          <dl className="state-list">
-            <div>
-              <dt>Repositories</dt>
-              <dd>{summary.repositories.length || 'None'}</dd>
+          <span className="quiet-count">{repositoryAttention.length} unresolved</span>
+        </div>
+        <div
+          className={`attention-board__columns${operations.length ? '' : ' attention-board__columns--engineering-only'}`}
+        >
+          <div className={`attention-group${operations.length ? '' : ' attention-group--healthy'}`}>
+            <div className="attention-group__heading">
+              <span
+                className={`status-dot ${operations.length ? 'status-dot--danger' : 'status-dot--success'}`}
+              />
+              <h3>{operations.length ? 'Operations' : 'Operations healthy'}</h3>
             </div>
-            <div>
-              <dt>Last synchronized</dt>
-              <dd>{relativeDate(repository?.lastSynchronizedAt ?? null)}</dd>
-            </div>
-            <div>
-              <dt>Last analysis</dt>
-              <dd>
-                {analysis ? `${analysis.status} · ${relativeDate(analysis.updatedAt)}` : 'Not run'}
-              </dd>
-            </div>
-            <div>
-              <dt>Latest report</dt>
-              <dd>{summary.latestReports[0]?.title ?? 'Not synchronized'}</dd>
-            </div>
-          </dl>
-        </section>
-
-        <section className="dashboard-card recent-change" aria-labelledby="recent-change-title">
-          <div className="card-heading">
-            <div>
-              <span className="card-label">Recent meaningful change</span>
-              <h2 id="recent-change-title">
-                {summary.latestChanges[0]?.title ?? 'No pull request snapshots yet'}
-              </h2>
-            </div>
-          </div>
-          {summary.latestChanges[0] ? (
-            <div className="change-summary">
-              <p>
-                {summary.latestChanges[0].repositoryName} · PR #{summary.latestChanges[0].number}
+            {operations.length ? (
+              operations.slice(0, 4).map((item) => (
+                <article className="attention-row attention-row--operation" key={item.id}>
+                  <div>
+                    <strong>{item.title}</strong>
+                    <p>{presentFindingDetail(item.detail)}</p>
+                  </div>
+                  {item.repositoryId ? (
+                    <Link href={`/app/repositories/${item.repositoryId}`}>Review</Link>
+                  ) : null}
+                </article>
+              ))
+            ) : (
+              <p className="inline-note">
+                No operational failures are blocking the last verified record.
               </p>
-              <span>
-                {summary.latestChanges[0].state} ·{' '}
-                {relativeDate(summary.latestChanges[0].updatedAt)}
-              </span>
-              {summary.latestChanges[0].url ? (
-                <a href={summary.latestChanges[0].url}>Open on GitHub</a>
-              ) : null}
+            )}
+          </div>
+          <div className="attention-group">
+            <div className="attention-group__heading">
+              <span className="status-dot status-dot--warning" />
+              <h3>Engineering</h3>
             </div>
+            {engineering.length ? (
+              engineering.slice(0, 5).map((item) => (
+                <article className="attention-row" key={item.id}>
+                  <div>
+                    <span className="severity-label" data-severity={item.severity}>
+                      {item.severity}
+                    </span>
+                    <strong>{item.title}</strong>
+                    <p>{presentFindingDetail(item.detail)}</p>
+                  </div>
+                  <FindingDisclosure
+                    finding={item}
+                    repositoryName={item.repositoryName}
+                    repository={repository}
+                  />
+                </article>
+              ))
+            ) : (
+              <p className="inline-note">
+                {repository?.analysis?.status === 'completed'
+                  ? 'No unresolved engineering findings for this project.'
+                  : 'Engineering findings require a completed local analysis.'}
+              </p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="intelligence-strip" aria-label="Project intelligence summary">
+        <div>
+          <span className="eyebrow">Findings</span>
+          <strong>{engineering.filter((item) => item.kind === 'finding').length}</strong>
+          <small>Persisted review signals</small>
+        </div>
+        <div>
+          <span className="eyebrow">Reports</span>
+          <strong>
+            {
+              summary.latestReports.filter(
+                (item) => !repository || item.repositoryId === repository.id,
+              ).length
+            }
+          </strong>
+          <small>Approved local records</small>
+        </div>
+        <div>
+          <span className="eyebrow">Branch</span>
+          <strong>
+            {repository?.latestSync?.branch ?? repository?.defaultBranch ?? 'Not available'}
+          </strong>
+          <small>
+            {repository?.latestSync?.headCommit
+              ? `@ ${repository.latestSync.headCommit.slice(0, 12)}`
+              : 'No analyzed commit'}
+          </small>
+        </div>
+        <div>
+          <span className="eyebrow">Freshness</span>
+          <strong className={stateToneClass(state.tone)}>{state.shortLabel}</strong>
+          <small>Based on trusted GitHub state</small>
+        </div>
+      </section>
+
+      <div className="redesign-two-column">
+        <section className="redesign-section" aria-labelledby="overview-changes-title">
+          <div className="section-heading-row redesign-section-heading">
+            <div>
+              <span className="eyebrow">Project memory</span>
+              <h2 id="overview-changes-title">What changed</h2>
+            </div>
+            {summary.capabilities.changes ? <Link href="/app/changes">View changes</Link> : null}
+          </div>
+          {summary.latestChanges.length ? (
+            summary.latestChanges.slice(0, 5).map((change) => (
+              <div className="redesign-list-row" key={change.id}>
+                <div>
+                  <strong>{change.title}</strong>
+                  <small>
+                    {change.repositoryName} - PR #{change.number} - {change.state}
+                  </small>
+                </div>
+                <time dateTime={change.updatedAt}>{formatRelativeDate(change.updatedAt)}</time>
+              </div>
+            ))
           ) : (
-            <p className="card-muted">
-              This is normal before GitHub webhook processing has stored pull request activity.
-            </p>
+            <div className="inline-empty redesign-empty">
+              <strong>No recent change summary has been synchronized.</strong>
+              <p>
+                TRACE will show GitHub change context after signed repository activity is processed.
+              </p>
+            </div>
+          )}
+        </section>
+        <section className="redesign-section" aria-labelledby="overview-record-title">
+          <div className="section-heading-row redesign-section-heading">
+            <div>
+              <span className="eyebrow">Workspace record</span>
+              <h2 id="overview-record-title">Workspace activity</h2>
+            </div>
+            {summary.capabilities.activity ? <Link href="/app/activity">View activity</Link> : null}
+          </div>
+          {summary.activity.length ? (
+            summary.activity.slice(0, 5).map((item) => (
+              <div className="redesign-list-row" key={item.id}>
+                <div>
+                  <strong>{item.title}</strong>
+                  <small>
+                    {activityContextLabel(item.repositoryName)} - {item.detail}
+                  </small>
+                </div>
+                <time dateTime={item.occurredAt}>{formatRelativeDate(item.occurredAt)}</time>
+              </div>
+            ))
+          ) : (
+            <div className="inline-empty redesign-empty">
+              <strong>No project events yet.</strong>
+              <p>Connecting a repository creates the first durable workspace event.</p>
+            </div>
           )}
         </section>
       </div>
-
-      <section className="dashboard-card record-section" aria-labelledby="attention-list-title">
-        <div className="section-heading-row">
-          <div>
-            <span className="card-label">Attention</span>
-            <h2 id="attention-list-title">Risks, findings, and failed operations</h2>
-          </div>
-          <span>{summary.attention.length} unresolved</span>
-        </div>
-        {summary.attention.length ? (
-          <div className="finding-list">
-            {summary.attention.slice(0, 5).map((item) => (
-              <article key={item.id} className="finding-row">
-                <span data-severity={item.severity}>{item.severity}</span>
-                <div>
-                  <h3>{item.title}</h3>
-                  <p>{item.detail}</p>
-                  <small>
-                    {item.classification === 'deterministic'
-                      ? 'Verified evidence'
-                      : `${item.classification} interpretation`}
-                    {item.repositoryName ? ` · ${item.repositoryName}` : ''}
-                  </small>
-                </div>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <div className="inline-empty">
-            <strong>
-              {analysis?.status === 'completed'
-                ? 'No unresolved findings'
-                : 'No analysis findings yet'}
-            </strong>
-            <p>
-              {analysis?.status === 'completed'
-                ? 'Nothing from the latest persisted run currently requires review.'
-                : 'Findings appear only after an analysis run has been persisted and validated.'}
-            </p>
-          </div>
-        )}
-      </section>
-
-      <section className="dashboard-card record-section" aria-labelledby="record-title">
-        <div className="section-heading-row">
-          <div>
-            <span className="card-label">Recent project record</span>
-            <h2 id="record-title">Meaningful TRACE events</h2>
-          </div>
-          {summary.capabilities.activity ? <Link href="/app/activity">View activity</Link> : null}
-        </div>
-        {summary.activity.length ? (
-          <ol className="activity-list">
-            {summary.activity.slice(0, 6).map((item) => (
-              <li key={item.id}>
-                <span aria-hidden="true" />
-                <div>
-                  <strong>{item.title}</strong>
-                  <p>{item.detail}</p>
-                </div>
-                <time dateTime={item.occurredAt}>{relativeDate(item.occurredAt)}</time>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <div className="inline-empty">
-            <strong>No project events yet</strong>
-            <p>Connecting a repository creates the first durable workspace event.</p>
-          </div>
-        )}
-      </section>
     </div>
   );
 }

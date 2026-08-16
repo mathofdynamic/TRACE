@@ -18,7 +18,10 @@ export default function DashboardError({
     <section className="empty-panel empty-panel--large" role="alert">
       <span aria-hidden="true">!</span>
       <h1>Workspace view unavailable</h1>
-      <p>The route could not load. Retry the request or return to the workspace overview.</p>
+      <p>
+        TRACE could not load this workspace view. Your local analysis and last verified dashboard
+        record are unchanged.
+      </p>
       <div className="error-actions">
         <button className="trace-button trace-button--primary" type="button" onClick={reset}>
           Retry
@@ -27,7 +30,12 @@ export default function DashboardError({
           Open overview
         </Link>
       </div>
-      {error.digest ? <small className="error-diagnostic">Diagnostic {error.digest}</small> : null}
+      {error.digest ? (
+        <details className="error-diagnostic">
+          <summary>Technical details</summary>
+          <small>Reference: {error.digest}</small>
+        </details>
+      ) : null}
     </section>
   );
 }

@@ -1,0 +1,184 @@
+name: TRACE staging deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Exact commit SHA to deploy to staging
+        required: true
+        type: string
+  pull_request:
+    types: [labeled, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: trace-staging-deployment
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' ||
+        (
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          contains(github.event.pull_request.labels.*.name, 'deploy-staging')
+        )
+      }}
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgresql://trace:change-me@127.0.0.1:5432/trace_dev
+      TRACE_STAGING_URL: https://trace-test-staging.mathofdynamic2.workers.dev
+    steps:
+      - name: Check out the exact source commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || inputs.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.16.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify source and staging target
+        id: source
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || inputs.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          if [[ "$actual_sha" != "$EXPECTED_SHA" ]]; then
+            echo "Checked-out SHA does not match the requested source." >&2
+            exit 1
+          fi
+          if ! grep -Fq '"name": "trace-test-staging"' apps/web/wrangler.jsonc; then
+            echo "Staging Worker target is not trace-test-staging." >&2
+            exit 1
+          fi
+          if grep -Fq '"production"' apps/web/wrangler.jsonc; then
+            echo "Production configuration must not be present in this staging workflow." >&2
+            exit 1
+          fi
+          echo "source_sha=$actual_sha" >> "$GITHUB_OUTPUT"
+          echo "Checked-out source SHA: $actual_sha"
+
+      - name: Record current staging deployment
+        id: baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec wrangler deployments list --config apps/web/wrangler.jsonc --env staging --json > "$RUNNER_TEMP/staging-deployments-before.json"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const deployments = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/staging-deployments-before.json', 'utf8'));
+          const latest = [...deployments].sort((a, b) => new Date(b.created_on) - new Date(a.created_on))[0];
+          const version = latest?.versions?.find((entry) => entry.percentage === 100) ?? latest?.versions?.[0];
+          const deploymentId = latest?.id ?? '';
+          const versionId = version?.version_id ?? '';
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `deployment_id=${deploymentId}\nversion_id=${versionId}\n`);
+          console.log(`Previous staging deployment: ${deploymentId || 'none'}`);
+          console.log(`Previous staging version: ${versionId || 'none'}`);
+          NODE
+
+      - name: Build workspace packages
+        run: pnpm build
+
+      - name: Build the Cloudflare bundle
+        run: pnpm cf:build
+
+      - name: Deploy the staging Worker
+        run: pnpm --dir apps/web exec opennextjs-cloudflare deploy --env staging
+
+      - name: Verify new staging deployment
+        id: deployment
+        shell: bash
+        env:
+          PREVIOUS_DEPLOYMENT_ID: ${{ steps.baseline.outputs.deployment_id }}
+          PREVIOUS_VERSION_ID: ${{ steps.baseline.outputs.version_id }}
+        run: |
+          set -euo pipefail
+          pnpm exec wrangler deployments list --config apps/web/wrangler.jsonc --env staging --json > "$RUNNER_TEMP/staging-deployments-after.json"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const deployments = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/staging-deployments-after.json', 'utf8'));
+          const latest = [...deployments].sort((a, b) => new Date(b.created_on) - new Date(a.created_on))[0];
+          const version = latest?.versions?.find((entry) => entry.percentage === 100) ?? latest?.versions?.[0];
+          if (!latest?.id || !version?.version_id) throw new Error('Cloudflare returned no active staging deployment/version.');
+          if (process.env.PREVIOUS_DEPLOYMENT_ID && latest.id === process.env.PREVIOUS_DEPLOYMENT_ID) {
+            throw new Error('No new staging deployment was created.');
+          }
+          if (process.env.PREVIOUS_VERSION_ID && version.version_id === process.env.PREVIOUS_VERSION_ID) {
+            throw new Error('No new staging Worker version was created.');
+          }
+          if (version.percentage !== 100) throw new Error(`Staging traffic is ${version.percentage}%, not 100%.`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `deployment_id=${latest.id}\nversion_id=${version.version_id}\ntraffic=${version.percentage}\ncreated_on=${latest.created_on}\n`);
+          console.log(`Staging deployment: ${latest.id}`);
+          console.log(`Staging Worker version: ${version.version_id}`);
+          console.log(`Staging traffic: ${version.percentage}%`);
+          console.log(`Created: ${latest.created_on}`);
+          NODE
+
+      - name: Verify staging health
+        shell: bash
+        env:
+          STAGING_URL: ${{ env.TRACE_STAGING_URL }}
+        run: |
+          set -euo pipefail
+          check_status() {
+            local path="$1"
+            local expected="$2"
+            local status
+            status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 45 "$STAGING_URL$path")"
+            if [[ "$status" != "$expected" ]]; then
+              echo "$path returned HTTP $status; expected $expected." >&2
+              exit 1
+            fi
+            echo "$path -> $status"
+          }
+          check_status /api/health 200
+          check_status /sign-in 200
+          status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 45 "$STAGING_URL/app")"
+          case "$status" in
+            301|302|303|307|308) echo "/app -> $status (authentication redirect)" ;;
+            *) echo "/app returned unexpected HTTP $status." >&2; exit 1 ;;
+          esac
+
+      - name: Publish deployment summary
+        if: success()
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
+          VERSION_ID: ${{ steps.deployment.outputs.version_id }}
+          TRAFFIC: ${{ steps.deployment.outputs.traffic }}
+          CREATED_ON: ${{ steps.deployment.outputs.created_on }}
+        run: |
+          {
+            echo '## TRACE staging deployment'
+            echo
+            echo "- Source SHA: $SOURCE_SHA"
+            echo "- Worker: trace-test-staging"
+            echo "- Worker version: $VERSION_ID"
+            echo "- Deployment: $DEPLOYMENT_ID"
+            echo "- Traffic: ${TRAFFIC}%"
+            echo "- Created: $CREATED_ON"
+            echo '- Health: `/api/health` 200, `/sign-in` 200, `/app` authentication redirect'
+          } >> "$GITHUB_STEP_SUMMARY"

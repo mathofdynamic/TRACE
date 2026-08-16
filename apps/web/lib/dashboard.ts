@@ -18,6 +18,7 @@ export type DashboardRepository = {
   defaultBranch: string | null;
   visibility: string | null;
   state: string;
+  remoteHeadSha: string | null;
   lastSynchronizedAt: string | null;
   latestSync: {
     operationId: string;
@@ -65,6 +66,8 @@ export type DashboardActivity = {
   kind: 'repository-connected' | 'analysis' | 'sync' | 'audit';
   title: string;
   detail: string;
+  repositoryId: string | null;
+  repositoryName: string | null;
   occurredAt: string;
 };
 
@@ -93,6 +96,7 @@ export type DashboardSyncedRecord = {
 
 export type DashboardSummary = {
   source: 'postgresql';
+  preferredRepositoryId: string | null;
   workspace: {
     name: string;
     profileComplete: boolean;
@@ -297,6 +301,7 @@ export async function getDashboardSummary(
       defaultBranch: repository.defaultBranch,
       visibility: repository.visibility,
       state: repository.state,
+      remoteHeadSha: repository.remoteHeadSha,
       lastSynchronizedAt: repository.lastSynchronizedAt?.toISOString() ?? null,
       latestSync: latestSync?.completedAt
         ? {
@@ -516,6 +521,15 @@ export async function getDashboardSummary(
       completedSyncRows.some((operation) => operation.id === event.subjectId) ||
       failedSyncRows.some((operation) => operation.id === event.subjectId),
   );
+  const activitySyncRows = activeRepositoryIds.length
+    ? await db
+        .select({ id: schema.syncOperations.id, repositoryId: schema.syncOperations.repositoryId })
+        .from(schema.syncOperations)
+        .where(inArray(schema.syncOperations.repositoryId, activeRepositoryIds))
+    : [];
+  const activityRepositoryBySubject = new Map(
+    activitySyncRows.map((operation) => [operation.id, operation.repositoryId]),
+  );
   const activity: DashboardActivity[] = [
     ...syncAuditRows.map((event) => {
       const labels: Record<string, { title: string; detail: string; kind: 'sync' | 'audit' }> = {
@@ -551,11 +565,18 @@ export async function getDashboardSummary(
         },
       };
       const label = labels[event.action];
+      const repositoryId =
+        event.subjectType === 'repository'
+          ? event.subjectId
+          : (activityRepositoryBySubject.get(event.subjectId ?? '') ?? null);
+      const repository = repositoryId ? repositoryById.get(repositoryId) : null;
       return {
         id: event.id,
         kind: label?.kind ?? ('audit' as const),
         title: label?.title ?? event.action.replaceAll('.', ' '),
         detail: label?.detail ?? event.subjectType.replaceAll('_', ' '),
+        repositoryId,
+        repositoryName: repository?.fullName ?? null,
         occurredAt: event.createdAt.toISOString(),
       };
     }),
@@ -563,16 +584,20 @@ export async function getDashboardSummary(
       id: `repository-${repository.id}`,
       kind: 'repository-connected' as const,
       title: 'Repository connected',
-      detail: repository.fullName,
+      detail: 'Repository access is active.',
+      repositoryId: repository.id,
+      repositoryName: repository.fullName,
       occurredAt: repository.createdAt.toISOString(),
     })),
     ...analysisRows.slice(0, 8).map((run) => ({
       id: `analysis-${run.id}`,
       kind: 'analysis' as const,
       title: `Analysis ${normalizeAnalysisState(run.status).replace('-', ' ')}`,
-      detail: run.repositoryId
-        ? (repositoryById.get(run.repositoryId)?.fullName ?? 'Repository')
-        : 'Workspace analysis',
+      detail: 'Local analysis state updated.',
+      repositoryId: run.repositoryId,
+      repositoryName: run.repositoryId
+        ? (repositoryById.get(run.repositoryId)?.fullName ?? null)
+        : null,
       occurredAt: run.updatedAt.toISOString(),
     })),
   ]
@@ -589,8 +614,26 @@ export async function getDashboardSummary(
     latestAnalysisStatus,
   });
 
+  const attentionCountByRepository = new Map<string, number>();
+  for (const item of attention) {
+    if (!item.repositoryId) continue;
+    attentionCountByRepository.set(
+      item.repositoryId,
+      (attentionCountByRepository.get(item.repositoryId) ?? 0) + 1,
+    );
+  }
+  const preferredRepositoryId =
+    [...repositories].sort((left, right) => {
+      const score = (repository: DashboardRepository) =>
+        (repository.latestSync ? 8 : 0) +
+        (repository.analysis?.status === 'completed' ? 4 : 0) +
+        (attentionCountByRepository.get(repository.id) ?? 0);
+      return score(right) - score(left);
+    })[0]?.id ?? null;
+
   return {
     source: 'postgresql',
+    preferredRepositoryId,
     workspace: {
       name: latestWorkspaceName(organizations, profile?.intendedUsage ?? null),
       profileComplete: profile?.completed ?? false,
