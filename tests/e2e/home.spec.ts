@@ -149,6 +149,8 @@ async function seedWorkspace(options: SeedOptions = {}) {
             'UPDATE github_repositories SET remote_head_sha = $1, last_synchronized_at = NOW() WHERE id = $2',
             ['abcdef1234567890abcdef1234567890abcdef12', repositoryId],
           );
+          const longFixturePath =
+            'apps/web/app/(app)/app/repositories/[repositoryId]/reports/weekly-report-detail.tsx';
           const records = [
             {
               id: `analysis-${suffix}`,
@@ -183,7 +185,7 @@ async function seedWorkspace(options: SeedOptions = {}) {
                   {
                     id: `change-${suffix}`,
                     title: 'Sync protocol hardened',
-                    detail: 'Manifest validation now rejects stale bases.',
+                    detail: `Modified path: ${longFixturePath}`,
                     classification: 'deterministic',
                     evidence: ['commit:abcdef1234567890abcdef1234567890abcdef12'],
                   },
@@ -203,7 +205,7 @@ async function seedWorkspace(options: SeedOptions = {}) {
                   {
                     id: `weekly-change-${suffix}`,
                     title: 'Repository state stayed source-free',
-                    detail: 'Only approved TRACE records were synchronized.',
+                    detail: `Only approved TRACE records were synchronized from ${longFixturePath}.`,
                     classification: 'deterministic',
                     evidence: ['commit:abcdef1234567890abcdef1234567890abcdef12'],
                   },

@@ -585,6 +585,7 @@ h1 {
   min-width: 0;
 }
 .report-native-detail__header h4 {
+  overflow-wrap: anywhere;
   margin: 5px 0 0;
   color: var(--trace-text);
   font-size: 18px;
@@ -611,6 +612,7 @@ h1 {
   text-transform: uppercase;
 }
 .report-native-detail__facts dd {
+  overflow-wrap: anywhere;
   margin: 5px 0 0;
   color: var(--trace-text-secondary);
   font-size: 12px;
@@ -627,6 +629,7 @@ h1 {
   font-size: 13px;
 }
 .report-native-detail__section p {
+  overflow-wrap: anywhere;
   margin: 0;
   color: var(--trace-text-secondary);
   font-size: 13px;
@@ -642,10 +645,12 @@ h1 {
   border-top: 1px solid var(--redesign-line-soft);
 }
 .report-native-detail__item strong {
+  overflow-wrap: anywhere;
   color: var(--trace-text);
   font-size: 13px;
 }
 .report-native-detail__item span {
+  overflow-wrap: anywhere;
   color: var(--trace-muted);
   font-size: 12px;
   line-height: 1.5;
