@@ -191,6 +191,26 @@ async function seedWorkspace(options: SeedOptions = {}) {
               },
               content: '# Daily report\n\nApproved source-free report.\n',
             },
+            {
+              id: `weekly-${suffix}`,
+              type: 'weekly_report',
+              path: `reports/weekly/2026-08-10-${suffix}.md`,
+              projection: {
+                title: 'Weekly project report',
+                summary: 'The approved weekly record summarizes the synchronized project changes.',
+                status: 'completed',
+                items: [
+                  {
+                    id: `weekly-change-${suffix}`,
+                    title: 'Repository state stayed source-free',
+                    detail: 'Only approved TRACE records were synchronized.',
+                    classification: 'deterministic',
+                    evidence: ['commit:abcdef1234567890abcdef1234567890abcdef12'],
+                  },
+                ],
+              },
+              content: '# Weekly report\n\nApproved source-free weekly report.\n',
+            },
           ];
           for (const record of records) {
             await client.query(
@@ -530,9 +550,34 @@ test.describe('authenticated product journey', () => {
       await expect(dailyReport.locator('pre.safe-markdown')).toBeHidden();
       await dailyReport.getByText('View approved TRACE record').click();
       await expect(dailyReport.locator('pre.safe-markdown')).toBeVisible();
+      const weeklyReport = page
+        .locator('article.report-row')
+        .filter({ hasText: 'Weekly project report' })
+        .first();
+      await expect(
+        weeklyReport.getByRole('heading', { name: 'Weekly project report' }).first(),
+      ).toBeVisible();
+      await expect(weeklyReport.locator('pre.safe-markdown')).toBeHidden();
+      await weeklyReport.getByText('View approved TRACE record').click();
+      await expect(weeklyReport.locator('pre.safe-markdown')).toBeVisible();
 
       await page.setViewportSize({ width: 390, height: 844 });
       await page.goto('/app/reports');
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+        ),
+      ).toBe(true);
+      for (const reportTitle of ['Daily project report', 'Weekly project report']) {
+        const report = page.locator('article.report-row').filter({ hasText: reportTitle }).first();
+        await report.getByText('View approved TRACE record').click();
+        await expect(report.locator('pre.safe-markdown')).toBeVisible();
+        expect(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+          ),
+        ).toBe(true);
+      }
       await page.getByRole('button', { name: 'Open navigation' }).click();
       const navigation = page.getByRole('navigation', { name: 'Mobile application navigation' });
       await expect(navigation.getByRole('link', { name: 'Reports' })).toHaveAttribute(

@@ -42,6 +42,10 @@ export function localTraceCommandsForState(state: TraceProjectStateKey): string[
   }
 }
 
+export function needsReanalysis(repository: DashboardRepository | null) {
+  return repository?.latestSync?.stale === true;
+}
+
 export function presentFindingDetail(value: string) {
   return value
     .replace(
@@ -94,8 +98,12 @@ export function deriveTraceProjectState(
   const repositoryAttention = attention.filter((item) => item.repositoryId === repository.id);
   const hasSyncFailure = repositoryAttention.some((item) => item.kind === 'sync-failed');
   const analysisStatus = repository.analysis?.status ?? 'not-started';
+  const repositoryNeedsReanalysis = needsReanalysis(repository);
 
-  if (hasSyncFailure) {
+  // A known remote divergence means the current analysis describes an older
+  // checkout. It takes precedence over a failed sync so the local workflow
+  // cannot imply that re-uploading the old record would make it current.
+  if (hasSyncFailure && !repositoryNeedsReanalysis) {
     return {
       key: 'sync-attention',
       label: 'Sync needs attention',
@@ -159,7 +167,7 @@ export function deriveTraceProjectState(
     };
   }
 
-  if (repository.latestSync.stale === true) {
+  if (repositoryNeedsReanalysis) {
     return {
       key: 'needs-refresh',
       label: 'Needs refresh',

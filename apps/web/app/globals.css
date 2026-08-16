@@ -2191,11 +2191,13 @@ h1 {
   padding: 38px 0 72px;
 }
 .dashboard-route {
+  min-width: 0;
   animation: route-enter 180ms ease-out both;
 }
 .dashboard-page {
   display: grid;
   gap: 18px;
+  min-width: 0;
 }
 .dashboard-page-header {
   margin-bottom: 8px;
@@ -3122,6 +3124,7 @@ h1 {
   --redesign-surface-raised: #15171a;
   --redesign-blue: #3b9cff;
   max-width: 1320px;
+  min-width: 0;
   margin: 0 auto;
   padding-bottom: 72px;
 }
@@ -3605,9 +3608,11 @@ h1 {
   margin-bottom: 30px;
 }
 .report-archive__list {
+  min-width: 0;
   border-top: 1px solid var(--redesign-line);
 }
 .report-row {
+  min-width: 0;
   padding: 22px 0;
   border-bottom: 1px solid var(--redesign-line-soft);
 }
@@ -3615,6 +3620,10 @@ h1 {
   display: flex;
   justify-content: space-between;
   gap: 18px;
+  min-width: 0;
+}
+.report-row__heading > div {
+  min-width: 0;
 }
 .report-type {
   color: var(--trace-muted);
@@ -3624,6 +3633,7 @@ h1 {
   text-transform: uppercase;
 }
 .report-row h3 {
+  overflow-wrap: anywhere;
   margin: 6px 0 0;
   color: var(--trace-text);
   font-size: 19px;
@@ -3633,13 +3643,22 @@ h1 {
   margin: 9px 0;
   color: var(--trace-muted);
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 .report-row__meta {
   display: flex;
   flex-wrap: wrap;
   gap: 14px;
+  min-width: 0;
   color: var(--trace-muted);
   font-size: 11px;
+}
+.report-row__meta span,
+.report-highlights,
+.report-native-detail,
+.technical-details {
+  min-width: 0;
+  max-width: 100%;
 }
 .report-highlights {
   display: grid;
@@ -3659,6 +3678,7 @@ h1 {
   color: var(--trace-muted);
   font-size: 12px;
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 .command-stack {
   display: grid;
