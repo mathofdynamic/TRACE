@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import './globals.css';
+import { EntranceMotionProvider } from './components/entrance-motion-provider';
 
 export const metadata: Metadata = {
   title: 'TRACE — Change intelligence for software teams',
@@ -16,7 +17,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <EntranceMotionProvider>{children}</EntranceMotionProvider>
+      </body>
     </html>
   );
 }

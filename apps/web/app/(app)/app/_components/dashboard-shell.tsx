@@ -14,6 +14,8 @@ import {
 import type { NavigationItem } from './navigation';
 import type { NavigationCapabilities } from './navigation';
 import { RepositorySwitcher } from './trace-redesign';
+import { usePresence, getMotionItemProps } from '../../../../lib/entrance-motion';
+import { PresenceContext } from './overlay-portal';
 import type { DashboardAttention, DashboardRepository } from '../../../../lib/dashboard';
 
 function NavigationIcon({ name }: { name: NavigationItem['icon'] }) {
@@ -166,6 +168,7 @@ export function DashboardShell({
   const pathname = usePathname();
   const [pendingHref, setPendingHref] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const presence = usePresence(mobileOpen);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const routeLabel = getRouteLabel(pathname);
@@ -180,7 +183,7 @@ export function DashboardShell({
     closeButtonRef.current?.focus();
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key !== 'Escape') return;
-      setMobileOpen(false);
+      presence.requestClose();
       menuButtonRef.current?.focus();
     }
     window.addEventListener('keydown', closeOnEscape);
@@ -198,14 +201,20 @@ export function DashboardShell({
       <a className="skip-link" href="#main-content">
         Skip to content
       </a>
-      <aside className="dashboard-sidebar" aria-label="Workspace" aria-hidden={mobileOpen}>
+      <aside
+        className="dashboard-sidebar"
+        aria-label="Workspace"
+        aria-hidden={mobileOpen}
+        data-trace-motion="item"
+        style={{ '--motion-index': 0 } as React.CSSProperties}
+      >
         <Link className="dashboard-brand" href="/app" aria-label="TRACE overview">
           <TraceMark />
           <span>TRACE</span>
         </Link>
-        <div className="workspace-switcher">
-          <span className="workspace-switcher__dot" />
-          <span>
+        <div className="workspace-switcher" role="region" aria-label="Active workspace">
+          <span className="workspace-switcher__dot" aria-hidden="true" />
+          <span className="workspace-switcher__identity">
             <small>Workspace</small>
             <strong>{workspaceName}</strong>
           </span>
@@ -216,82 +225,117 @@ export function DashboardShell({
           </span>
         </div>
         <nav className="dashboard-nav" aria-label="Application navigation">
-          <p>Workspace</p>
+          <p className="dashboard-nav__section-label">Workspace</p>
           <NavigationLinks items={primaryNavigation} {...navigationProps} />
-          <p>Manage</p>
+          <p className="dashboard-nav__section-label">Manage</p>
           <NavigationLinks items={secondaryNavigation} {...navigationProps} />
         </nav>
         <div className="dashboard-account">
-          <span className="avatar">{userName.charAt(0).toUpperCase()}</span>
-          <span>
+          <span className="avatar" aria-hidden="true">
+            {userName.charAt(0).toUpperCase()}
+          </span>
+          <span className="dashboard-account__identity">
             <small>Signed in as</small>
             <strong title={userName}>{userName}</strong>
           </span>
         </div>
       </aside>
 
-      {mobileOpen ? (
-        <>
+      {presence.isMounted ? (
+        <PresenceContext.Provider value={presence}>
           <button
             className="dashboard-scrim"
             type="button"
             aria-label="Close navigation"
-            onClick={() => setMobileOpen(false)}
+            onClick={presence.requestClose}
+            data-trace-motion="surface"
+            data-motion-variant="backdrop"
+            data-presence-state={presence.presenceState}
           />
           <aside
             className="dashboard-mobile-drawer"
             data-open="true"
+            data-trace-motion="surface"
+            data-motion-variant="drawer"
+            data-presence-state={presence.presenceState}
             aria-label="Mobile workspace navigation"
           >
-            <div className="dashboard-mobile-drawer__header">
-              <span>{workspaceName}</span>
+            <div className="dashboard-mobile-drawer__header" {...getMotionItemProps(0)}>
+              <div className="dashboard-mobile-drawer__workspace">
+                <span className="workspace-switcher__dot" aria-hidden="true" />
+                <span>{workspaceName}</span>
+              </div>
               <button
                 ref={closeButtonRef}
                 type="button"
-                onClick={() => setMobileOpen(false)}
+                onClick={presence.requestClose}
                 aria-label="Close navigation"
               >
                 ×
               </button>
             </div>
-            <nav className="dashboard-nav" aria-label="Mobile application navigation">
-              <p>Workspace</p>
+            <nav
+              className="dashboard-nav"
+              aria-label="Mobile application navigation"
+              {...getMotionItemProps(1)}
+            >
+              <p className="dashboard-nav__section-label">Workspace</p>
               <NavigationLinks items={primaryNavigation} {...navigationProps} />
-              <p>Manage</p>
+              <p className="dashboard-nav__section-label">Manage</p>
               <NavigationLinks items={secondaryNavigation} {...navigationProps} />
             </nav>
+            <div className="dashboard-account dashboard-account--mobile" {...getMotionItemProps(2)}>
+              <span className="avatar" aria-hidden="true">
+                {userName.charAt(0).toUpperCase()}
+              </span>
+              <span className="dashboard-account__identity">
+                <small>Signed in as</small>
+                <strong title={userName}>{userName}</strong>
+              </span>
+            </div>
           </aside>
-        </>
+        </PresenceContext.Provider>
       ) : null}
 
       <div className="dashboard-main">
-        <header className="dashboard-topbar">
-          <button
-            ref={menuButtonRef}
-            className="dashboard-menu-button"
-            type="button"
-            aria-label="Open navigation"
-            aria-expanded={mobileOpen}
-            onClick={() => setMobileOpen(true)}
-          >
-            <span />
-            <span />
-          </button>
-          <span className="breadcrumb">
-            <span>{workspaceName}</span>
-            <i aria-hidden="true">/</i>
-            <strong>{routeLabel}</strong>
-          </span>
-          {repositories.length ? (
-            <RepositorySwitcher
-              repositories={repositories}
-              attention={attention}
-              preferredRepositoryId={preferredRepositoryId}
-            />
-          ) : null}
-          <span className="topbar-status">
-            <i /> Early pilot
-          </span>
+        <header
+          className="dashboard-topbar"
+          data-trace-motion="item"
+          style={{ '--motion-index': 0 } as React.CSSProperties}
+        >
+          <div className="dashboard-topbar__start">
+            <button
+              ref={menuButtonRef}
+              className="dashboard-menu-button"
+              type="button"
+              aria-label="Open navigation"
+              aria-expanded={mobileOpen}
+              onClick={() => setMobileOpen(true)}
+            >
+              <span />
+              <span />
+            </button>
+            <div className="breadcrumb" aria-label="Current location">
+              <span className="breadcrumb__workspace">{workspaceName}</span>
+              <span className="breadcrumb__separator" aria-hidden="true">
+                /
+              </span>
+              <strong className="breadcrumb__page">{routeLabel}</strong>
+            </div>
+          </div>
+          <div className="dashboard-topbar__end">
+            {repositories.length ? (
+              <RepositorySwitcher
+                repositories={repositories}
+                attention={attention}
+                preferredRepositoryId={preferredRepositoryId}
+              />
+            ) : null}
+            <span className="topbar-status">
+              <i aria-hidden="true" />
+              <span>Early pilot</span>
+            </span>
+          </div>
         </header>
         {pendingHref ? (
           <div
@@ -301,7 +345,12 @@ export function DashboardShell({
           />
         ) : null}
         <main id="main-content" className="dashboard-content">
-          <div className="dashboard-route" key={pathname}>
+          <div
+            className="dashboard-route"
+            key={pathname}
+            data-trace-motion="section"
+            data-motion-section="dashboard-route"
+          >
             {children}
           </div>
         </main>

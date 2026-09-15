@@ -22,13 +22,16 @@ export function GithubAuthButton({ callbackURL = '/onboarding' }: { callbackURL?
         type="button"
         onClick={startSignIn}
         disabled={state === 'loading'}
+        aria-busy={state === 'loading'}
       >
         {state === 'loading' ? 'Connecting to GitHub…' : 'Continue with GitHub'}
       </button>
       {state === 'error' ? (
-        <p className="auth-error" role="alert">
-          GitHub sign-in is unavailable. Check the configured OAuth callback and try again.
-        </p>
+        <div className="auth-error-box" role="alert">
+          <p className="auth-error">
+            GitHub sign-in is unavailable. Check the configured OAuth callback and try again.
+          </p>
+        </div>
       ) : null}
       <span className="sr-only" aria-live="polite">
         {state === 'loading' ? 'Opening GitHub authorization' : ''}

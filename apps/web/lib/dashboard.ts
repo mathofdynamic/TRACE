@@ -34,6 +34,7 @@ export type DashboardRepository = {
     status: AnalysisState;
     updatedAt: string;
   } | null;
+  syncState?: 'not_analyzed' | 'pending' | 'synced' | 'needs_refresh' | 'unknown';
 };
 
 export type DashboardAttention = {
@@ -47,6 +48,16 @@ export type DashboardAttention = {
   repositoryId: string | null;
   repositoryName: string | null;
   updatedAt: string;
+  affectedArea?: string | null;
+  analyzedCommit?: string | null;
+  relatedChangeId?: string | null;
+  relatedChangeNumber?: number | null;
+  provenance?: {
+    ruleId?: string | null;
+    analyzedCommit?: string | null;
+    remoteHeadCommit?: string | null;
+    isStaleWithRemote?: boolean;
+  } | null;
 };
 
 export type DashboardChange = {
@@ -59,6 +70,15 @@ export type DashboardChange = {
   url: string | null;
   authorLogin: string | null;
   updatedAt: string;
+  branch?: string | null;
+  baseBranch?: string | null;
+  headSha?: string | null;
+  intent?: string | null;
+  affectedAreas?: string[];
+  affectedFiles?: string[];
+  relatedConflictId?: string | null;
+  relatedChangeIds?: string[];
+  relatedFindingIds?: string[];
 };
 
 export type DashboardActivity = {
@@ -87,11 +107,21 @@ export type DashboardSyncedRecord = {
     severity?: string;
     classification?: string;
     evidence: string[];
+    changeId?: string | null;
+    changeNumber?: number | null;
+    findingId?: string | null;
   }>;
   generatedAt: string;
   syncedAt: string;
   origin: 'local';
   content: string;
+  path?: string | null;
+  timeWindow?: string | null;
+  freshness?: 'current' | 'needs-refresh' | 'attention' | 'unknown' | null;
+  analyzedCommit?: string | null;
+  remoteHeadCommit?: string | null;
+  relatedChangeIds?: string[];
+  relatedFindingIds?: string[];
 };
 
 export type DashboardSummary = {
@@ -113,6 +143,13 @@ export type DashboardSummary = {
     localAnalysisAvailable: true;
   };
   repositories: DashboardRepository[];
+  repositoryCatalog: DashboardRepository[];
+  github: {
+    connected: boolean;
+    accountLogin: string | null;
+    accountType: string | null;
+    defaultBranch: string | null;
+  };
   attention: DashboardAttention[];
   latestChanges: DashboardChange[];
   latestReports: DashboardSyncedRecord[];
@@ -188,7 +225,11 @@ export async function getDashboardSummary(
 
   const installations = organizationIds.length
     ? await db
-        .select({ id: schema.githubInstallations.id })
+        .select({
+          id: schema.githubInstallations.id,
+          accountLogin: schema.githubInstallations.accountLogin,
+          accountType: schema.githubInstallations.accountType,
+        })
         .from(schema.githubInstallations)
         .where(
           and(
@@ -270,6 +311,7 @@ export async function getDashboardSummary(
           id: schema.analysisRuns.id,
           repositoryId: schema.analysisRuns.repositoryId,
           status: schema.analysisRuns.status,
+          headSha: schema.analysisRuns.headSha,
           result: schema.analysisRuns.result,
           updatedAt: schema.analysisRuns.updatedAt,
         })
@@ -324,7 +366,35 @@ export async function getDashboardSummary(
             updatedAt: analysis.updatedAt.toISOString(),
           }
         : null,
+      syncState: latestSync
+        ? latestSync.headCommit && repository.remoteHeadSha
+          ? latestSync.headCommit === repository.remoteHeadSha
+            ? 'synced'
+            : 'needs_refresh'
+          : 'unknown'
+        : analysis?.status === 'completed'
+          ? 'pending'
+          : 'not_analyzed',
     };
+  });
+  const repositoryCatalog: DashboardRepository[] = repositoryRows.map((repository) => {
+    const active = repositories.find((item) => item.id === repository.id);
+    return (
+      active ?? {
+        id: repository.id,
+        fullName: repository.fullName,
+        owner: repository.owner,
+        name: repository.name,
+        defaultBranch: repository.defaultBranch,
+        visibility: repository.visibility,
+        state: repository.state,
+        remoteHeadSha: repository.remoteHeadSha,
+        lastSynchronizedAt: repository.lastSynchronizedAt?.toISOString() ?? null,
+        latestSync: null,
+        analysis: null,
+        syncState: 'not_analyzed',
+      }
+    );
   });
 
   const findingRows = analysisRows.length
@@ -368,6 +438,15 @@ export async function getDashboardSummary(
       repositoryId: run?.repositoryId ?? null,
       repositoryName: repository?.fullName ?? null,
       updatedAt: finding.updatedAt.toISOString(),
+      provenance: run
+        ? {
+            analyzedCommit: run.headSha ?? null,
+            remoteHeadCommit: repository?.remoteHeadSha ?? null,
+            isStaleWithRemote:
+              Boolean(run.headSha && repository?.remoteHeadSha) &&
+              run.headSha !== repository?.remoteHeadSha,
+          }
+        : null,
     };
   });
   for (const run of analysisRows.filter(
@@ -416,6 +495,8 @@ export async function getDashboardSummary(
           number: schema.githubPullRequests.number,
           title: schema.githubPullRequests.title,
           state: schema.githubPullRequests.state,
+          headSha: schema.githubPullRequests.headSha,
+          baseBranch: schema.githubPullRequests.baseBranch,
           url: schema.githubPullRequests.url,
           authorLogin: schema.githubPullRequests.authorLogin,
           updatedAt: schema.githubPullRequests.updatedAt,
@@ -448,6 +529,23 @@ export async function getDashboardSummary(
       status?: string;
       items?: DashboardSyncedRecord['items'];
     };
+    const projectionRecord = artifact.projection as Record<string, unknown>;
+    const stringArray = (value: unknown): string[] | undefined =>
+      Array.isArray(value) && value.every((item) => typeof item === 'string') ? value : undefined;
+    const stringValue = (value: unknown): string | null =>
+      typeof value === 'string' && value.length ? value : null;
+    const reportRemoteHead = stringValue(projectionRecord.remoteHeadCommit);
+    const reportAnalyzedCommit =
+      stringValue(projectionRecord.analyzedCommit) ??
+      latestSyncByRepository.get(artifact.repositoryId)?.headCommit ??
+      null;
+    const repository = repositoryById.get(artifact.repositoryId);
+    const freshness =
+      repository?.remoteHeadSha && reportAnalyzedCommit
+        ? repository.remoteHeadSha === reportAnalyzedCommit
+          ? ('current' as const)
+          : ('needs-refresh' as const)
+        : null;
     return {
       id: artifact.id,
       artifactId: artifact.artifactId,
@@ -462,6 +560,13 @@ export async function getDashboardSummary(
       syncedAt: artifact.syncedAt.toISOString(),
       origin: 'local',
       content: artifact.content,
+      path: artifact.path,
+      timeWindow: stringValue(projectionRecord.timeWindow),
+      freshness,
+      analyzedCommit: reportAnalyzedCommit,
+      remoteHeadCommit: reportRemoteHead ?? repository?.remoteHeadSha ?? null,
+      relatedChangeIds: stringArray(projectionRecord.relatedChangeIds),
+      relatedFindingIds: stringArray(projectionRecord.relatedFindingIds),
     };
   });
   const latestReports = syncedRecords.filter((record) =>
@@ -642,6 +747,14 @@ export async function getDashboardSummary(
     },
     setup: { ...setup, repositoriesAvailable: repositoryRows.length },
     repositories,
+    repositoryCatalog,
+    github: {
+      connected: installations.length > 0,
+      accountLogin: installations[0]?.accountLogin ?? null,
+      accountType: installations[0]?.accountType ?? null,
+      defaultBranch:
+        repositories.find((repository) => repository.defaultBranch)?.defaultBranch ?? null,
+    },
     attention: attention.slice(0, 12),
     latestChanges,
     latestReports,
