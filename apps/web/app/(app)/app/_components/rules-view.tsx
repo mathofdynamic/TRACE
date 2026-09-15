@@ -289,7 +289,7 @@ export function RulesView({
           <div className="rule-metric-item">
             <span className="rule-metric-label">SEVERITY INVARIANTS</span>
             <span className="rule-metric-value">
-              {severityCounts.high} High Â· {severityCounts.medium} Med Â· {severityCounts.low} Low
+              {severityCounts.high} High · {severityCounts.medium} Med · {severityCounts.low} Low
             </span>
             <span className="rule-metric-sub">Policy weights</span>
           </div>
@@ -353,7 +353,7 @@ export function RulesView({
                 onClick={() => setSearchQuery('')}
                 aria-label="Clear search query"
               >
-                âœ•
+                ✕
               </button>
             )}
           </div>
@@ -575,7 +575,7 @@ export function RulesView({
                       {/* Neutral Status Tag */}
                       <span className="rule-status-tag">
                         <span className="status-bullet" aria-hidden="true">
-                          â—
+                          ●
                         </span>
                         ACTIVE INVARIANT
                       </span>
@@ -596,19 +596,19 @@ export function RulesView({
                         {allEvidencePaths.slice(0, 2).join(', ')}
                         {allEvidencePaths.length > 2 ? ` +${allEvidencePaths.length - 2} more` : ''}
                       </span>
-                      <span className="meta-token-divider">Â·</span>
+                      <span className="meta-token-divider">·</span>
                       <span className="meta-token">
                         <strong className="token-label">Constraints:</strong> {rule.items.length}{' '}
                         checks
                       </span>
-                      <span className="meta-token-divider">Â·</span>
+                      <span className="meta-token-divider">·</span>
                       {linkedFindings.length > 0 && (
                         <>
                           <span className="meta-token">
                             <strong className="token-label">Linked findings:</strong>{' '}
                             {linkedFindings.length}
                           </span>
-                          <span className="meta-token-divider">Â·</span>
+                          <span className="meta-token-divider">·</span>
                         </>
                       )}
                       <span className="meta-token meta-token--provenance">
@@ -700,7 +700,7 @@ export function RulesView({
                 <h2 className="empty-title">No matching governance rules found</h2>
                 <p className="empty-description">
                   No rules match the current filters
-                  {searchQuery.trim() ? ` for â€œ${searchQuery}â€` : ''}.
+                  {searchQuery.trim() ? ` for “${searchQuery}”` : ''}.
                 </p>
                 <button
                   type="button"
@@ -747,7 +747,7 @@ export function RulesView({
             developers, or transmitting raw source files.
           </p>
           <Link href="/docs#rules" className="privacy-link">
-            Read governance docs â†’
+            Read governance docs →
           </Link>
         </div>
       </footer>
@@ -845,7 +845,7 @@ function RuleDisclosureBody({
                 {parsed.requirements.map((req, rIdx) => (
                   <li key={rIdx} className="requirement-item">
                     <span className="req-bullet" aria-hidden="true">
-                      â–¸
+                      ▸
                     </span>
                     <span className="req-text">{req}</span>
                   </li>

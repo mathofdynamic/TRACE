@@ -1,7 +1,7 @@
 import { DocumentationView } from '../_components/documentation-view';
 
 export const metadata = {
-  title: 'Documentation â€” TRACE Dashboard',
+  title: 'Documentation — TRACE Dashboard',
   description: 'In-tree specifications, local AST manuals, and verification workflows.',
 };
 

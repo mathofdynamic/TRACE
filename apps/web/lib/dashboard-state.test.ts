@@ -3,6 +3,7 @@ import {
   analysisOriginLabel,
   activityContextLabel,
   deriveTraceProjectState,
+  freshnessLabel,
   isFileEvidenceReference,
   localTraceCommandsForState,
   needsReanalysis,
@@ -33,6 +34,12 @@ const repository: DashboardRepository = {
 };
 
 describe('deriveTraceProjectState', () => {
+  it('maps unknown report freshness to unavailable rather than current', () => {
+    expect(freshnessLabel(null)).toBe('Freshness unavailable');
+    expect(freshnessLabel(undefined)).toBe('Freshness unavailable');
+    expect(freshnessLabel('unknown')).toBe('Freshness unavailable');
+    expect(freshnessLabel('current')).toBe('Current');
+  });
   it('fails closed when freshness is unavailable', () => {
     expect(
       deriveTraceProjectState({

@@ -15,6 +15,7 @@ import type { NavigationItem } from './navigation';
 import type { NavigationCapabilities } from './navigation';
 import { RepositorySwitcher } from './trace-redesign';
 import { usePresence, getMotionItemProps } from '../../../../lib/entrance-motion';
+import { PresenceContext } from './overlay-portal';
 import type { DashboardAttention, DashboardRepository } from '../../../../lib/dashboard';
 
 function NavigationIcon({ name }: { name: NavigationItem['icon'] }) {
@@ -182,7 +183,7 @@ export function DashboardShell({
     closeButtonRef.current?.focus();
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key !== 'Escape') return;
-      setMobileOpen(false);
+      presence.requestClose();
       menuButtonRef.current?.focus();
     }
     window.addEventListener('keydown', closeOnEscape);
@@ -241,12 +242,12 @@ export function DashboardShell({
       </aside>
 
       {presence.isMounted ? (
-        <>
+        <PresenceContext.Provider value={presence}>
           <button
             className="dashboard-scrim"
             type="button"
             aria-label="Close navigation"
-            onClick={() => setMobileOpen(false)}
+            onClick={presence.requestClose}
             data-trace-motion="surface"
             data-motion-variant="backdrop"
             data-presence-state={presence.presenceState}
@@ -267,10 +268,10 @@ export function DashboardShell({
               <button
                 ref={closeButtonRef}
                 type="button"
-                onClick={() => setMobileOpen(false)}
+                onClick={presence.requestClose}
                 aria-label="Close navigation"
               >
-                Ã—
+                ×
               </button>
             </div>
             <nav
@@ -293,7 +294,7 @@ export function DashboardShell({
               </span>
             </div>
           </aside>
-        </>
+        </PresenceContext.Provider>
       ) : null}
 
       <div className="dashboard-main">

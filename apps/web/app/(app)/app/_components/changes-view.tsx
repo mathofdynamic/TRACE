@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { TraceSelect } from './trace-select';
-import { OverlayPortal, ModalBackdrop, CenteredDialog } from './overlay-portal';
+import { OverlayPortal, ModalBackdrop, CenteredDialog, PresenceContext } from './overlay-portal';
 import { usePresence, getMotionItemProps } from '../../../../lib/entrance-motion';
 import type {
   DashboardAttention,
@@ -259,7 +259,7 @@ export function ChangesView({ changes, repositories, conflicts, attention }: Cha
           <span className="changes-summary-metric__label">With findings</span>
         </div>
         <div className="changes-summary-note changes-summary-subline">
-          <span>Local deterministic snapshots Â· Zero personal scoring</span>
+          <span>Local deterministic snapshots · Zero personal scoring</span>
         </div>
       </section>
 
@@ -292,7 +292,7 @@ export function ChangesView({ changes, repositories, conflicts, attention }: Cha
                 id="changes-search-input"
                 className="trace-input changes-search-input"
                 type="search"
-                placeholder="Search by PR #, title, branch, author, or areaâ€¦"
+                placeholder="Search by PR #, title, branch, author, or area…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 aria-label="Search pull requests"
@@ -304,7 +304,7 @@ export function ChangesView({ changes, repositories, conflicts, attention }: Cha
                   onClick={() => setSearchQuery('')}
                   aria-label="Clear search input"
                 >
-                  Ã—
+                  ×
                 </button>
               ) : null}
             </div>
@@ -507,7 +507,7 @@ export function ChangesView({ changes, repositories, conflicts, attention }: Cha
                     className="changes-repo-section__view-link"
                     href={`/app/repositories/${group.repositoryId}/changes`}
                   >
-                    View repository changes â†’
+                    View repository changes →
                   </Link>
                 </div>
 
@@ -651,7 +651,7 @@ function ChangeRow({
                 {conflictInfo.collidingChanges.map((c, i) => (
                   <span key={c.id}>
                     {i > 0 ? ', ' : ''}
-                    <strong>PR #{c.number}</strong> ({c.authorLogin} Â· <code>{c.branch}</code>)
+                    <strong>PR #{c.number}</strong> ({c.authorLogin} · <code>{c.branch}</code>)
                   </span>
                 ))}
               </span>
@@ -736,7 +736,7 @@ function ChangeRow({
               target="_blank"
               rel="noreferrer"
             >
-              Open on GitHub â†—
+              Open on GitHub ↗
             </a>
           ) : null}
         </div>
@@ -798,246 +798,248 @@ function ChangeDetailDrawer({
   if (!presence.isMounted) return null;
 
   return (
-    <OverlayPortal>
-      <ModalBackdrop onClose={onClose} ariaLabel="Close change details">
-        <CenteredDialog
-          size="lg"
-          titleId={`change-drawer-title-${change.id}`}
-          onClose={onClose}
-          initialFocusRef={closeRef}
-          className="change-drawer"
-        >
-          {/* Header */}
-          <div className="change-drawer__header" {...getMotionItemProps(0)}>
-            <div className="change-drawer__eyebrow">
-              <span className="change-pr-badge">PR #{change.number}</span>
-              <span className="change-state-badge" data-state={change.state}>
-                {change.state.toUpperCase()}
-              </span>
-              <span className="change-repo-tag">{change.repositoryName}</span>
-            </div>
-            <button
-              ref={closeRef}
-              className="trace-dialog__close"
-              type="button"
-              aria-label="Close change details"
-              onClick={onClose}
-            >
-              Ã—
-            </button>
-          </div>
-
-          {/* Title and Intro */}
-          <div className="change-drawer__intro" {...getMotionItemProps(1)}>
-            <h2 id={`change-drawer-title-${change.id}`}>{change.title}</h2>
-          </div>
-
-          {/* Main Two-Column Content Layout */}
-          <div className="change-drawer__columns" {...getMotionItemProps(2)}>
-            {/* Left Column: Intent, Technical Context, Affected Files */}
-            <div className="change-drawer__column change-drawer__column--left">
-              {change.intent ? (
-                <section className="change-drawer__section">
-                  <span className="eyebrow">Architectural intent</span>
-                  <p className="change-drawer__lead">{change.intent}</p>
-                </section>
-              ) : null}
-
-              <section className="change-drawer__section">
-                <span className="eyebrow">Technical context</span>
-                <div className="change-drawer__grid">
-                  <div>
-                    <span className="detail-label">Author</span>
-                    <strong>@{change.authorLogin ?? 'Author unavailable'}</strong>
-                  </div>
-                  <div>
-                    <span className="detail-label">Source branch</span>
-                    <code title={change.branch ?? 'branch unavailable'}>
-                      {change.branch ?? 'branch unavailable'}
-                    </code>
-                  </div>
-                  <div>
-                    <span className="detail-label">Base branch</span>
-                    <code title={change.baseBranch ?? 'main'}>{change.baseBranch ?? 'main'}</code>
-                  </div>
-                  <div>
-                    <span className="detail-label">Head commit SHA</span>
-                    <code title={change.headSha ?? 'SHA unavailable'}>
-                      {change.headSha ? change.headSha.slice(0, 7) : 'SHA unavailable'}
-                    </code>
-                  </div>
-                  {change.affectedAreas?.length ? (
-                    <div>
-                      <span className="detail-label">Affected areas</span>
-                      <span>{change.affectedAreas.join(', ')}</span>
-                    </div>
-                  ) : null}
-                  <div>
-                    <span className="detail-label">Snapshot timestamp</span>
-                    <span>{formatDate(change.updatedAt)}</span>
-                  </div>
-                </div>
-              </section>
-
-              {change.affectedFiles?.length ? (
-                <section className="change-drawer__section">
-                  <span className="eyebrow">Affected files ({change.affectedFiles.length})</span>
-                  <ul className="change-drawer__file-list">
-                    {change.affectedFiles.map((file) => (
-                      <li key={file}>
-                        <code title={file}>{file}</code>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ) : null}
-            </div>
-
-            {/* Right Column: Coordination Conflict, AST Findings, Local Review Command */}
-            <div className="change-drawer__column change-drawer__column--right">
-              {conflictInfo ? (
-                <section className="change-drawer__section change-drawer__section--conflict">
-                  <span className="eyebrow">Active Coordination Conflict</span>
-                  <div className="change-drawer__conflict-box">
-                    <div className="conflict-box__header">
-                      <strong>{conflictInfo.conflict.title}</strong>
-                    </div>
-                    <p>{conflictInfo.conflict.summary}</p>
-                    {conflictInfo.collidingChanges.length ? (
-                      <div className="conflict-box__colliding">
-                        <span className="conflict-box__subhead">Colliding pull requests:</span>
-                        <ul>
-                          {conflictInfo.collidingChanges.map((c) => (
-                            <li key={c.id}>
-                              <strong>PR #{c.number}</strong> ({c.title}) â€” Branch:{' '}
-                              <code>{c.branch}</code> by @{c.authorLogin}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
-                    {conflictInfo.conflict.items?.length ? (
-                      <div className="conflict-box__evidence">
-                        <span className="conflict-box__subhead">
-                          Deterministic AST collision points:
-                        </span>
-                        <ul>
-                          {conflictInfo.conflict.items.map((item) => (
-                            <li key={item.id}>
-                              <strong>{item.title}</strong>: {item.detail}
-                              {item.evidence?.length ? (
-                                <div className="conflict-box__file-tags">
-                                  {item.evidence.map((e) => (
-                                    <code key={e}>{e}</code>
-                                  ))}
-                                </div>
-                              ) : null}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
-                  </div>
-                </section>
-              ) : null}
-
-              {relatedFindings.length ? (
-                <section className="change-drawer__section">
-                  <span className="eyebrow">Related AST findings ({relatedFindings.length})</span>
-                  <div className="change-drawer__findings-list">
-                    {relatedFindings.map((finding) => (
-                      <div key={finding.id} className="change-drawer__finding-card">
-                        <div className="finding-card__header">
-                          <span className="severity-badge" data-severity={finding.severity}>
-                            {finding.severity}
-                          </span>
-                          <strong>{finding.title}</strong>
-                        </div>
-                        <p>{finding.detail}</p>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
-              <section className="change-drawer__section">
-                <span className="eyebrow">Local review command</span>
-                <div className="change-drawer__cli-box">
-                  <code>trace pr inspect {change.number}</code>
-                  <button
-                    type="button"
-                    className="trace-button trace-button--secondary trace-button--small"
-                    onClick={copyCliCommand}
-                  >
-                    {copied ? (
-                      <>
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 16 16"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          aria-hidden="true"
-                          style={{ marginRight: '6px' }}
-                        >
-                          <polyline points="3 8 7 12 13 4" />
-                        </svg>
-                        Copied
-                      </>
-                    ) : (
-                      <>
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 16 16"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.75"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          aria-hidden="true"
-                          style={{ marginRight: '6px' }}
-                        >
-                          <rect x="5" y="5" width="9" height="9" rx="1.5" />
-                          <path d="M3 11V3a1.5 1.5 0 011.5-1.5H11" />
-                        </svg>
-                        Copy command
-                      </>
-                    )}
-                  </button>
-                </div>
-                <p className="change-drawer__cli-note">
-                  Run on your local computer to verify AST invariants before merging.
-                </p>
-              </section>
-            </div>
-          </div>
-
-          {/* Drawer Actions */}
-          <div className="change-drawer__footer" {...getMotionItemProps(3)}>
-            <button
-              type="button"
-              className="trace-button trace-button--secondary"
-              onClick={onClose}
-            >
-              Close
-            </button>
-            {change.url ? (
-              <a
-                className="trace-button trace-button--secondary"
-                href={change.url}
-                target="_blank"
-                rel="noreferrer"
+    <PresenceContext.Provider value={presence}>
+      <OverlayPortal>
+        <ModalBackdrop onRequestClose={presence.requestClose} ariaLabel="Close change details">
+          <CenteredDialog
+            size="lg"
+            titleId={`change-drawer-title-${change.id}`}
+            onRequestClose={presence.requestClose}
+            initialFocusRef={closeRef}
+            className="change-drawer"
+          >
+            {/* Header */}
+            <div className="change-drawer__header" {...getMotionItemProps(0)}>
+              <div className="change-drawer__eyebrow">
+                <span className="change-pr-badge">PR #{change.number}</span>
+                <span className="change-state-badge" data-state={change.state}>
+                  {change.state.toUpperCase()}
+                </span>
+                <span className="change-repo-tag">{change.repositoryName}</span>
+              </div>
+              <button
+                ref={closeRef}
+                className="trace-dialog__close"
+                type="button"
+                aria-label="Close change details"
+                onClick={presence.requestClose}
               >
-                Open PR #{change.number} on GitHub â†—
-              </a>
-            ) : null}
-          </div>
-        </CenteredDialog>
-      </ModalBackdrop>
-    </OverlayPortal>
+                ×
+              </button>
+            </div>
+
+            {/* Title and Intro */}
+            <div className="change-drawer__intro" {...getMotionItemProps(1)}>
+              <h2 id={`change-drawer-title-${change.id}`}>{change.title}</h2>
+            </div>
+
+            {/* Main Two-Column Content Layout */}
+            <div className="change-drawer__columns" {...getMotionItemProps(2)}>
+              {/* Left Column: Intent, Technical Context, Affected Files */}
+              <div className="change-drawer__column change-drawer__column--left">
+                {change.intent ? (
+                  <section className="change-drawer__section">
+                    <span className="eyebrow">Architectural intent</span>
+                    <p className="change-drawer__lead">{change.intent}</p>
+                  </section>
+                ) : null}
+
+                <section className="change-drawer__section">
+                  <span className="eyebrow">Technical context</span>
+                  <div className="change-drawer__grid">
+                    <div>
+                      <span className="detail-label">Author</span>
+                      <strong>@{change.authorLogin ?? 'Author unavailable'}</strong>
+                    </div>
+                    <div>
+                      <span className="detail-label">Source branch</span>
+                      <code title={change.branch ?? 'branch unavailable'}>
+                        {change.branch ?? 'branch unavailable'}
+                      </code>
+                    </div>
+                    <div>
+                      <span className="detail-label">Base branch</span>
+                      <code title={change.baseBranch ?? 'main'}>{change.baseBranch ?? 'main'}</code>
+                    </div>
+                    <div>
+                      <span className="detail-label">Head commit SHA</span>
+                      <code title={change.headSha ?? 'SHA unavailable'}>
+                        {change.headSha ? change.headSha.slice(0, 7) : 'SHA unavailable'}
+                      </code>
+                    </div>
+                    {change.affectedAreas?.length ? (
+                      <div>
+                        <span className="detail-label">Affected areas</span>
+                        <span>{change.affectedAreas.join(', ')}</span>
+                      </div>
+                    ) : null}
+                    <div>
+                      <span className="detail-label">Snapshot timestamp</span>
+                      <span>{formatDate(change.updatedAt)}</span>
+                    </div>
+                  </div>
+                </section>
+
+                {change.affectedFiles?.length ? (
+                  <section className="change-drawer__section">
+                    <span className="eyebrow">Affected files ({change.affectedFiles.length})</span>
+                    <ul className="change-drawer__file-list">
+                      {change.affectedFiles.map((file) => (
+                        <li key={file}>
+                          <code title={file}>{file}</code>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ) : null}
+              </div>
+
+              {/* Right Column: Coordination Conflict, AST Findings, Local Review Command */}
+              <div className="change-drawer__column change-drawer__column--right">
+                {conflictInfo ? (
+                  <section className="change-drawer__section change-drawer__section--conflict">
+                    <span className="eyebrow">Active Coordination Conflict</span>
+                    <div className="change-drawer__conflict-box">
+                      <div className="conflict-box__header">
+                        <strong>{conflictInfo.conflict.title}</strong>
+                      </div>
+                      <p>{conflictInfo.conflict.summary}</p>
+                      {conflictInfo.collidingChanges.length ? (
+                        <div className="conflict-box__colliding">
+                          <span className="conflict-box__subhead">Colliding pull requests:</span>
+                          <ul>
+                            {conflictInfo.collidingChanges.map((c) => (
+                              <li key={c.id}>
+                                <strong>PR #{c.number}</strong> ({c.title}) — Branch:{' '}
+                                <code>{c.branch}</code> by @{c.authorLogin}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                      {conflictInfo.conflict.items?.length ? (
+                        <div className="conflict-box__evidence">
+                          <span className="conflict-box__subhead">
+                            Deterministic AST collision points:
+                          </span>
+                          <ul>
+                            {conflictInfo.conflict.items.map((item) => (
+                              <li key={item.id}>
+                                <strong>{item.title}</strong>: {item.detail}
+                                {item.evidence?.length ? (
+                                  <div className="conflict-box__file-tags">
+                                    {item.evidence.map((e) => (
+                                      <code key={e}>{e}</code>
+                                    ))}
+                                  </div>
+                                ) : null}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                    </div>
+                  </section>
+                ) : null}
+
+                {relatedFindings.length ? (
+                  <section className="change-drawer__section">
+                    <span className="eyebrow">Related AST findings ({relatedFindings.length})</span>
+                    <div className="change-drawer__findings-list">
+                      {relatedFindings.map((finding) => (
+                        <div key={finding.id} className="change-drawer__finding-card">
+                          <div className="finding-card__header">
+                            <span className="severity-badge" data-severity={finding.severity}>
+                              {finding.severity}
+                            </span>
+                            <strong>{finding.title}</strong>
+                          </div>
+                          <p>{finding.detail}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+
+                <section className="change-drawer__section">
+                  <span className="eyebrow">Local review command</span>
+                  <div className="change-drawer__cli-box">
+                    <code>trace pr inspect {change.number}</code>
+                    <button
+                      type="button"
+                      className="trace-button trace-button--secondary trace-button--small"
+                      onClick={copyCliCommand}
+                    >
+                      {copied ? (
+                        <>
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 16 16"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                            style={{ marginRight: '6px' }}
+                          >
+                            <polyline points="3 8 7 12 13 4" />
+                          </svg>
+                          Copied
+                        </>
+                      ) : (
+                        <>
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 16 16"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.75"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                            style={{ marginRight: '6px' }}
+                          >
+                            <rect x="5" y="5" width="9" height="9" rx="1.5" />
+                            <path d="M3 11V3a1.5 1.5 0 011.5-1.5H11" />
+                          </svg>
+                          Copy command
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <p className="change-drawer__cli-note">
+                    Run on your local computer to verify AST invariants before merging.
+                  </p>
+                </section>
+              </div>
+            </div>
+
+            {/* Drawer Actions */}
+            <div className="change-drawer__footer" {...getMotionItemProps(3)}>
+              <button
+                type="button"
+                className="trace-button trace-button--secondary"
+                onClick={presence.requestClose}
+              >
+                Close
+              </button>
+              {change.url ? (
+                <a
+                  className="trace-button trace-button--secondary"
+                  href={change.url}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open PR #{change.number} on GitHub ↗
+                </a>
+              ) : null}
+            </div>
+          </CenteredDialog>
+        </ModalBackdrop>
+      </OverlayPortal>
+    </PresenceContext.Provider>
   );
 }

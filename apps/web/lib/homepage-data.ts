@@ -23,7 +23,7 @@ export const narrativeItems: NarrativeItem[] = [
     description:
       'Connect what changed to original intent, deterministic AST evidence, affected boundaries, and unfinished work.',
     evidenceTag: 'Deterministic AST Check',
-    evidenceSnippet: 'stream.rs:48 Â· No unbounded buffer allocations',
+    evidenceSnippet: 'stream.rs:48 · No unbounded buffer allocations',
   },
   {
     index: '02',
@@ -31,7 +31,7 @@ export const narrativeItems: NarrativeItem[] = [
     description:
       'Surface possible conflicts across active branches before concurrent PRs make coordination expensive.',
     evidenceTag: 'Collision Detector',
-    evidenceSnippet: 'PR #88 vs #89 Â· user_workspaces migration conflict',
+    evidenceSnippet: 'PR #88 vs #89 · user_workspaces migration conflict',
   },
   {
     index: '03',
@@ -39,14 +39,14 @@ export const narrativeItems: NarrativeItem[] = [
     description:
       'Preserve decisions, risks, and reports as readable repository artifacts, not ephemeral dashboard-only state.',
     evidenceTag: 'Durable Artifact',
-    evidenceSnippet: '.trace/reports/daily/2026-08-19.md Â· Hash 1e9b8a',
+    evidenceSnippet: '.trace/reports/daily/2026-08-19.md · Hash 1e9b8a',
   },
 ];
 
 export const executionComparison: ExecutionComparisonItem[] = [
   {
     mode: 'Local Execution',
-    status: 'Active Â· Production Ready',
+    status: 'Active · Production Ready',
     active: true,
     sourceHandling: 'Never leaves machine (0 bytes transmitted)',
     parsing: 'Local AST & symbol extraction',
@@ -55,7 +55,7 @@ export const executionComparison: ExecutionComparisonItem[] = [
   },
   {
     mode: 'Hybrid Intelligence',
-    status: 'Active Â· Selective Sync',
+    status: 'Active · Selective Sync',
     active: true,
     sourceHandling: 'Only signed metadata & summaries uploaded',
     parsing: 'Client-side redaction before push',
@@ -64,7 +64,7 @@ export const executionComparison: ExecutionComparisonItem[] = [
   },
   {
     mode: 'Cloud Coordination',
-    status: 'Planned Â· Opt-in Policy',
+    status: 'Planned · Opt-in Policy',
     active: false,
     sourceHandling: 'Ephemeral isolated sandbox (Opt-in only)',
     parsing: 'Automated webhook evaluation pipeline',

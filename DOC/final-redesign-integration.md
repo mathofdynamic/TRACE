@@ -14,6 +14,15 @@ Local TRACE synchronization, APIs, and deployment configuration.
 
 ## Real Data Contract Mapping
 
+| UI field             | Real source                                                  | Derivation                                              | Unknown behavior                                       |
+| -------------------- | ------------------------------------------------------------ | ------------------------------------------------------- | ------------------------------------------------------ |
+| Repository identity  | `github_repositories.full_name`                              | None                                                    | Omit when unavailable                                  |
+| Affected files       | Synchronized change record `items[].evidence`                | Only file-shaped references are shown as file locations | Show evidence-record wording otherwise                 |
+| Change intent        | No persisted TRACE field in the current projection           | Not derived from title text                             | Omit the intent affordance                             |
+| Change relationships | Persisted related change/finding/conflict IDs when present   | Deterministic ID mapping only                           | Omit relationship counts/panels                        |
+| Freshness            | `remote_head_sha` compared with synchronized/analysis commit | `current`, `needs-refresh`, `attention`, or `unknown`   | Render `Freshness unavailable`, never `Current`        |
+| Conflict result      | Synchronized conflict artifact records                       | Empty artifact items means zero conflicts               | Missing artifact means `Conflict analysis unavailable` |
+
 | UI surface                | Real source                                                                         | Truthful fallback                                                       |
 | ------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | Project context and state | `getAuthenticatedDashboardSummary()` and `deriveTraceProjectState()`                | Not connected, not analyzed, sync attention, freshness unavailable      |

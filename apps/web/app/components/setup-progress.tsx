@@ -13,7 +13,7 @@ export function SetupProgress({ current }: { current: 1 | 2 | 3 | 4 }) {
               data-state={state}
               aria-current={state === 'current' ? 'step' : undefined}
             >
-              <span aria-hidden="true">{state === 'complete' ? 'âœ“' : number}</span>
+              <span aria-hidden="true">{state === 'complete' ? '✓' : number}</span>
               <strong>{label}</strong>
             </li>
           );

@@ -1,5 +1,28 @@
 import type { DashboardAttention, DashboardRepository } from './dashboard';
 
+export type DashboardFreshness =
+  | 'current'
+  | 'needs-refresh'
+  | 'attention'
+  | 'unknown'
+  | null
+  | undefined;
+
+export function freshnessLabel(freshness: DashboardFreshness) {
+  switch (freshness) {
+    case 'current':
+      return 'Current';
+    case 'needs-refresh':
+      return 'Needs refresh';
+    case 'attention':
+      return 'Sync attention';
+    case 'unknown':
+    case null:
+    case undefined:
+      return 'Freshness unavailable';
+  }
+}
+
 export type TraceProjectStateKey =
   | 'not-connected'
   | 'github-access-required'

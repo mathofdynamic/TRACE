@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { artifactRelationships, specLifecycleNodes, specQuestions } from '../../lib/spec-data';
 import { PageHeader, PublicLayout, SectionLabel, TraceMark } from '../components/public';
 
-export const metadata = { title: '.trace specification â€” TRACE' };
+export const metadata = { title: '.trace specification — TRACE' };
 
 export default function SpecificationPage() {
   return (
@@ -63,7 +63,7 @@ export default function SpecificationPage() {
 
           <div className="spec-lifecycle__notice">
             <span className="notice-icon" aria-hidden="true">
-              â„¹
+              ℹ
             </span>
             <p>
               <strong>Core Invariant:</strong> The dashboard is a projection layer, never the sole
@@ -168,7 +168,7 @@ export default function SpecificationPage() {
                     {q.details.map((detail, dIdx) => (
                       <li key={dIdx}>
                         <span className="detail-bullet" aria-hidden="true">
-                          â€”
+                          —
                         </span>
                         <span>{detail}</span>
                       </li>
@@ -223,10 +223,10 @@ export default function SpecificationPage() {
                 target="_blank"
                 rel="noreferrer"
               >
-                Inspect Repository Docs â†’
+                Inspect Repository Docs →
               </a>
               <Link className="inline-link" href="/security">
-                Review Security & Privacy Boundaries â†’
+                Review Security & Privacy Boundaries →
               </Link>
             </div>
           </div>

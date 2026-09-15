@@ -99,7 +99,7 @@ export function RepositoryFindingsView({ findings, repository }: RepositoryFindi
           <input
             className="trace-input findings-search-input"
             type="search"
-            placeholder="Search findings by keyword, rule ID, or file pathâ€¦"
+            placeholder="Search findings by keyword, rule ID, or file path…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             aria-label="Search findings"
@@ -198,13 +198,13 @@ export function RepositoryFindingsView({ findings, repository }: RepositoryFindi
             {findings.length === 1 ? '' : 's'}
           </span>
           <span className="meta-sep" aria-hidden="true">
-            Â·
+            ·
           </span>
           <span className="findings-stat-item">
             <strong>{deterministicCount}</strong> verified deterministic
           </span>
           <span className="meta-sep" aria-hidden="true">
-            Â·
+            ·
           </span>
           <span className="findings-stat-item">
             <strong>{probabilisticCount}</strong> probabilistic

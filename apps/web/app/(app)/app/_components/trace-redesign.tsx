@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { OverlayPortal, ModalBackdrop, CenteredDialog } from './overlay-portal';
+import { OverlayPortal, ModalBackdrop, CenteredDialog, PresenceContext } from './overlay-portal';
 import { usePresence, getMotionItemProps } from '../../../../lib/entrance-motion';
 import type { DashboardAttention, DashboardRepository } from '../../../../lib/dashboard';
 import {
@@ -216,9 +216,7 @@ export function TraceRail({ state }: { state: TraceProjectStateKey }) {
             title={label.long}
           >
             <div className="trace-rail__step-body">
-              <span className="trace-rail__node">
-                {errored ? '!' : complete ? 'âœ“' : index + 1}
-              </span>
+              <span className="trace-rail__node">{errored ? '!' : complete ? '✓' : index + 1}</span>
               <span className="trace-rail__label">
                 <span className="trace-rail__label-long">{label.long}</span>
                 <span className="trace-rail__label-short">{label.short}</span>
@@ -264,7 +262,7 @@ export function LocalActionPanel({
     if (!open) return;
     closeRef.current?.focus();
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key === 'Escape') presence.requestClose();
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
@@ -294,75 +292,80 @@ export function LocalActionPanel({
         {triggerLabel}
       </button>
       {presence.isMounted ? (
-        <OverlayPortal>
-          <ModalBackdrop onClose={() => setOpen(false)} ariaLabel="Close local action panel">
-            <CenteredDialog
-              size="md"
-              titleId="local-action-title"
-              onClose={() => setOpen(false)}
-              initialFocusRef={closeRef}
+        <PresenceContext.Provider value={presence}>
+          <OverlayPortal>
+            <ModalBackdrop
+              onRequestClose={presence.requestClose}
+              ariaLabel="Close local action panel"
             >
-              <button
-                ref={closeRef}
-                className="trace-dialog__close"
-                type="button"
-                aria-label="Close local action panel"
-                onClick={() => setOpen(false)}
+              <CenteredDialog
+                size="md"
+                titleId="local-action-title"
+                onRequestClose={presence.requestClose}
+                initialFocusRef={closeRef}
               >
-                Ã—
-              </button>
-              <span className="eyebrow" {...getMotionItemProps(0)}>
-                Local TRACE workflow
-              </span>
-              <h2 id="local-action-title" {...getMotionItemProps(0)}>
-                {title}
-              </h2>
-              <p {...getMotionItemProps(1)}>
-                {description ??
-                  `Run these commands from ${repositoryName ? `${repositoryName} on ` : ''}your computer.`}
-              </p>
-              <div className="local-action-panel__notice" {...getMotionItemProps(1)}>
-                <StateMark tone="info" />
-                <span>
-                  Analysis stays on your computer. Only approved TRACE records are synchronized.
-                </span>
-              </div>
-              <ol className="local-action-commands" {...getMotionItemProps(2)}>
-                {commands.map((command, index) => (
-                  <li key={command}>
-                    <span>{index + 1}</span>
-                    <code>{command}</code>
-                    <button type="button" onClick={() => handleCopy(command, command)}>
-                      {copied === command ? 'Copied' : 'Copy'}
-                    </button>
-                  </li>
-                ))}
-              </ol>
-              {!commands.some((command) => command.startsWith('trace sync')) ? (
-                <p className="local-action-panel__hint" {...getMotionItemProps(2)}>
-                  Synchronization becomes available after local analysis creates an approved record
-                  and a dashboard connection is present.
-                </p>
-              ) : null}
-              <div className="trace-dialog__actions" {...getMotionItemProps(3)}>
                 <button
-                  className="trace-button trace-button--primary"
+                  ref={closeRef}
+                  className="trace-dialog__close"
                   type="button"
-                  onClick={() => handleCopy(allCommands, 'all')}
+                  aria-label="Close local action panel"
+                  onClick={() => presence.requestClose()}
                 >
-                  {copied === 'all' ? 'Commands copied' : 'Copy all commands'}
+                  ×
                 </button>
-                <Link
-                  className="trace-button trace-button--tertiary"
-                  href="/docs#local-dashboard"
-                  onClick={() => setOpen(false)}
-                >
-                  Learn how local analysis works
-                </Link>
-              </div>
-            </CenteredDialog>
-          </ModalBackdrop>
-        </OverlayPortal>
+                <span className="eyebrow" {...getMotionItemProps(0)}>
+                  Local TRACE workflow
+                </span>
+                <h2 id="local-action-title" {...getMotionItemProps(0)}>
+                  {title}
+                </h2>
+                <p {...getMotionItemProps(1)}>
+                  {description ??
+                    `Run these commands from ${repositoryName ? `${repositoryName} on ` : ''}your computer.`}
+                </p>
+                <div className="local-action-panel__notice" {...getMotionItemProps(1)}>
+                  <StateMark tone="info" />
+                  <span>
+                    Analysis stays on your computer. Only approved TRACE records are synchronized.
+                  </span>
+                </div>
+                <ol className="local-action-commands" {...getMotionItemProps(2)}>
+                  {commands.map((command, index) => (
+                    <li key={command}>
+                      <span>{index + 1}</span>
+                      <code>{command}</code>
+                      <button type="button" onClick={() => handleCopy(command, command)}>
+                        {copied === command ? 'Copied' : 'Copy'}
+                      </button>
+                    </li>
+                  ))}
+                </ol>
+                {!commands.some((command) => command.startsWith('trace sync')) ? (
+                  <p className="local-action-panel__hint" {...getMotionItemProps(2)}>
+                    Synchronization becomes available after local analysis creates an approved
+                    record and a dashboard connection is present.
+                  </p>
+                ) : null}
+                <div className="trace-dialog__actions" {...getMotionItemProps(3)}>
+                  <button
+                    className="trace-button trace-button--primary"
+                    type="button"
+                    onClick={() => handleCopy(allCommands, 'all')}
+                  >
+                    {copied === 'all' ? 'Commands copied' : 'Copy all commands'}
+                  </button>
+                  <Link
+                    className="trace-button trace-button--tertiary"
+                    href="/docs#local-dashboard"
+                    onClick={presence.requestClose}
+                  >
+                    Learn how local analysis works
+                  </Link>
+                </div>
+              </CenteredDialog>
+            </ModalBackdrop>
+          </OverlayPortal>
+        </PresenceContext.Provider>
       ) : null}
     </>
   );
@@ -461,7 +464,7 @@ export function RepositorySwitcher({
           </span>
         ) : null}
         <span className="repository-context__chevron" aria-hidden="true">
-          âŒ„
+          ⌄
         </span>
       </button>
       {presence.isMounted ? (
@@ -494,7 +497,7 @@ export function RepositorySwitcher({
                 aria-label="Close repository switcher"
                 onClick={() => setOpen(false)}
               >
-                Ã—
+                ×
               </button>
             </div>
             <div className="repository-switcher__search-wrapper" {...getMotionItemProps(1)}>
@@ -518,7 +521,7 @@ export function RepositorySwitcher({
                 className="repository-switcher__search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search projects by nameâ€¦"
+                placeholder="Search projects by name…"
                 aria-label="Search repositories"
               />
               {query ? (
@@ -528,7 +531,7 @@ export function RepositorySwitcher({
                   onClick={() => setQuery('')}
                   aria-label="Clear search"
                 >
-                  âœ•
+                  ✕
                 </button>
               ) : null}
             </div>
@@ -578,7 +581,7 @@ export function RepositorySwitcher({
               {...getMotionItemProps(3)}
             >
               <span>Manage repositories</span>
-              <span aria-hidden="true">â†’</span>
+              <span aria-hidden="true">→</span>
             </Link>
           </div>
         </>
@@ -612,7 +615,7 @@ function RepositorySwitcherRow({
         <small>
           {state.label}
           {repository.latestSync
-            ? ` Â· ${formatRelativeDate(repository.latestSync.completedAt)}`
+            ? ` · ${formatRelativeDate(repository.latestSync.completedAt)}`
             : ''}
         </small>
       </span>
@@ -654,7 +657,7 @@ export function ProjectContextSummary({
       <p>{state.description}</p>
       {repository?.latestSync ? (
         <small>
-          Last synced {formatRelativeDate(repository.lastSynchronizedAt)} Â·{' '}
+          Last synced {formatRelativeDate(repository.lastSynchronizedAt)} ·{' '}
           {repository.latestSync.branch ?? repository.defaultBranch ?? 'default branch'} @{' '}
           {repository.latestSync.headCommit?.slice(0, 12) ?? 'unknown'}
         </small>
@@ -685,19 +688,13 @@ export function FindingDisclosure({
       closeRef.current?.focus();
       const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
-          setOpen(false);
-          triggerRef.current?.focus();
+          presence.requestClose();
         }
       };
       window.addEventListener('keydown', handleKeyDown);
       return () => window.removeEventListener('keydown', handleKeyDown);
     }
   }, [open]);
-
-  const handleClose = () => {
-    setOpen(false);
-    triggerRef.current?.focus();
-  };
 
   const analyzedCommitSha =
     finding.provenance?.analyzedCommit ??
@@ -719,285 +716,291 @@ export function FindingDisclosure({
         Review
       </button>
       {presence.isMounted ? (
-        <OverlayPortal>
-          <ModalBackdrop onClose={handleClose} ariaLabel="Close finding details">
-            <CenteredDialog
-              size="lg"
-              titleId={`finding-title-${finding.id}`}
-              onClose={handleClose}
-              initialFocusRef={closeRef}
-              className="finding-drawer"
-            >
-              <div className="finding-drawer__header" {...getMotionItemProps(0)}>
-                <div className="finding-drawer__eyebrow">
-                  <span className="severity-badge" data-severity={finding.severity}>
-                    {finding.severity}
-                  </span>
-                  <span className="classification-pill">
-                    {finding.classification === 'deterministic'
-                      ? 'Verified evidence'
-                      : 'Probabilistic'}
-                  </span>
-                  {finding.affectedArea ? (
-                    <span className="affected-area-pill">{finding.affectedArea}</span>
-                  ) : null}
-                  {finding.relatedChangeNumber ? (
-                    <span className="related-change-pill">PR #{finding.relatedChangeNumber}</span>
-                  ) : null}
-                </div>
-                <button
-                  ref={closeRef}
-                  className="trace-dialog__close"
-                  type="button"
-                  aria-label="Close finding details"
-                  onClick={handleClose}
-                >
-                  Ã—
-                </button>
-              </div>
-
-              {/* 1. What Happened */}
-              <div className="finding-drawer__intro" {...getMotionItemProps(1)}>
-                <h2 id={`finding-title-${finding.id}`}>{finding.title}</h2>
-                <p className="finding-drawer__lead">{presentFindingDetail(finding.detail)}</p>
-              </div>
-
-              {/* Responsive 2-Column Content Layout */}
-              <div className="finding-drawer__body-grid" {...getMotionItemProps(2)}>
-                {/* Primary Left Column: Context, Reasoning & Evidence */}
-                <div className="finding-drawer__col-main">
-                  {/* 2. Why this matters */}
-                  <section className="finding-drawer__section finding-drawer__section--first">
-                    <span className="eyebrow">Why TRACE flagged this</span>
-                    <p className="finding-drawer__text">
-                      {finding.classification === 'deterministic'
-                        ? `Deterministic AST rule '${finding.provenance?.ruleId ?? 'code-rule'}' matched code patterns that violate local invariants. This condition directly affects ${finding.affectedArea ?? 'the codebase'} and should be addressed before merging.`
-                        : `Heuristic evaluation flagged potential drift in ${finding.affectedArea ?? 'related components'}. Review the referenced evidence to verify impact on system stability.`}
-                    </p>
-                  </section>
-
-                  {/* 3. Related Change (if present) */}
-                  {finding.relatedChangeNumber ? (
-                    <section className="finding-drawer__section">
-                      <span className="eyebrow">Related change</span>
-                      <div className="finding-drawer__fact-card">
-                        <strong>Pull Request #{finding.relatedChangeNumber}</strong>
-                        <p>
-                          Observed in the context of active pull request #
-                          {finding.relatedChangeNumber}.
-                        </p>
-                      </div>
-                    </section>
-                  ) : null}
-
-                  {/* 4. Evidence & Locations */}
-                  <section className="finding-drawer__section">
-                    <span className="eyebrow">
-                      Evidence ({finding.evidence.length} reference
-                      {finding.evidence.length === 1 ? '' : 's'})
+        <PresenceContext.Provider value={presence}>
+          <OverlayPortal>
+            <ModalBackdrop onRequestClose={presence.requestClose} ariaLabel="Close finding details">
+              <CenteredDialog
+                size="lg"
+                titleId={`finding-title-${finding.id}`}
+                onRequestClose={presence.requestClose}
+                initialFocusRef={closeRef}
+                className="finding-drawer"
+              >
+                <div className="finding-drawer__header" {...getMotionItemProps(0)}>
+                  <div className="finding-drawer__eyebrow">
+                    <span className="severity-badge" data-severity={finding.severity}>
+                      {finding.severity}
                     </span>
-                    {fileEvidence.length ? (
-                      <div className="finding-drawer__evidence-group">
-                        <h3 className="finding-drawer__subheading">Affected file locations</h3>
-                        <ul className="evidence-list evidence-list--enhanced">
-                          {fileEvidence.map((item) => (
-                            <li key={item} className="evidence-item">
-                              <div className="evidence-item__icon" aria-hidden="true">
-                                <svg
-                                  width="14"
-                                  height="14"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                >
-                                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                  <polyline points="14 2 14 8 20 8" />
-                                  <line x1="16" y1="13" x2="8" y2="13" />
-                                  <line x1="16" y1="17" x2="8" y2="17" />
-                                  <polyline points="10 9 9 9 8 9" />
-                                </svg>
-                              </div>
-                              <div className="evidence-item__details">
-                                <code className="evidence-item__path">{item}</code>
-                                <span className="evidence-item__meta">
-                                  {finding.classification === 'deterministic'
-                                    ? 'Deterministic AST syntax match'
-                                    : 'File reference'}
-                                  {' Â· '}Verified by local trace CLI
-                                </span>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
+                    <span className="classification-pill">
+                      {finding.classification === 'deterministic'
+                        ? 'Verified evidence'
+                        : 'Probabilistic'}
+                    </span>
+                    {finding.affectedArea ? (
+                      <span className="affected-area-pill">{finding.affectedArea}</span>
                     ) : null}
-
-                    {recordEvidence.length ? (
-                      <div className="finding-drawer__evidence-group">
-                        <h3 className="finding-drawer__subheading">TRACE evidence records</h3>
-                        <ul className="evidence-list evidence-list--enhanced">
-                          {recordEvidence.map((item) => (
-                            <li key={item} className="evidence-item">
-                              <div className="evidence-item__icon" aria-hidden="true">
-                                <svg
-                                  width="14"
-                                  height="14"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                >
-                                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                                  <line x1="3" y1="9" x2="21" y2="9" />
-                                  <line x1="9" y1="21" x2="9" y2="9" />
-                                </svg>
-                              </div>
-                              <div className="evidence-item__details">
-                                <code className="evidence-item__path">{item}</code>
-                                <span className="evidence-item__meta">
-                                  Synchronized TRACE record
-                                </span>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
+                    {finding.relatedChangeNumber ? (
+                      <span className="related-change-pill">PR #{finding.relatedChangeNumber}</span>
                     ) : null}
-
-                    {!finding.evidence.length ? (
-                      <p className="drawer-muted">
-                        No supporting evidence references were synchronized for this item.
-                      </p>
-                    ) : null}
-
-                    <div className="finding-privacy-badge">
-                      <span className="privacy-icon" aria-hidden="true">
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 14 14"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <rect x="2.5" y="5.5" width="9" height="7" rx="1.5" />
-                          <path d="M4.5 5.5V3.5a2.5 2.5 0 0 1 5 0v2.5" />
-                        </svg>
-                      </span>
-                      <span>
-                        Zero source code exposure: TRACE analyzes AST locally and never uploads code
-                        snippets or files.
-                      </span>
-                    </div>
-                  </section>
+                  </div>
+                  <button
+                    ref={closeRef}
+                    className="trace-dialog__close"
+                    type="button"
+                    aria-label="Close finding details"
+                    onClick={() => presence.requestClose()}
+                  >
+                    ×
+                  </button>
                 </div>
 
-                {/* Secondary Right Column: Rule Metadata, Provenance & Privacy */}
-                <div className="finding-drawer__col-sidebar">
-                  {/* 5. Origin & Verification */}
-                  <section className="finding-drawer__section finding-drawer__section--first">
-                    <span className="eyebrow">Origin & Rule details</span>
-                    <div className="finding-drawer__grid">
-                      <div>
-                        <span className="detail-label">Repository</span>
-                        <strong>
-                          {repositoryName ?? repository?.fullName ?? 'Local workspace'}
-                        </strong>
-                      </div>
-                      <div>
-                        <span className="detail-label">Branch</span>
-                        <code>{branchName}</code>
-                      </div>
-                      {finding.provenance?.ruleId ? (
-                        <div>
-                          <span className="detail-label">Rule ID</span>
-                          <code>{finding.provenance.ruleId}</code>
-                        </div>
-                      ) : null}
-                      <div>
-                        <span className="detail-label">Verification source</span>
-                        <span>Local CLI Analyzer</span>
-                      </div>
-                    </div>
-                  </section>
+                {/* 1. What Happened */}
+                <div className="finding-drawer__intro" {...getMotionItemProps(1)}>
+                  <h2 id={`finding-title-${finding.id}`}>{finding.title}</h2>
+                  <p className="finding-drawer__lead">{presentFindingDetail(finding.detail)}</p>
+                </div>
 
-                  {/* 6. Analyzed Commit & Freshness Boundary */}
-                  <section className="finding-drawer__section">
-                    <span className="eyebrow">Analyzed commit & Freshness</span>
-                    <div className="finding-drawer__commit-info">
-                      <span>
-                        Analyzed at commit:{' '}
-                        <code>
-                          {analyzedCommitSha ? analyzedCommitSha.slice(0, 12) : 'local workspace'}
-                        </code>
-                      </span>
-                      {finding.provenance?.isStaleWithRemote &&
-                      finding.provenance.remoteHeadCommit ? (
-                        <div className="stale-warning-box">
-                          <strong>Newer commit on GitHub</strong>
+                {/* Responsive 2-Column Content Layout */}
+                <div className="finding-drawer__body-grid" {...getMotionItemProps(2)}>
+                  {/* Primary Left Column: Context, Reasoning & Evidence */}
+                  <div className="finding-drawer__col-main">
+                    {/* 2. Why this matters */}
+                    <section className="finding-drawer__section finding-drawer__section--first">
+                      <span className="eyebrow">Why TRACE flagged this</span>
+                      <p className="finding-drawer__text">
+                        {finding.classification === 'deterministic'
+                          ? `Deterministic AST rule '${finding.provenance?.ruleId ?? 'code-rule'}' matched code patterns that violate local invariants. This condition directly affects ${finding.affectedArea ?? 'the codebase'} and should be addressed before merging.`
+                          : `Heuristic evaluation flagged potential drift in ${finding.affectedArea ?? 'related components'}. Review the referenced evidence to verify impact on system stability.`}
+                      </p>
+                    </section>
+
+                    {/* 3. Related Change (if present) */}
+                    {finding.relatedChangeNumber ? (
+                      <section className="finding-drawer__section">
+                        <span className="eyebrow">Related change</span>
+                        <div className="finding-drawer__fact-card">
+                          <strong>Pull Request #{finding.relatedChangeNumber}</strong>
                           <p>
-                            Remote default branch has commit{' '}
-                            <code>{finding.provenance.remoteHeadCommit.slice(0, 12)}</code>. Run{' '}
-                            <code>trace analyze</code> locally to update findings against latest
-                            remote changes.
+                            Observed in the context of active pull request #
+                            {finding.relatedChangeNumber}.
                           </p>
                         </div>
-                      ) : (
-                        <span className="freshness-ok">
-                          Verified against current repository state.
+                      </section>
+                    ) : null}
+
+                    {/* 4. Evidence & Locations */}
+                    <section className="finding-drawer__section">
+                      <span className="eyebrow">
+                        Evidence ({finding.evidence.length} reference
+                        {finding.evidence.length === 1 ? '' : 's'})
+                      </span>
+                      {fileEvidence.length ? (
+                        <div className="finding-drawer__evidence-group">
+                          <h3 className="finding-drawer__subheading">Affected file locations</h3>
+                          <ul className="evidence-list evidence-list--enhanced">
+                            {fileEvidence.map((item) => (
+                              <li key={item} className="evidence-item">
+                                <div className="evidence-item__icon" aria-hidden="true">
+                                  <svg
+                                    width="14"
+                                    height="14"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                  >
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                    <polyline points="14 2 14 8 20 8" />
+                                    <line x1="16" y1="13" x2="8" y2="13" />
+                                    <line x1="16" y1="17" x2="8" y2="17" />
+                                    <polyline points="10 9 9 9 8 9" />
+                                  </svg>
+                                </div>
+                                <div className="evidence-item__details">
+                                  <code className="evidence-item__path">{item}</code>
+                                  <span className="evidence-item__meta">
+                                    {finding.classification === 'deterministic'
+                                      ? 'Deterministic AST syntax match'
+                                      : 'File reference'}
+                                    {' · '}Verified by local trace CLI
+                                  </span>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+
+                      {recordEvidence.length ? (
+                        <div className="finding-drawer__evidence-group">
+                          <h3 className="finding-drawer__subheading">TRACE evidence records</h3>
+                          <ul className="evidence-list evidence-list--enhanced">
+                            {recordEvidence.map((item) => (
+                              <li key={item} className="evidence-item">
+                                <div className="evidence-item__icon" aria-hidden="true">
+                                  <svg
+                                    width="14"
+                                    height="14"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                  >
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                    <line x1="3" y1="9" x2="21" y2="9" />
+                                    <line x1="9" y1="21" x2="9" y2="9" />
+                                  </svg>
+                                </div>
+                                <div className="evidence-item__details">
+                                  <code className="evidence-item__path">{item}</code>
+                                  <span className="evidence-item__meta">
+                                    Synchronized TRACE record
+                                  </span>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+
+                      {!finding.evidence.length ? (
+                        <p className="drawer-muted">
+                          No supporting evidence references were synchronized for this item.
+                        </p>
+                      ) : null}
+
+                      <div className="finding-privacy-badge">
+                        <span className="privacy-icon" aria-hidden="true">
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 14 14"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <rect x="2.5" y="5.5" width="9" height="7" rx="1.5" />
+                            <path d="M4.5 5.5V3.5a2.5 2.5 0 0 1 5 0v2.5" />
+                          </svg>
                         </span>
-                      )}
-                    </div>
-                  </section>
+                        <span>
+                          Zero source code exposure: TRACE analyzes AST locally and never uploads
+                          code snippets or files.
+                        </span>
+                      </div>
+                    </section>
+                  </div>
 
-                  {/* 7. Privacy & Security Boundary */}
-                  <section className="finding-drawer__section">
-                    <span className="eyebrow">Privacy & Security boundary</span>
-                    <p className="finding-drawer__privacy-text">
-                      Local-first guarantee: TRACE performs code analysis exclusively on your
-                      machine. Raw source code, syntax trees, and sensitive repository contents are
-                      never transmitted or retained in the cloud.
-                    </p>
-                  </section>
+                  {/* Secondary Right Column: Rule Metadata, Provenance & Privacy */}
+                  <div className="finding-drawer__col-sidebar">
+                    {/* 5. Origin & Verification */}
+                    <section className="finding-drawer__section finding-drawer__section--first">
+                      <span className="eyebrow">Origin & Rule details</span>
+                      <div className="finding-drawer__grid">
+                        <div>
+                          <span className="detail-label">Repository</span>
+                          <strong>
+                            {repositoryName ?? repository?.fullName ?? 'Local workspace'}
+                          </strong>
+                        </div>
+                        <div>
+                          <span className="detail-label">Branch</span>
+                          <code>{branchName}</code>
+                        </div>
+                        {finding.provenance?.ruleId ? (
+                          <div>
+                            <span className="detail-label">Rule ID</span>
+                            <code>{finding.provenance.ruleId}</code>
+                          </div>
+                        ) : null}
+                        <div>
+                          <span className="detail-label">Verification source</span>
+                          <span>Local CLI Analyzer</span>
+                        </div>
+                      </div>
+                    </section>
 
-                  {/* 8. Technical Details Accordion */}
-                  <details className="technical-details redesign-technical">
-                    <summary>Technical provenance details</summary>
-                    <div className="technical-details__content">
-                      <div className="tech-row">
-                        <span>Finding ID:</span>
-                        <code>{finding.id}</code>
+                    {/* 6. Analyzed Commit & Freshness Boundary */}
+                    <section className="finding-drawer__section">
+                      <span className="eyebrow">Analyzed commit & Freshness</span>
+                      <div className="finding-drawer__commit-info">
+                        <span>
+                          Analyzed at commit:{' '}
+                          <code>
+                            {analyzedCommitSha ? analyzedCommitSha.slice(0, 12) : 'local workspace'}
+                          </code>
+                        </span>
+                        {finding.provenance?.isStaleWithRemote &&
+                        finding.provenance.remoteHeadCommit ? (
+                          <div className="stale-warning-box">
+                            <strong>Newer commit on GitHub</strong>
+                            <p>
+                              Remote default branch has commit{' '}
+                              <code>{finding.provenance.remoteHeadCommit.slice(0, 12)}</code>. Run{' '}
+                              <code>trace analyze</code> locally to update findings against latest
+                              remote changes.
+                            </p>
+                          </div>
+                        ) : finding.provenance?.analyzedCommit &&
+                          finding.provenance.remoteHeadCommit &&
+                          finding.provenance.isStaleWithRemote === false ? (
+                          <span className="freshness-ok">
+                            Verified against current repository state.
+                          </span>
+                        ) : (
+                          <span className="freshness-unknown">Verification unavailable.</span>
+                        )}
                       </div>
-                      <div className="tech-row">
-                        <span>Classification:</span>
-                        <span>{finding.classification}</span>
+                    </section>
+
+                    {/* 7. Privacy & Security Boundary */}
+                    <section className="finding-drawer__section">
+                      <span className="eyebrow">Privacy & Security boundary</span>
+                      <p className="finding-drawer__privacy-text">
+                        Local-first guarantee: TRACE performs code analysis exclusively on your
+                        machine. Raw source code, syntax trees, and sensitive repository contents
+                        are never transmitted or retained in the cloud.
+                      </p>
+                    </section>
+
+                    {/* 8. Technical Details Accordion */}
+                    <details className="technical-details redesign-technical">
+                      <summary>Technical provenance details</summary>
+                      <div className="technical-details__content">
+                        <div className="tech-row">
+                          <span>Finding ID:</span>
+                          <code>{finding.id}</code>
+                        </div>
+                        <div className="tech-row">
+                          <span>Classification:</span>
+                          <span>{finding.classification}</span>
+                        </div>
+                        <div className="tech-row">
+                          <span>Severity Level:</span>
+                          <span>{finding.severity}</span>
+                        </div>
+                        <div className="tech-row">
+                          <span>Last Updated:</span>
+                          <time dateTime={finding.updatedAt}>{formatDate(finding.updatedAt)}</time>
+                        </div>
+                        <div className="tech-notice">
+                          <small>
+                            TRACE finding records are immutable snapshots from local analysis runs.
+                            Manual disposition controls (resolve, dismiss, or assign) are
+                            intentionally excluded because TRACE enforces deterministic engineering
+                            truth rather than subjective ticket status.
+                          </small>
+                        </div>
                       </div>
-                      <div className="tech-row">
-                        <span>Severity Level:</span>
-                        <span>{finding.severity}</span>
-                      </div>
-                      <div className="tech-row">
-                        <span>Last Updated:</span>
-                        <time dateTime={finding.updatedAt}>{formatDate(finding.updatedAt)}</time>
-                      </div>
-                      <div className="tech-notice">
-                        <small>
-                          TRACE finding records are immutable snapshots from local analysis runs.
-                          Manual disposition controls (resolve, dismiss, or assign) are
-                          intentionally excluded because TRACE enforces deterministic engineering
-                          truth rather than subjective ticket status.
-                        </small>
-                      </div>
-                    </div>
-                  </details>
+                    </details>
+                  </div>
                 </div>
-              </div>
-            </CenteredDialog>
-          </ModalBackdrop>
-        </OverlayPortal>
+              </CenteredDialog>
+            </ModalBackdrop>
+          </OverlayPortal>
+        </PresenceContext.Provider>
       ) : null}
     </>
   );

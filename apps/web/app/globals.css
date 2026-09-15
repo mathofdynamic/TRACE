@@ -277,9 +277,7 @@
   --trace-motion-ease-exit: cubic-bezier(0.7, 0, 0.84, 0);
 
   /* Phase 39: Authenticated-App Typography Tokens */
-  --trace-font-sans:
-    'Kunst Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
-    sans-serif;
+  --trace-font-sans: 'Kunst Grotesk';
   --trace-font-mono:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
     monospace;
@@ -2374,7 +2372,7 @@ button.trace-button--danger:focus-visible {
 }
 
 .status-column li::before {
-  content: 'Â·';
+  content: '·';
   color: var(--trace-blue-bright);
   font-weight: bold;
 }
@@ -4140,23 +4138,6 @@ button.trace-button--danger:focus-visible {
   overflow: hidden;
 }
 
-.auth-ambient-halo {
-  position: absolute;
-  top: 40%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 500px;
-  height: 400px;
-  background: radial-gradient(
-    circle,
-    rgba(10, 126, 255, 0.035) 0%,
-    rgba(10, 126, 255, 0.008) 45%,
-    transparent 70%
-  );
-  pointer-events: none;
-  z-index: 0;
-}
-
 .auth-shell {
   position: relative;
   z-index: 1;
@@ -5553,7 +5534,7 @@ button.trace-button--danger:focus-visible {
 }
 .attention-panel {
   gap: 28px;
-  background: linear-gradient(90deg, var(--trace-blue-soft), rgba(10, 126, 255, 0.025));
+  background: var(--trace-surface);
   padding: 20px 22px;
 }
 .dashboard-card {
@@ -10026,7 +10007,7 @@ body[data-overlay-active='true'] > :not(.trace-overlay-root) {
 }
 
 /* =========================================================================
-   Phase 17 â€” Reports Library Surface (/app/reports)
+   Phase 17 — Reports Library Surface (/app/reports)
    ========================================================================= */
 
 .reports-library-surface {
@@ -10887,7 +10868,7 @@ body[data-overlay-active='true'] > :not(.trace-overlay-root) {
 }
 
 /* =========================================================================
-   Phase 18 â€” Report Detail Surface (/app/reports/[reportId])
+   Phase 18 — Report Detail Surface (/app/reports/[reportId])
    ========================================================================= */
 
 .report-detail-surface {
@@ -11720,7 +11701,7 @@ body[data-overlay-active='true'] > :not(.trace-overlay-root) {
 }
 
 /* =========================================================================
-   Phase 19 â€” Decisions Surface (/app/decisions)
+   Phase 19 — Decisions Surface (/app/decisions)
    ========================================================================= */
 
 .decisions-surface {
@@ -12796,7 +12777,7 @@ body[data-overlay-active='true'] > :not(.trace-overlay-root) {
 }
 
 /* ==========================================================================
-   Phase 46 â€” Decision Definition Prompt Builder
+   Phase 46 — Decision Definition Prompt Builder
    Approved color universe: Black, White, Neutral Grays, and TRACE Blue (#0066ff)
    ========================================================================== */
 
@@ -13352,7 +13333,7 @@ body[data-overlay-active='true'] > :not(.trace-overlay-root) {
 }
 
 /* ==========================================================================
-   Phase 20 â€” Rules (Governance Policy Surface)
+   Phase 20 — Rules (Governance Policy Surface)
    Approved color universe: Black, White, Neutral Grays, and TRACE Blue (#0066ff)
    Strictly NO red, amber, green, purple, teal, or brown.
    ========================================================================== */
@@ -14780,7 +14761,7 @@ body[data-overlay-active='true'] > :not(.trace-overlay-root) {
 }
 
 /* ==========================================================================
-   Phase 23 â€” Mobile & Responsive Pass (Comprehensive Refinement)
+   Phase 23 — Mobile & Responsive Pass (Comprehensive Refinement)
    ========================================================================== */
 
 /* 1. Global Overflow & Text Safety */
@@ -15270,7 +15251,7 @@ pre {
 }
 
 /* ==========================================================================
-   Phase 24 â€” Motion, Interaction Feel, Accessibility (Restrained Apple-Grade)
+   Phase 24 — Motion, Interaction Feel, Accessibility (Restrained Apple-Grade)
    ========================================================================== */
 
 /* 1. Immediate Press Feedback & Tactile Response */

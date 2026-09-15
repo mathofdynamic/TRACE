@@ -86,7 +86,7 @@ export default async function DashboardOverviewPage({
               <div className="project-command-surface__meta">
                 <span>Last synced {formatRelativeDate(repository.lastSynchronizedAt)}</span>
                 <span className="project-command-surface__meta-dot" aria-hidden="true">
-                  Â·
+                  ·
                 </span>
                 <span>
                   <code>
@@ -138,7 +138,7 @@ export default async function DashboardOverviewPage({
           style={{ '--motion-index': 2 } as React.CSSProperties}
         >
           <span className="project-command-surface__flow-hint">
-            Connect â†’ analyze locally â†’ sync approved records â†’ understand the change
+            Connect → analyze locally → sync approved records → understand the change
           </span>
           {repository?.latestSync ? (
             <time dateTime={repository.latestSync.completedAt}>
@@ -400,7 +400,7 @@ export default async function DashboardOverviewPage({
                     <div className="overview-recent-row__meta">
                       <span className="overview-recent-row__tag">PR #{change.number}</span>
                       <span>{change.repositoryName}</span>
-                      <span className="overview-recent-row__sep">Â·</span>
+                      <span className="overview-recent-row__sep">·</span>
                       <span className="overview-recent-row__state">{change.state}</span>
                     </div>
                   </div>
@@ -459,7 +459,7 @@ export default async function DashboardOverviewPage({
                     <strong className="overview-recent-row__title">{item.title}</strong>
                     <div className="overview-recent-row__meta">
                       <span>{activityContextLabel(item.repositoryName)}</span>
-                      <span className="overview-recent-row__sep">Â·</span>
+                      <span className="overview-recent-row__sep">·</span>
                       <span className="overview-recent-row__detail">{item.detail}</span>
                     </div>
                   </div>

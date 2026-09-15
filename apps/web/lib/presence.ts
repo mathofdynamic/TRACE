@@ -1,5 +1,5 @@
 /**
- * TRACE Unified Presence Lifecycle Engine â€” 200ms Open / 66ms Close Contract
+ * TRACE Unified Presence Lifecycle Engine — 200ms Open / 66ms Close Contract
  *
  * Manages the deterministic presence lifecycle for all transient surfaces:
  * - Menus, popovers, dropdowns, drawers, disclosures, dialogs, modals, prompt builders.

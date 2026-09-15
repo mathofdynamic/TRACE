@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useId, useCallback } from 'react';
 import { usePresence, getMotionStyle } from '../../../../lib/entrance-motion';
+import { PresenceContext } from './overlay-portal';
 
 export interface TraceSelectOption {
   value: string;
@@ -173,112 +174,114 @@ export function TraceSelect({
   const effectiveAriaLabel = ariaLabel || label || placeholder;
 
   return (
-    <div
-      ref={containerRef}
-      className={`trace-select-wrapper ${size === 'sm' ? 'trace-select-wrapper--sm' : ''} ${className}`.trim()}
-      style={minWidth ? { minWidth } : undefined}
-    >
-      {/* Hidden input for form submissions / test tools if name is provided */}
-      {name && <input type="hidden" name={name} value={value} />}
-
-      <button
-        ref={triggerRef}
-        id={id}
-        type="button"
-        className={`trace-select-trigger ${isOpen ? 'trace-select-trigger--open' : ''} ${disabled ? 'trace-select-trigger--disabled' : ''} ${size === 'sm' ? 'trace-select-trigger--sm' : ''}`}
-        onClick={() => !disabled && setIsOpen(!isOpen)}
-        onKeyDown={handleTriggerKeyDown}
-        aria-haspopup="listbox"
-        aria-expanded={isOpen}
-        aria-controls={listboxId}
-        aria-label={effectiveAriaLabel}
-        aria-activedescendant={
-          isOpen && highlightedIndex >= 0 ? `${listboxId}-opt-${highlightedIndex}` : undefined
-        }
-        disabled={disabled}
+    <PresenceContext.Provider value={presence}>
+      <div
+        ref={containerRef}
+        className={`trace-select-wrapper ${size === 'sm' ? 'trace-select-wrapper--sm' : ''} ${className}`.trim()}
+        style={minWidth ? { minWidth } : undefined}
       >
-        <span className="trace-select-trigger__label">
-          {selectedOption ? selectedOption.label : placeholder}
-        </span>
-        <span className="trace-select-trigger__icon" aria-hidden="true">
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="m3 4.5 3 3 3-3" />
-          </svg>
-        </span>
-      </button>
+        {/* Hidden input for form submissions / test tools if name is provided */}
+        {name && <input type="hidden" name={name} value={value} />}
 
-      {presence.isMounted && (
-        <ul
-          ref={listboxRef}
-          id={listboxId}
-          role="listbox"
-          tabIndex={-1}
+        <button
+          ref={triggerRef}
+          id={id}
+          type="button"
+          className={`trace-select-trigger ${isOpen ? 'trace-select-trigger--open' : ''} ${disabled ? 'trace-select-trigger--disabled' : ''} ${size === 'sm' ? 'trace-select-trigger--sm' : ''}`}
+          onClick={() => !disabled && setIsOpen(!isOpen)}
+          onKeyDown={handleTriggerKeyDown}
+          aria-haspopup="listbox"
+          aria-expanded={isOpen}
+          aria-controls={listboxId}
           aria-label={effectiveAriaLabel}
-          className="trace-select-listbox"
-          data-trace-motion="surface"
-          data-motion-variant="popover"
-          data-presence-state={presence.presenceState}
-          data-trace-presence={presence.presenceState}
+          aria-activedescendant={
+            isOpen && highlightedIndex >= 0 ? `${listboxId}-opt-${highlightedIndex}` : undefined
+          }
+          disabled={disabled}
         >
-          {options.map((opt, idx) => {
-            const isSelected = opt.value === value;
-            const isHighlighted = idx === highlightedIndex;
+          <span className="trace-select-trigger__label">
+            {selectedOption ? selectedOption.label : placeholder}
+          </span>
+          <span className="trace-select-trigger__icon" aria-hidden="true">
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 12 12"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m3 4.5 3 3 3-3" />
+            </svg>
+          </span>
+        </button>
 
-            return (
-              <li
-                key={opt.value}
-                id={`${listboxId}-opt-${idx}`}
-                role="option"
-                aria-selected={isSelected}
-                aria-disabled={opt.disabled}
-                data-selected={isSelected}
-                data-highlighted={isHighlighted}
-                data-trace-motion="item"
-                data-motion-item="true"
-                style={getMotionStyle(idx, { delayMs: Math.min(idx * 25, 120) })}
-                className={`trace-select-option ${isSelected ? 'trace-select-option--selected' : ''} ${isHighlighted ? 'trace-select-option--highlighted' : ''} ${opt.disabled ? 'trace-select-option--disabled' : ''}`}
-                onClick={() => selectOption(idx)}
-                onMouseEnter={() => !opt.disabled && setHighlightedIndex(idx)}
-              >
-                <div className="trace-select-option__content">
-                  <span className="trace-select-option__label">{opt.label}</span>
-                  {opt.description ? (
-                    <span className="trace-select-option__desc">{opt.description}</span>
-                  ) : null}
-                </div>
-                {opt.count !== undefined && (
-                  <span className="trace-select-option__count">{opt.count}</span>
-                )}
-                {isSelected && (
-                  <span className="trace-select-option__check" aria-hidden="true">
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 12 12"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="m2.5 6 2.5 2.5 4.5-5" />
-                    </svg>
-                  </span>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
+        {presence.isMounted && (
+          <ul
+            ref={listboxRef}
+            id={listboxId}
+            role="listbox"
+            tabIndex={-1}
+            aria-label={effectiveAriaLabel}
+            className="trace-select-listbox"
+            data-trace-motion="surface"
+            data-motion-variant="popover"
+            data-presence-state={presence.presenceState}
+            data-trace-presence={presence.presenceState}
+          >
+            {options.map((opt, idx) => {
+              const isSelected = opt.value === value;
+              const isHighlighted = idx === highlightedIndex;
+
+              return (
+                <li
+                  key={opt.value}
+                  id={`${listboxId}-opt-${idx}`}
+                  role="option"
+                  aria-selected={isSelected}
+                  aria-disabled={opt.disabled}
+                  data-selected={isSelected}
+                  data-highlighted={isHighlighted}
+                  data-trace-motion="item"
+                  data-motion-item="true"
+                  style={getMotionStyle(idx, { delayMs: Math.min(idx * 25, 120) })}
+                  className={`trace-select-option ${isSelected ? 'trace-select-option--selected' : ''} ${isHighlighted ? 'trace-select-option--highlighted' : ''} ${opt.disabled ? 'trace-select-option--disabled' : ''}`}
+                  onClick={() => selectOption(idx)}
+                  onMouseEnter={() => !opt.disabled && setHighlightedIndex(idx)}
+                >
+                  <div className="trace-select-option__content">
+                    <span className="trace-select-option__label">{opt.label}</span>
+                    {opt.description ? (
+                      <span className="trace-select-option__desc">{opt.description}</span>
+                    ) : null}
+                  </div>
+                  {opt.count !== undefined && (
+                    <span className="trace-select-option__count">{opt.count}</span>
+                  )}
+                  {isSelected && (
+                    <span className="trace-select-option__check" aria-hidden="true">
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 12 12"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="m2.5 6 2.5 2.5 4.5-5" />
+                      </svg>
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </PresenceContext.Provider>
   );
 }

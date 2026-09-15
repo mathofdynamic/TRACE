@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { packagingTiers, prelaunchPrinciples } from '../../lib/pricing-data';
 import { PageHeader, PublicLayout, SectionLabel, TraceMark } from '../components/public';
 
-export const metadata = { title: 'Pricing â€” TRACE' };
+export const metadata = { title: 'Pricing — TRACE' };
 
 export default function PricingPage() {
   return (
@@ -145,10 +145,10 @@ export default function PricingPage() {
             </div>
             <div className="pricing-cta__actions">
               <Link className="trace-button trace-button--primary" href="/app">
-                Open Live Workspace â†’
+                Open Live Workspace →
               </Link>
               <Link className="inline-link" href="/specification">
-                Review Artifact Specification â†’
+                Review Artifact Specification →
               </Link>
             </div>
           </div>

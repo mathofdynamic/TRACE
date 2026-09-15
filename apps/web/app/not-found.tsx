@@ -3,7 +3,7 @@ import { PublicLayout, SectionLabel } from './components/public';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Page Not Found â€” TRACE',
+  title: 'Page Not Found — TRACE',
   description: 'The requested resource could not be found.',
   robots: { index: false, follow: false },
 };
@@ -22,7 +22,7 @@ export default function NotFound() {
           style={{ padding: '36px', border: '1px solid var(--trace-border-subtle)' }}
         >
           <div data-trace-motion="item" style={{ '--motion-index': 0 } as React.CSSProperties}>
-            <SectionLabel>404 â€” Not Found</SectionLabel>
+            <SectionLabel>404 — Not Found</SectionLabel>
             <h1
               style={{ fontSize: '24px', fontWeight: 600, marginTop: '8px', marginBottom: '12px' }}
             >

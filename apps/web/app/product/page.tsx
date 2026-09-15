@@ -12,7 +12,7 @@ export default function ProductPage() {
         <PageHeader
           eyebrow="Product Architecture"
           title="A calm system for understanding software change."
-          body="TRACE connects change intent to implementation, evidence, impact, decisions, risks, conflicts, and remaining work â€” keeping intelligence portable across teams and AI agents."
+          body="TRACE connects change intent to implementation, evidence, impact, decisions, risks, conflicts, and remaining work — keeping intelligence portable across teams and AI agents."
         />
 
         {/* =================================================================
@@ -91,7 +91,9 @@ export default function ProductPage() {
               <div className="capability-layer__mock" aria-label={`UI fragment for ${cap.title}`}>
                 <div className="capability-layer__mock-header">
                   <span>{cap.preview.header}</span>
-                  <span className="trace-badge trace-badge--info">{cap.preview.badge}</span>
+                  <span className="trace-badge trace-badge--info">
+                    Illustrative example · {cap.preview.badge}
+                  </span>
                 </div>
                 <div className="capability-layer__mock-body">
                   <strong>{cap.preview.body}</strong>
@@ -202,11 +204,11 @@ export default function ProductPage() {
             style={{ '--motion-index': 3 } as React.CSSProperties}
           >
             <Link className="inline-link" href="/specification">
-              Read the .trace artifact specification â†’
+              Read the .trace artifact specification →
             </Link>
-            <span className="status-footer-divider">Â·</span>
+            <span className="status-footer-divider">·</span>
             <Link className="inline-link" href="/security">
-              Review security & privacy architecture â†’
+              Review security & privacy architecture →
             </Link>
           </div>
         </section>

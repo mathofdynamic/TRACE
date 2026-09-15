@@ -62,7 +62,7 @@ export function OnboardingForm() {
         type="submit"
         disabled={status === 'loading'}
       >
-        {status === 'loading' ? 'Saving workspaceâ€¦' : 'Continue to GitHub'}
+        {status === 'loading' ? 'Saving workspace…' : 'Continue to GitHub'}
       </button>
       {status === 'error' ? (
         <p className="auth-error" role="alert">

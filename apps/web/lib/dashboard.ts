@@ -143,6 +143,13 @@ export type DashboardSummary = {
     localAnalysisAvailable: true;
   };
   repositories: DashboardRepository[];
+  repositoryCatalog: DashboardRepository[];
+  github: {
+    connected: boolean;
+    accountLogin: string | null;
+    accountType: string | null;
+    defaultBranch: string | null;
+  };
   attention: DashboardAttention[];
   latestChanges: DashboardChange[];
   latestReports: DashboardSyncedRecord[];
@@ -218,7 +225,11 @@ export async function getDashboardSummary(
 
   const installations = organizationIds.length
     ? await db
-        .select({ id: schema.githubInstallations.id })
+        .select({
+          id: schema.githubInstallations.id,
+          accountLogin: schema.githubInstallations.accountLogin,
+          accountType: schema.githubInstallations.accountType,
+        })
         .from(schema.githubInstallations)
         .where(
           and(
@@ -300,6 +311,7 @@ export async function getDashboardSummary(
           id: schema.analysisRuns.id,
           repositoryId: schema.analysisRuns.repositoryId,
           status: schema.analysisRuns.status,
+          headSha: schema.analysisRuns.headSha,
           result: schema.analysisRuns.result,
           updatedAt: schema.analysisRuns.updatedAt,
         })
@@ -365,6 +377,25 @@ export async function getDashboardSummary(
           : 'not_analyzed',
     };
   });
+  const repositoryCatalog: DashboardRepository[] = repositoryRows.map((repository) => {
+    const active = repositories.find((item) => item.id === repository.id);
+    return (
+      active ?? {
+        id: repository.id,
+        fullName: repository.fullName,
+        owner: repository.owner,
+        name: repository.name,
+        defaultBranch: repository.defaultBranch,
+        visibility: repository.visibility,
+        state: repository.state,
+        remoteHeadSha: repository.remoteHeadSha,
+        lastSynchronizedAt: repository.lastSynchronizedAt?.toISOString() ?? null,
+        latestSync: null,
+        analysis: null,
+        syncState: 'not_analyzed',
+      }
+    );
+  });
 
   const findingRows = analysisRows.length
     ? await db
@@ -407,6 +438,15 @@ export async function getDashboardSummary(
       repositoryId: run?.repositoryId ?? null,
       repositoryName: repository?.fullName ?? null,
       updatedAt: finding.updatedAt.toISOString(),
+      provenance: run
+        ? {
+            analyzedCommit: run.headSha ?? null,
+            remoteHeadCommit: repository?.remoteHeadSha ?? null,
+            isStaleWithRemote:
+              Boolean(run.headSha && repository?.remoteHeadSha) &&
+              run.headSha !== repository?.remoteHeadSha,
+          }
+        : null,
     };
   });
   for (const run of analysisRows.filter(
@@ -707,6 +747,14 @@ export async function getDashboardSummary(
     },
     setup: { ...setup, repositoriesAvailable: repositoryRows.length },
     repositories,
+    repositoryCatalog,
+    github: {
+      connected: installations.length > 0,
+      accountLogin: installations[0]?.accountLogin ?? null,
+      accountType: installations[0]?.accountType ?? null,
+      defaultBranch:
+        repositories.find((repository) => repository.defaultBranch)?.defaultBranch ?? null,
+    },
     attention: attention.slice(0, 12),
     latestChanges,
     latestReports,

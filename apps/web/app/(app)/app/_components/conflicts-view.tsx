@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { TraceSelect } from './trace-select';
-import { OverlayPortal, ModalBackdrop, CenteredDialog } from './overlay-portal';
+import { OverlayPortal, ModalBackdrop, CenteredDialog, PresenceContext } from './overlay-portal';
 import { usePresence, getMotionItemProps } from '../../../../lib/entrance-motion';
 import type {
   DashboardAttention,
@@ -131,6 +131,10 @@ export function ConflictsView({ conflicts, changes, repositories, attention }: C
   ).length;
 
   const selectedRepoObject = repositories.find((r) => r.id === repositoryFilter);
+  const selectedRepoConflictArtifacts = selectedRepoObject
+    ? conflicts.filter((conflict) => conflict.repositoryId === selectedRepoObject.id)
+    : [];
+  const hasCompletedConflictAnalysis = selectedRepoConflictArtifacts.length > 0;
 
   return (
     <div className="conflicts-surface" id="conflicts-surface">
@@ -163,7 +167,7 @@ export function ConflictsView({ conflicts, changes, repositories, attention }: C
           <span className="conflicts-summary-metric__label">Deterministic AST</span>
         </div>
         <div className="conflicts-summary-note">
-          <span>Deterministic invariant checks Ãƒâ€šÃ‚Â· Zero developer surveillance</span>
+          <span>Deterministic invariant checks · Zero developer surveillance</span>
         </div>
       </section>
 
@@ -195,7 +199,7 @@ export function ConflictsView({ conflicts, changes, repositories, attention }: C
                 id="conflicts-search-input"
                 className="trace-input conflicts-search-input"
                 type="search"
-                placeholder="Search by PR #, table, file path, author, or boundaryÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦"
+                placeholder="Search by PR #, table, file path, author, or boundary…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 aria-label="Search conflicts"
@@ -207,7 +211,7 @@ export function ConflictsView({ conflicts, changes, repositories, attention }: C
                   onClick={() => setSearchQuery('')}
                   aria-label="Clear search input"
                 >
-                  ÃƒÆ’Ã¢â‚¬â€
+                  ×
                 </button>
               ) : null}
             </div>
@@ -306,7 +310,7 @@ export function ConflictsView({ conflicts, changes, repositories, attention }: C
               </svg>
             </div>
             <span className="conflicts-empty-status-tag conflicts-empty-status-tag--pending">
-              ANALYSIS PENDING Ãƒâ€šÃ‚Â· SETUP REQUIRED
+              ANALYSIS PENDING · SETUP REQUIRED
             </span>
             <h3>Conflict analysis requires completed TRACE analysis.</h3>
             <p>
@@ -319,7 +323,7 @@ export function ConflictsView({ conflicts, changes, repositories, attention }: C
                 className="trace-button trace-button--primary trace-button--small"
                 href={`/app/repositories/${selectedRepoObject.id}`}
               >
-                Configure {selectedRepoObject.name} repository ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢
+                Configure {selectedRepoObject.name} repository →
               </Link>
               <button
                 type="button"
@@ -330,7 +334,21 @@ export function ConflictsView({ conflicts, changes, repositories, attention }: C
               </button>
             </div>
           </div>
-        ) : selectedRepoObject && selectedRepoObject.lastSynchronizedAt ? (
+        ) : selectedRepoObject && !hasCompletedConflictAnalysis ? (
+          <div className="conflicts-empty-panel" role="status">
+            <div className="conflicts-empty-glyph" aria-hidden="true">
+              ?
+            </div>
+            <span className="conflicts-empty-status-tag">CONFLICT ANALYSIS UNAVAILABLE</span>
+            <h3>No conflict-analysis artifact is synchronized.</h3>
+            <p>
+              Synchronization alone does not prove that conflict analysis ran. Run the local TRACE
+              workflow and sync an approved conflict artifact before relying on this surface.
+            </p>
+          </div>
+        ) : selectedRepoObject &&
+          hasCompletedConflictAnalysis &&
+          selectedRepoConflictArtifacts.every((conflict) => conflict.items.length === 0) ? (
           <div
             className="conflicts-empty-panel conflicts-empty-panel--complete"
             role="status"
@@ -351,7 +369,7 @@ export function ConflictsView({ conflicts, changes, repositories, attention }: C
               </svg>
             </div>
             <span className="conflicts-empty-status-tag">
-              AST INVARIANTS CLEAN Ãƒâ€šÃ‚Â· ANALYSIS COMPLETE
+              AST INVARIANTS CLEAN · ANALYSIS COMPLETE
             </span>
             <h3>No active engineering conflicts detected.</h3>
             <p>
@@ -364,7 +382,7 @@ export function ConflictsView({ conflicts, changes, repositories, attention }: C
                 className="trace-button trace-button--secondary trace-button--small"
                 href={`/app/repositories/${selectedRepoObject.id}`}
               >
-                View {selectedRepoObject.name} repository overview ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢
+                View {selectedRepoObject.name} repository overview →
               </Link>
               <button
                 type="button"
@@ -469,10 +487,10 @@ function PairedConflictCard({ model, onInspect, motionIndex }: PairedConflictCar
             </Link>
           </span>
           <span className="meta-sep" aria-hidden="true">
-            Ãƒâ€šÃ‚Â·
+            ·
           </span>
           <span className="conflict-provenance-text">
-            Local snapshot Ãƒâ€šÃ‚Â· Synced {formatDate(conflict.syncedAt ?? conflict.generatedAt)}
+            Local snapshot · Synced {formatDate(conflict.syncedAt ?? conflict.generatedAt)}
           </span>
         </div>
 
@@ -494,7 +512,7 @@ function PairedConflictCard({ model, onInspect, motionIndex }: PairedConflictCar
         <p className="conflict-card__summary">{conflict.summary}</p>
       </div>
 
-      {/* COMPACT PAIRED SUMMARY: Change A ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬Â Shared Boundary ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬Â Change B */}
+      {/* COMPACT PAIRED SUMMARY: Change A ↔ Shared Boundary ↔ Change B */}
       <div className="conflict-compact-pair">
         {/* Side A Summary */}
         <div className="conflict-compact-item conflict-compact-item--a">
@@ -545,11 +563,11 @@ function PairedConflictCard({ model, onInspect, motionIndex }: PairedConflictCar
       <div className="conflict-card__footer">
         <div className="conflict-card__evidence-summary">
           <span className="evidence-summary-glyph" aria-hidden="true">
-            ÃƒÂ¢Ã¢â‚¬â€œÃ‚Âª
+            ▪
           </span>
           <span>
-            {items.length} deterministic evidence reference{items.length === 1 ? '' : 's'} Ãƒâ€šÃ‚Â·
-            AST collision
+            {items.length} deterministic evidence reference{items.length === 1 ? '' : 's'} · AST
+            collision
           </span>
         </div>
 
@@ -607,208 +625,216 @@ function ConflictDetailModal({ model, attention, isOpen, onClose }: ConflictDeta
   if (!presence.isMounted) return null;
 
   return (
-    <OverlayPortal>
-      <ModalBackdrop onClose={onClose} ariaLabel="Close conflict details">
-        <CenteredDialog
-          size="lg"
-          titleId={`conflict-modal-title-${conflict.id}`}
-          onClose={onClose}
-          initialFocusRef={closeRef}
-          className="conflict-drawer"
-        >
-          {/* Modal Header */}
-          <div className="conflict-drawer__header" {...getMotionItemProps(0)}>
-            <div className="conflict-drawer__eyebrow">
-              <span className="conflict-repo-tag">{conflict.repositoryName}</span>
-              <span className="conflict-classification-badge">{classification.toUpperCase()}</span>
-              <span className="conflict-severity-badge" data-severity={severity}>
-                {severity === 'high' ? 'HIGH IMPACT' : 'MEDIUM IMPACT'}
-              </span>
-            </div>
-            <button
-              ref={closeRef}
-              className="trace-dialog__close"
-              type="button"
-              aria-label="Close conflict details"
-              onClick={onClose}
-            >
-              ÃƒÆ’Ã¢â‚¬â€
-            </button>
-          </div>
-
-          {/* Title and Summary Intro */}
-          <div className="conflict-drawer__intro" {...getMotionItemProps(1)}>
-            <h2 id={`conflict-modal-title-${conflict.id}`}>{conflict.title}</h2>
-            <p className="conflict-drawer__lead">{conflict.summary}</p>
-            <div className="conflict-drawer__provenance-row">
-              <span className="provenance-label">Provenance:</span>
-              <span className="provenance-value">
-                Local deterministic snapshot Ãƒâ€šÃ‚Â· Synced{' '}
-                {formatDate(conflict.syncedAt ?? conflict.generatedAt)}
-              </span>
-            </div>
-          </div>
-
-          {/* Shared Invariant Callout */}
-          <section
-            className="conflict-drawer__section conflict-drawer__section--boundary"
-            {...getMotionItemProps(2)}
+    <PresenceContext.Provider value={presence}>
+      <OverlayPortal>
+        <ModalBackdrop onRequestClose={presence.requestClose} ariaLabel="Close conflict details">
+          <CenteredDialog
+            size="lg"
+            titleId={`conflict-modal-title-${conflict.id}`}
+            onRequestClose={presence.requestClose}
+            initialFocusRef={closeRef}
+            className="conflict-drawer"
           >
-            <span className="eyebrow">Shared Boundary Invariant</span>
-            <div className="drawer-boundary-box">
-              <strong className="drawer-boundary-box__target">{sharedBoundary.target}</strong>
-              <p className="drawer-boundary-box__statement">{sharedBoundary.statement}</p>
-              <div className="drawer-boundary-action">
-                <span className="action-tag">Resolution guidance:</span>
-                <span className="action-guidance">{sharedBoundary.actionRequired}</span>
+            {/* Modal Header */}
+            <div className="conflict-drawer__header" {...getMotionItemProps(0)}>
+              <div className="conflict-drawer__eyebrow">
+                <span className="conflict-repo-tag">{conflict.repositoryName}</span>
+                <span className="conflict-classification-badge">
+                  {classification.toUpperCase()}
+                </span>
+                <span className="conflict-severity-badge" data-severity={severity}>
+                  {severity === 'high' ? 'HIGH IMPACT' : 'MEDIUM IMPACT'}
+                </span>
               </div>
-            </div>
-          </section>
-
-          {/* Paired Changes Details */}
-          <section className="conflict-drawer__section" {...getMotionItemProps(3)}>
-            <span className="eyebrow">Involved Branches & Changes</span>
-            <div className="drawer-sides-grid">
-              {/* Side A Full Card */}
-              <div className="drawer-side-block drawer-side-block--a">
-                <div className="drawer-side-block__head">
-                  <span className="conflict-side-role-tag">SIDE A</span>
-                  <strong className="drawer-side-badge">{sideA.badge}</strong>
-                  {sideA.area ? <span className="drawer-side-area-pill">{sideA.area}</span> : null}
-                </div>
-                <h4 className="drawer-side-title">{sideA.title}</h4>
-                <div className="drawer-side-meta">
-                  {sideA.author ? <span>Author: @{sideA.author}</span> : null}
-                  {sideA.branch ? (
-                    <span>
-                      Branch: <code>{sideA.branch}</code>
-                    </span>
-                  ) : null}
-                  {sideA.locus ? (
-                    <span>
-                      Locus: <code>{sideA.locus}</code>
-                    </span>
-                  ) : null}
-                </div>
-                <div className="drawer-side-assumption">
-                  <span className="assumption-label">Branch Assumption & State</span>
-                  <p>{sideA.assumption}</p>
-                </div>
-                {sideA.url ? (
-                  <div className="drawer-side-actions">
-                    <a
-                      className="trace-button trace-button--secondary trace-button--small"
-                      href={sideA.url}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Open {sideA.badge} on GitHub ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â€
-                    </a>
-                  </div>
-                ) : null}
-              </div>
-
-              {/* Side B Full Card */}
-              <div className="drawer-side-block drawer-side-block--b">
-                <div className="drawer-side-block__head">
-                  <span className="conflict-side-role-tag">SIDE B</span>
-                  <strong className="drawer-side-badge">{sideB.badge}</strong>
-                  {sideB.area ? <span className="drawer-side-area-pill">{sideB.area}</span> : null}
-                </div>
-                <h4 className="drawer-side-title">{sideB.title}</h4>
-                <div className="drawer-side-meta">
-                  {sideB.author ? <span>Author: @{sideB.author}</span> : null}
-                  {sideB.branch ? (
-                    <span>
-                      Branch: <code>{sideB.branch}</code>
-                    </span>
-                  ) : null}
-                  {sideB.locus ? (
-                    <span>
-                      Locus: <code>{sideB.locus}</code>
-                    </span>
-                  ) : null}
-                </div>
-                <div className="drawer-side-assumption">
-                  <span className="assumption-label">System / Branch Assumption</span>
-                  <p>{sideB.assumption}</p>
-                </div>
-                {sideB.url ? (
-                  <div className="drawer-side-actions">
-                    <a
-                      className="trace-button trace-button--secondary trace-button--small"
-                      href={sideB.url}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Open {sideB.badge} on GitHub ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â€
-                    </a>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </section>
-
-          {/* Deterministic Evidence */}
-          <section className="conflict-drawer__section" {...getMotionItemProps(4)}>
-            <span className="eyebrow">Deterministic AST Evidence Items ({items.length})</span>
-            <div className="drawer-evidence-list">
-              {items.map((item) => (
-                <div key={item.id} className="drawer-evidence-card">
-                  <div className="drawer-evidence-card__head">
-                    <div className="evidence-card-title-group">
-                      <span className="evidence-glyph" aria-hidden="true">
-                        ÃƒÂ¢Ã¢â‚¬â€œÃ‚Âª
-                      </span>
-                      <strong>{item.title}</strong>
-                    </div>
-                    <span className="evidence-classification-pill">{item.classification}</span>
-                  </div>
-                  <p>{item.detail}</p>
-                  {item.evidence?.length ? (
-                    <div className="drawer-evidence-card__paths">
-                      {item.evidence.map((p) => (
-                        <code key={p}>{p}</code>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {/* Local Verification Command */}
-          <section className="conflict-drawer__section" {...getMotionItemProps(5)}>
-            <span className="eyebrow">Local reproduction guidance</span>
-            <div className="conflict-drawer__cli-box">
-              <code>trace analyze</code>
               <button
+                ref={closeRef}
+                className="trace-dialog__close"
                 type="button"
-                className="trace-button trace-button--secondary trace-button--small"
-                onClick={copyCliCommand}
+                aria-label="Close conflict details"
+                onClick={presence.requestClose}
               >
-                {copied ? 'Copied' : 'Copy command'}
+                ×
               </button>
             </div>
-            <p className="conflict-drawer__cli-note">
-              Run deterministic change analysis in your local repository workspace to verify AST
-              collision boundaries.
-            </p>
-          </section>
 
-          {/* Modal Actions Footer */}
-          <div className="conflict-drawer__footer" {...getMotionItemProps(6)}>
-            <button
-              type="button"
-              className="trace-button trace-button--secondary"
-              onClick={onClose}
+            {/* Title and Summary Intro */}
+            <div className="conflict-drawer__intro" {...getMotionItemProps(1)}>
+              <h2 id={`conflict-modal-title-${conflict.id}`}>{conflict.title}</h2>
+              <p className="conflict-drawer__lead">{conflict.summary}</p>
+              <div className="conflict-drawer__provenance-row">
+                <span className="provenance-label">Provenance:</span>
+                <span className="provenance-value">
+                  Local deterministic snapshot · Synced{' '}
+                  {formatDate(conflict.syncedAt ?? conflict.generatedAt)}
+                </span>
+              </div>
+            </div>
+
+            {/* Shared Invariant Callout */}
+            <section
+              className="conflict-drawer__section conflict-drawer__section--boundary"
+              {...getMotionItemProps(2)}
             >
-              Close
-            </button>
-          </div>
-        </CenteredDialog>
-      </ModalBackdrop>
-    </OverlayPortal>
+              <span className="eyebrow">Shared Boundary Invariant</span>
+              <div className="drawer-boundary-box">
+                <strong className="drawer-boundary-box__target">{sharedBoundary.target}</strong>
+                <p className="drawer-boundary-box__statement">{sharedBoundary.statement}</p>
+                <div className="drawer-boundary-action">
+                  <span className="action-tag">Resolution guidance:</span>
+                  <span className="action-guidance">{sharedBoundary.actionRequired}</span>
+                </div>
+              </div>
+            </section>
+
+            {/* Paired Changes Details */}
+            <section className="conflict-drawer__section" {...getMotionItemProps(3)}>
+              <span className="eyebrow">Involved Branches & Changes</span>
+              <div className="drawer-sides-grid">
+                {/* Side A Full Card */}
+                <div className="drawer-side-block drawer-side-block--a">
+                  <div className="drawer-side-block__head">
+                    <span className="conflict-side-role-tag">SIDE A</span>
+                    <strong className="drawer-side-badge">{sideA.badge}</strong>
+                    {sideA.area ? (
+                      <span className="drawer-side-area-pill">{sideA.area}</span>
+                    ) : null}
+                  </div>
+                  <h4 className="drawer-side-title">{sideA.title}</h4>
+                  <div className="drawer-side-meta">
+                    {sideA.author ? <span>Author: @{sideA.author}</span> : null}
+                    {sideA.branch ? (
+                      <span>
+                        Branch: <code>{sideA.branch}</code>
+                      </span>
+                    ) : null}
+                    {sideA.locus ? (
+                      <span>
+                        Locus: <code>{sideA.locus}</code>
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="drawer-side-assumption">
+                    <span className="assumption-label">Branch Assumption & State</span>
+                    <p>{sideA.assumption}</p>
+                  </div>
+                  {sideA.url ? (
+                    <div className="drawer-side-actions">
+                      <a
+                        className="trace-button trace-button--secondary trace-button--small"
+                        href={sideA.url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Open {sideA.badge} on GitHub ↗
+                      </a>
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* Side B Full Card */}
+                <div className="drawer-side-block drawer-side-block--b">
+                  <div className="drawer-side-block__head">
+                    <span className="conflict-side-role-tag">SIDE B</span>
+                    <strong className="drawer-side-badge">{sideB.badge}</strong>
+                    {sideB.area ? (
+                      <span className="drawer-side-area-pill">{sideB.area}</span>
+                    ) : null}
+                  </div>
+                  <h4 className="drawer-side-title">{sideB.title}</h4>
+                  <div className="drawer-side-meta">
+                    {sideB.author ? <span>Author: @{sideB.author}</span> : null}
+                    {sideB.branch ? (
+                      <span>
+                        Branch: <code>{sideB.branch}</code>
+                      </span>
+                    ) : null}
+                    {sideB.locus ? (
+                      <span>
+                        Locus: <code>{sideB.locus}</code>
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="drawer-side-assumption">
+                    <span className="assumption-label">System / Branch Assumption</span>
+                    <p>{sideB.assumption}</p>
+                  </div>
+                  {sideB.url ? (
+                    <div className="drawer-side-actions">
+                      <a
+                        className="trace-button trace-button--secondary trace-button--small"
+                        href={sideB.url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Open {sideB.badge} on GitHub ↗
+                      </a>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </section>
+
+            {/* Deterministic Evidence */}
+            <section className="conflict-drawer__section" {...getMotionItemProps(4)}>
+              <span className="eyebrow">Deterministic AST Evidence Items ({items.length})</span>
+              <div className="drawer-evidence-list">
+                {items.map((item) => (
+                  <div key={item.id} className="drawer-evidence-card">
+                    <div className="drawer-evidence-card__head">
+                      <div className="evidence-card-title-group">
+                        <span className="evidence-glyph" aria-hidden="true">
+                          ▪
+                        </span>
+                        <strong>{item.title}</strong>
+                      </div>
+                      <span className="evidence-classification-pill">{item.classification}</span>
+                    </div>
+                    <p>{item.detail}</p>
+                    {item.evidence?.length ? (
+                      <div className="drawer-evidence-card__paths">
+                        {item.evidence.map((p) => (
+                          <code key={p}>{p}</code>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* Local Verification Command */}
+            <section className="conflict-drawer__section" {...getMotionItemProps(5)}>
+              <span className="eyebrow">Local reproduction guidance</span>
+              <div className="conflict-drawer__cli-box">
+                <code>trace analyze</code>
+                <button
+                  type="button"
+                  className="trace-button trace-button--secondary trace-button--small"
+                  onClick={copyCliCommand}
+                >
+                  {copied ? 'Copied' : 'Copy command'}
+                </button>
+              </div>
+              <p className="conflict-drawer__cli-note">
+                Run deterministic change analysis in your local repository workspace to verify AST
+                collision boundaries.
+              </p>
+            </section>
+
+            {/* Modal Actions Footer */}
+            <div className="conflict-drawer__footer" {...getMotionItemProps(6)}>
+              <button
+                type="button"
+                className="trace-button trace-button--secondary"
+                onClick={presence.requestClose}
+              >
+                Close
+              </button>
+            </div>
+          </CenteredDialog>
+        </ModalBackdrop>
+      </OverlayPortal>
+    </PresenceContext.Provider>
   );
 }
 

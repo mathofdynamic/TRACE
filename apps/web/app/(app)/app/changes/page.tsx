@@ -33,7 +33,7 @@ export default async function ChangesPage() {
           data-trace-motion="item"
           style={{ '--motion-index': 1 } as React.CSSProperties}
         >
-          <span aria-hidden="true">â†—</span>
+          <span aria-hidden="true">↗</span>
           <h2>No active changes stored</h2>
           <p>
             {summary.setup.repositorySelected

@@ -244,7 +244,7 @@ export function DecisionsView({
         }),
       ),
     );
-    return names.join(' Â· ');
+    return names.join(' · ');
   }, [decisions, repositories]);
 
   return (
@@ -379,7 +379,7 @@ export function DecisionsView({
                 onClick={() => setSearchQuery('')}
                 aria-label="Clear search query"
               >
-                âœ•
+                ✕
               </button>
             )}
           </div>
@@ -550,7 +550,7 @@ export function DecisionsView({
                       <span className="decision-repo-tag">{repoShortName}</span>
                       <span className="decision-status-tag">
                         <span className="status-bullet" aria-hidden="true">
-                          â—
+                          ●
                         </span>
                         {decision.status ?? 'Recorded'}
                       </span>
@@ -568,14 +568,14 @@ export function DecisionsView({
                       <span className="meta-token">
                         <strong className="token-label">Evidence:</strong> {evidenceCount} files
                       </span>
-                      <span className="meta-token-divider">Â·</span>
+                      <span className="meta-token-divider">·</span>
                       {linkedFindings.length > 0 && (
                         <>
                           <span className="meta-token">
                             <strong className="token-label">Linked finding:</strong>{' '}
                             {linkedFindings.length}
                           </span>
-                          <span className="meta-token-divider">Â·</span>
+                          <span className="meta-token-divider">·</span>
                         </>
                       )}
                       <span className="meta-token meta-token--provenance">
@@ -716,7 +716,7 @@ export function DecisionsView({
             individual developer output.
           </p>
           <Link href="/privacy" className="privacy-link">
-            Read privacy guarantee â†’
+            Read privacy guarantee →
           </Link>
         </div>
       </footer>
@@ -790,7 +790,7 @@ function DecisionDisclosureBody({
                 {parsed.decisionRules.map((rule, idx) => (
                   <li key={idx} className="rule-item">
                     <span className="rule-bullet" aria-hidden="true">
-                      â–¸
+                      ▸
                     </span>
                     <span className="rule-text">{cleanMarkdownLine(rule)}</span>
                   </li>
@@ -807,7 +807,7 @@ function DecisionDisclosureBody({
                 {parsed.consequences.map((cons, idx) => (
                   <li key={idx} className="consequence-item">
                     <span className="cons-bullet" aria-hidden="true">
-                      âœ“
+                      ✓
                     </span>
                     <span className="cons-text">{cleanMarkdownLine(cons)}</span>
                   </li>

@@ -6,6 +6,7 @@ import {
   analysisOriginLabel,
   formatDate,
   formatRelativeDate,
+  freshnessLabel,
   localTraceCommandsForState,
   presentFindingDetail,
   stateToneClass,
@@ -55,7 +56,7 @@ export default async function RepositoryPage({
             {repository.defaultBranch ? (
               <>
                 <span className="repository-identity-block__sep" aria-hidden="true">
-                  Â·
+                  ·
                 </span>
                 <code className="repository-identity-block__branch-pill">
                   {repository.defaultBranch}
@@ -79,7 +80,7 @@ export default async function RepositoryPage({
             {repository.remoteHeadSha ? (
               <>
                 <span className="repository-identity-block__dot" aria-hidden="true">
-                  Â·
+                  ·
                 </span>
                 <span className="repository-identity-block__commit">
                   <span className="repository-identity-block__commit-label">GitHub head:</span>
@@ -88,7 +89,7 @@ export default async function RepositoryPage({
               </>
             ) : null}
             <span className="repository-identity-block__dot" aria-hidden="true">
-              Â·
+              ·
             </span>
             <span className="repository-identity-block__freshness-note">
               {state.key === 'current'
@@ -151,7 +152,7 @@ export default async function RepositoryPage({
                   : state.key === 'sync-attention'
                     ? 'Sync attention required'
                     : state.key === 'connected-not-analyzed'
-                      ? 'Connected â€” awaiting first local run'
+                      ? 'Connected — awaiting first local run'
                       : state.label}
             </strong>
             <p>{state.description}</p>
@@ -160,7 +161,7 @@ export default async function RepositoryPage({
                 Last sync: <strong>{formatRelativeDate(repository.lastSynchronizedAt)}</strong>
               </span>
               <span className="repository-lifecycle-meta__sep" aria-hidden="true">
-                Â·
+                ·
               </span>
               <span>
                 Origin: <strong>{originLabel ?? 'Not available yet'}</strong>
@@ -234,7 +235,7 @@ export default async function RepositoryPage({
         </div>
       </section>
 
-      {/* 5. "What TRACE knows" â€” Primary Engineering Intelligence */}
+      {/* 5. "What TRACE knows" — Primary Engineering Intelligence */}
       <section
         className="redesign-section repository-intelligence-section"
         aria-labelledby="repository-intelligence-title"
@@ -259,7 +260,7 @@ export default async function RepositoryPage({
                 className="repository-view-all-link"
                 href={`/app/repositories/${repository.id}/findings`}
               >
-                View all ({findings.length}) â†’
+                View all ({findings.length}) →
               </Link>
             ) : null}
           </div>
@@ -368,7 +369,7 @@ export default async function RepositoryPage({
               className="repository-view-all-link"
               href={reports.length ? `/app/repositories/${repository.id}/reports` : '/app/reports'}
             >
-              View all {reports.length > 0 ? `(${reports.length})` : ''} â†’
+              View all {reports.length > 0 ? `(${reports.length})` : ''} →
             </Link>
           </div>
           {reports.length ? (
@@ -392,14 +393,10 @@ export default async function RepositoryPage({
                     </p>
                     <div className="repository-recent-row__meta">
                       <span className="report-freshness-tag" data-freshness={report.freshness}>
-                        {report.freshness === 'needs-refresh'
-                          ? 'Needs refresh'
-                          : report.freshness === 'attention'
-                            ? 'Sync attention'
-                            : 'Current'}
+                        {freshnessLabel(report.freshness)}
                       </span>
                       <span className="meta-sep" aria-hidden="true">
-                        Â·
+                        ·
                       </span>
                       <time dateTime={report.generatedAt}>{formatDate(report.generatedAt)}</time>
                     </div>
@@ -441,7 +438,7 @@ export default async function RepositoryPage({
               className="repository-view-all-link"
               href={`/app/repositories/${repository.id}/pull-requests`}
             >
-              View all {changes.length > 0 ? `(${changes.length})` : ''} â†’
+              View all {changes.length > 0 ? `(${changes.length})` : ''} →
             </Link>
           </div>
           {changes.length ? (
@@ -464,7 +461,7 @@ export default async function RepositoryPage({
                       {change.branch ? (
                         <>
                           <span className="meta-sep" aria-hidden="true">
-                            Â·
+                            ·
                           </span>
                           <code>{change.branch}</code>
                         </>
@@ -472,7 +469,7 @@ export default async function RepositoryPage({
                       {change.affectedAreas?.length ? (
                         <>
                           <span className="meta-sep" aria-hidden="true">
-                            Â·
+                            ·
                           </span>
                           <span>{change.affectedAreas.join(', ')}</span>
                         </>
@@ -487,7 +484,7 @@ export default async function RepositoryPage({
                         target="_blank"
                         rel="noreferrer"
                       >
-                        GitHub â†—
+                        GitHub ↗
                       </a>
                     </div>
                   ) : null}

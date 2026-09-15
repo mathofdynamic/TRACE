@@ -3,7 +3,7 @@
 import { useId, useMemo, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { TraceSelect } from './trace-select';
-import { OverlayPortal, ModalBackdrop, CenteredDialog } from './overlay-portal';
+import { OverlayPortal, ModalBackdrop, CenteredDialog, PresenceContext } from './overlay-portal';
 import { usePresence, getMotionItemProps } from '../../../../lib/entrance-motion';
 import type {
   DashboardAttention,
@@ -15,6 +15,7 @@ import {
   formatDate,
   formatRelativeDate,
   presentFindingDetail,
+  freshnessLabel,
 } from '../../../../lib/dashboard-state';
 import {
   computeReportsSummaryMetrics,
@@ -264,9 +265,7 @@ export function ReportsView({
             </div>
           </>
         ) : null}
-        <span className="reports-summary-note">
-          Approved local records Ãƒâ€šÃ‚Â· Privacy preserving
-        </span>
+        <span className="reports-summary-note">Approved local records · Privacy preserving</span>
       </div>
 
       {/* 2. Compact Multi-Dimensional Toolbar */}
@@ -438,7 +437,7 @@ export function ReportsView({
             </svg>
           </div>
           <span className="reports-empty-status-tag">
-            0 SYNCHRONIZED REPORTS Ãƒâ€šÃ‚Â· LOCAL ANALYSIS PENDING
+            0 SYNCHRONIZED REPORTS · LOCAL ANALYSIS PENDING
           </span>
           <h3>{emptyStateReason.title}</h3>
           <p>{emptyStateReason.description}</p>
@@ -568,9 +567,13 @@ export function ReportsView({
                             <span className="report-freshness-badge report-freshness-badge--attention">
                               Sync attention
                             </span>
-                          ) : (
+                          ) : report.freshness === 'current' ? (
                             <span className="report-freshness-badge report-freshness-badge--current">
                               Current
+                            </span>
+                          ) : (
+                            <span className="report-freshness-badge report-freshness-badge--unknown">
+                              {freshnessLabel(report.freshness)}
                             </span>
                           )}
                           <span className="report-timestamp">{formatDate(report.generatedAt)}</span>
@@ -631,7 +634,7 @@ export function ReportsView({
                             href={`/app/reports/${report.id}`}
                             className="trace-button trace-button--primary trace-button--sm"
                           >
-                            Read report ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢
+                            Read report →
                           </Link>
                         </div>
                         <details className="report-raw-disclosure">
@@ -704,191 +707,204 @@ function ReportQuickDrawer({
   if (!presence.isMounted) return null;
 
   return (
-    <OverlayPortal>
-      <ModalBackdrop onClose={onClose} ariaLabel="Close report quick inspect">
-        <CenteredDialog
-          size="lg"
-          titleId="report-drawer-title"
-          onClose={onClose}
-          className="report-drawer report-quick-inspect"
+    <PresenceContext.Provider value={presence}>
+      <OverlayPortal>
+        <ModalBackdrop
+          onRequestClose={presence.requestClose}
+          ariaLabel="Close report quick inspect"
         >
-          {/* 1. Header: Type, Repo, Title, Date & Close */}
-          <div className="report-drawer__header" {...getMotionItemProps(0)}>
-            <div>
-              <div className="report-drawer__eyebrow">
-                <span className="report-type-badge">
-                  {formatArtifactTypeLabel(report.artifactType)}
-                </span>
-                <span className="report-repo-tag">
-                  {repository?.fullName ?? report.repositoryName}
-                </span>
-                <span className="report-origin-tag">Quick Inspect</span>
+          <CenteredDialog
+            size="lg"
+            titleId="report-drawer-title"
+            onRequestClose={presence.requestClose}
+            className="report-drawer report-quick-inspect"
+          >
+            {/* 1. Header: Type, Repo, Title, Date & Close */}
+            <div className="report-drawer__header" {...getMotionItemProps(0)}>
+              <div>
+                <div className="report-drawer__eyebrow">
+                  <span className="report-type-badge">
+                    {formatArtifactTypeLabel(report.artifactType)}
+                  </span>
+                  <span className="report-repo-tag">
+                    {repository?.fullName ?? report.repositoryName}
+                  </span>
+                  <span className="report-origin-tag">Quick Inspect</span>
+                </div>
+                <h2 id="report-drawer-title" className="report-drawer__title">
+                  {report.title}
+                </h2>
+                <time className="report-drawer__date" dateTime={report.generatedAt}>
+                  Generated {formatDate(report.generatedAt)} ·{' '}
+                  {report.timeWindow ?? 'Single evaluation'}
+                </time>
               </div>
-              <h2 id="report-drawer-title" className="report-drawer__title">
-                {report.title}
-              </h2>
-              <time className="report-drawer__date" dateTime={report.generatedAt}>
-                Generated {formatDate(report.generatedAt)} Ãƒâ€šÃ‚Â·{' '}
-                {report.timeWindow ?? 'Single evaluation'}
-              </time>
+              <button
+                type="button"
+                className="drawer-close-btn"
+                onClick={presence.requestClose}
+                aria-label="Close report quick inspect"
+              >
+                ✕
+              </button>
             </div>
-            <button
-              type="button"
-              className="drawer-close-btn"
-              onClick={onClose}
-              aria-label="Close report quick inspect"
-            >
-              ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¢
-            </button>
-          </div>
 
-          {/* 2. Freshness Status */}
-          {report.freshness === 'needs-refresh' ? (
-            <div
-              className="drawer-freshness-banner drawer-freshness-banner--warning"
-              {...getMotionItemProps(1)}
-            >
-              <strong>Needs refresh</strong>
-              <p>
-                Analyzed commit <code>{report.analyzedCommit?.slice(0, 12)}</code> is behind GitHub
-                remote HEAD (<code>{report.remoteHeadCommit?.slice(0, 12)}</code>).
+            {/* 2. Freshness Status */}
+            {report.freshness === 'needs-refresh' ? (
+              <div
+                className="drawer-freshness-banner drawer-freshness-banner--warning"
+                {...getMotionItemProps(1)}
+              >
+                <strong>Needs refresh</strong>
+                <p>
+                  Analyzed commit <code>{report.analyzedCommit?.slice(0, 12)}</code> is behind
+                  GitHub remote HEAD (<code>{report.remoteHeadCommit?.slice(0, 12)}</code>).
+                </p>
+              </div>
+            ) : report.freshness === 'attention' ? (
+              <div
+                className="drawer-freshness-banner drawer-freshness-banner--attention"
+                {...getMotionItemProps(1)}
+              >
+                <strong>Sync attention</strong>
+                <p>CLI manifest schema alignment required for automated bridge sync.</p>
+              </div>
+            ) : report.freshness === 'current' ? (
+              <div
+                className="drawer-freshness-banner drawer-freshness-banner--current"
+                {...getMotionItemProps(1)}
+              >
+                <strong>Current with GitHub</strong>
+                <p>Analyzed commit matches remote default branch HEAD.</p>
+              </div>
+            ) : (
+              <div
+                className="drawer-freshness-banner drawer-freshness-banner--unknown"
+                {...getMotionItemProps(1)}
+              >
+                <strong>Freshness unavailable</strong>
+                <p>TRACE cannot currently verify this record against GitHub.</p>
+              </div>
+            )}
+
+            {/* 3. Summary: One Concise Paragraph */}
+            <div className="report-drawer__section" {...getMotionItemProps(2)}>
+              <span className="drawer-section-label">Summary</span>
+              <p className="report-drawer__summary-text">
+                {report.summary || 'Approved TRACE project-memory record.'}
               </p>
             </div>
-          ) : report.freshness === 'attention' ? (
-            <div
-              className="drawer-freshness-banner drawer-freshness-banner--attention"
-              {...getMotionItemProps(1)}
-            >
-              <strong>Sync attention</strong>
-              <p>CLI manifest schema alignment required for automated bridge sync.</p>
-            </div>
-          ) : (
-            <div
-              className="drawer-freshness-banner drawer-freshness-banner--current"
-              {...getMotionItemProps(1)}
-            >
-              <strong>Current with GitHub</strong>
-              <p>Analyzed commit matches remote default branch HEAD.</p>
-            </div>
-          )}
 
-          {/* 3. Summary: One Concise Paragraph */}
-          <div className="report-drawer__section" {...getMotionItemProps(2)}>
-            <span className="drawer-section-label">Summary</span>
-            <p className="report-drawer__summary-text">
-              {report.summary || 'Approved TRACE project-memory record.'}
-            </p>
-          </div>
-
-          {/* 4. High-Signal Intelligence: Top Findings & AST Evidence */}
-          {topFindings.length > 0 ? (
-            <div className="report-drawer__section" {...getMotionItemProps(3)}>
-              <div className="drawer-section-header-row">
-                <span className="drawer-section-label">Top Findings ({report.items.length})</span>
-                {remainingFindingsCount > 0 ? (
-                  <span className="drawer-more-hint">
-                    +{remainingFindingsCount} more in full report
-                  </span>
-                ) : null}
-              </div>
-              <div className="drawer-items-list">
-                {topFindings.map((item) => (
-                  <div className="drawer-item-card" key={item.id}>
-                    <div className="drawer-item-card__head">
-                      <span className="item-severity-tag" data-severity={item.severity ?? 'low'}>
-                        {item.severity ?? 'low'}
-                      </span>
-                      <strong>{item.title}</strong>
-                    </div>
-                    <p>{presentFindingDetail(item.detail)}</p>
-                    {item.evidence?.length ? (
-                      <div className="drawer-item-evidence">
-                        {item.evidence.slice(0, 2).map((ev) => (
-                          <code key={ev}>{ev}</code>
-                        ))}
-                        {item.evidence.length > 2 ? (
-                          <span className="evidence-more-tag">
-                            +{item.evidence.length - 2} loci
-                          </span>
-                        ) : null}
+            {/* 4. High-Signal Intelligence: Top Findings & AST Evidence */}
+            {topFindings.length > 0 ? (
+              <div className="report-drawer__section" {...getMotionItemProps(3)}>
+                <div className="drawer-section-header-row">
+                  <span className="drawer-section-label">Top Findings ({report.items.length})</span>
+                  {remainingFindingsCount > 0 ? (
+                    <span className="drawer-more-hint">
+                      +{remainingFindingsCount} more in full report
+                    </span>
+                  ) : null}
+                </div>
+                <div className="drawer-items-list">
+                  {topFindings.map((item) => (
+                    <div className="drawer-item-card" key={item.id}>
+                      <div className="drawer-item-card__head">
+                        <span className="item-severity-tag" data-severity={item.severity ?? 'low'}>
+                          {item.severity ?? 'low'}
+                        </span>
+                        <strong>{item.title}</strong>
                       </div>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {/* 5. High-Signal Intelligence: Linked Changes */}
-          {topChanges.length > 0 ? (
-            <div className="report-drawer__section" {...getMotionItemProps(4)}>
-              <div className="drawer-section-header-row">
-                <span className="drawer-section-label">
-                  Linked Pull Requests ({relatedChanges.length})
-                </span>
-                {remainingChangesCount > 0 ? (
-                  <span className="drawer-more-hint">+{remainingChangesCount} more reviewed</span>
-                ) : null}
-              </div>
-              <div className="drawer-changes-list">
-                {topChanges.map((change) => (
-                  <div className="drawer-change-row" key={change.id}>
-                    <span className="drawer-change-badge">PR #{change.number}</span>
-                    <div className="drawer-change-info">
-                      <strong>{change.title}</strong>
-                      <small>
-                        @{change.authorLogin} Ãƒâ€šÃ‚Â· <code>{change.branch}</code>
-                      </small>
+                      <p>{presentFindingDetail(item.detail)}</p>
+                      {item.evidence?.length ? (
+                        <div className="drawer-item-evidence">
+                          {item.evidence.slice(0, 2).map((ev) => (
+                            <code key={ev}>{ev}</code>
+                          ))}
+                          {item.evidence.length > 2 ? (
+                            <span className="evidence-more-tag">
+                              +{item.evidence.length - 2} loci
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
+            ) : null}
+
+            {/* 5. High-Signal Intelligence: Linked Changes */}
+            {topChanges.length > 0 ? (
+              <div className="report-drawer__section" {...getMotionItemProps(4)}>
+                <div className="drawer-section-header-row">
+                  <span className="drawer-section-label">
+                    Linked Pull Requests ({relatedChanges.length})
+                  </span>
+                  {remainingChangesCount > 0 ? (
+                    <span className="drawer-more-hint">+{remainingChangesCount} more reviewed</span>
+                  ) : null}
+                </div>
+                <div className="drawer-changes-list">
+                  {topChanges.map((change) => (
+                    <div className="drawer-change-row" key={change.id}>
+                      <span className="drawer-change-badge">PR #{change.number}</span>
+                      <div className="drawer-change-info">
+                        <strong>{change.title}</strong>
+                        <small>
+                          @{change.authorLogin} · <code>{change.branch}</code>
+                        </small>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {/* 6. High-Signal Intelligence: Provenance Summary */}
+            <div className="report-drawer__section" {...getMotionItemProps(5)}>
+              <span className="drawer-section-label">Provenance Summary</span>
+              <dl className="drawer-facts-grid drawer-facts-grid--compact">
+                <div>
+                  <dt>Repository</dt>
+                  <dd>
+                    <Link href={`/app/repositories/${report.repositoryId}`}>
+                      {report.repositoryName}
+                    </Link>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Analyzed Commit</dt>
+                  <dd>
+                    <code>{report.analyzedCommit?.slice(0, 12) ?? 'Local HEAD'}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Privacy Guarantee</dt>
+                  <dd>Deterministic AST facts · Source code excluded</dd>
+                </div>
+              </dl>
             </div>
-          ) : null}
 
-          {/* 6. High-Signal Intelligence: Provenance Summary */}
-          <div className="report-drawer__section" {...getMotionItemProps(5)}>
-            <span className="drawer-section-label">Provenance Summary</span>
-            <dl className="drawer-facts-grid drawer-facts-grid--compact">
-              <div>
-                <dt>Repository</dt>
-                <dd>
-                  <Link href={`/app/repositories/${report.repositoryId}`}>
-                    {report.repositoryName}
-                  </Link>
-                </dd>
-              </div>
-              <div>
-                <dt>Analyzed Commit</dt>
-                <dd>
-                  <code>{report.analyzedCommit?.slice(0, 12) ?? 'Local HEAD'}</code>
-                </dd>
-              </div>
-              <div>
-                <dt>Privacy Guarantee</dt>
-                <dd>Deterministic AST facts Ãƒâ€šÃ‚Â· Source code excluded</dd>
-              </div>
-            </dl>
-          </div>
-
-          {/* 7. Footer: Read Full Report & Copy CLI */}
-          <div className="report-drawer__footer" {...getMotionItemProps(6)}>
-            <button
-              type="button"
-              className="trace-button trace-button--secondary trace-button--sm"
-              onClick={() => onCopyCli(report)}
-            >
-              {copiedId === report.id ? 'Copied' : 'Copy CLI inspect'}
-            </button>
-            <Link
-              href={`/app/reports/${report.id}`}
-              className="trace-button trace-button--primary trace-button--sm"
-            >
-              Read full report ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢
-            </Link>
-          </div>
-        </CenteredDialog>
-      </ModalBackdrop>
-    </OverlayPortal>
+            {/* 7. Footer: Read Full Report & Copy CLI */}
+            <div className="report-drawer__footer" {...getMotionItemProps(6)}>
+              <button
+                type="button"
+                className="trace-button trace-button--secondary trace-button--sm"
+                onClick={() => onCopyCli(report)}
+              >
+                {copiedId === report.id ? 'Copied' : 'Copy CLI inspect'}
+              </button>
+              <Link
+                href={`/app/reports/${report.id}`}
+                className="trace-button trace-button--primary trace-button--sm"
+              >
+                Read full report →
+              </Link>
+            </div>
+          </CenteredDialog>
+        </ModalBackdrop>
+      </OverlayPortal>
+    </PresenceContext.Provider>
   );
 }

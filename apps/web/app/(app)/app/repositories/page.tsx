@@ -43,7 +43,7 @@ export default async function RepositoriesPage({ searchParams }: RepositoriesPag
           .from(schema.githubInstallations)
           .where(inArray(schema.githubInstallations.organizationId, organizationIds))
       : [];
-    const repositories = summary.repositories;
+    const repositories = summary.repositoryCatalog;
     const activeRepositories = repositories.filter((repository) => repository.state === 'active');
     const currentStep = activeRepositories.length ? 4 : installations.length ? 3 : 2;
     return (

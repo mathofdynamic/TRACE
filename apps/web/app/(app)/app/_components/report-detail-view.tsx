@@ -97,6 +97,7 @@ export function ReportDetailView({
 
   const isNeedsRefresh = report.freshness === 'needs-refresh';
   const isAttention = report.freshness === 'attention';
+  const isCurrent = report.freshness === 'current';
 
   return (
     <div className="report-detail-surface">
@@ -128,7 +129,7 @@ export function ReportDetailView({
           /
         </span>
         <span className="report-breadcrumb-current">
-          {report.repositoryName.split('/')[1] ?? report.repositoryName} Â· {report.id}
+          {report.repositoryName.split('/')[1] ?? report.repositoryName} · {report.id}
         </span>
       </nav>
 
@@ -190,7 +191,7 @@ export function ReportDetailView({
               >
                 <div className="freshness-notice-head">
                   <span className="freshness-glyph" aria-hidden="true">
-                    â†»
+                    ↻
                   </span>
                   <div>
                     <strong>
@@ -247,7 +248,7 @@ export function ReportDetailView({
                   </div>
                 </div>
               </div>
-            ) : (
+            ) : isCurrent ? (
               <div
                 className="report-freshness-notice report-freshness-notice--current"
                 role="region"
@@ -255,7 +256,7 @@ export function ReportDetailView({
               >
                 <div className="freshness-notice-head">
                   <span className="freshness-glyph" aria-hidden="true">
-                    âœ“
+                    ✓
                   </span>
                   <div>
                     <strong>Intelligence Current with GitHub HEAD</strong>
@@ -263,6 +264,22 @@ export function ReportDetailView({
                       Analyzed commit <code>{report.analyzedCommit?.slice(0, 12)}</code> matches
                       GitHub remote repository default branch.
                     </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div
+                className="report-freshness-notice report-freshness-notice--unknown"
+                role="region"
+                aria-label="Freshness Status"
+              >
+                <div className="freshness-notice-head">
+                  <span className="freshness-glyph" aria-hidden="true">
+                    ?
+                  </span>
+                  <div>
+                    <strong>Freshness unavailable</strong>
+                    <p>TRACE cannot currently verify this report against GitHub.</p>
                   </div>
                 </div>
               </div>
@@ -335,13 +352,13 @@ export function ReportDetailView({
                               <div className="doc-change-meta">
                                 <span>{change.authorLogin ?? 'Unknown author'}</span>
                                 <span className="doc-meta-dot" aria-hidden="true">
-                                  Â·
+                                  ·
                                 </span>
                                 <code>{change.branch ?? 'feature'}</code>
                                 {change.affectedAreas?.length ? (
                                   <>
                                     <span className="doc-meta-dot" aria-hidden="true">
-                                      Â·
+                                      ·
                                     </span>
                                     <span className="doc-area-pill">
                                       {change.affectedAreas.join(', ')}
@@ -359,7 +376,7 @@ export function ReportDetailView({
                               rel="noreferrer"
                               className="trace-button trace-button--secondary trace-button--small doc-gh-link"
                             >
-                              GitHub PR â†—
+                              GitHub PR ↗
                             </a>
                           ) : null}
                         </div>
@@ -446,7 +463,7 @@ export function ReportDetailView({
                           return (
                             <div className="doc-bullet-item" key={idx}>
                               <span className="bullet-dot" aria-hidden="true">
-                                â€”
+                                —
                               </span>
                               <p>{itemText}</p>
                             </div>
@@ -628,7 +645,7 @@ export function ReportDetailView({
               ) : null}
               <div className="rail-fact-item">
                 <dt>Privacy Guarantee</dt>
-                <dd>AST facts Â· Code excluded</dd>
+                <dd>AST facts · Code excluded</dd>
               </div>
               <div className="rail-fact-item">
                 <dt>Status</dt>
@@ -658,7 +675,7 @@ export function ReportDetailView({
                   title="Copy inspect command"
                   aria-label="Copy CLI inspect command"
                 >
-                  {copiedText === 'cli-view' ? 'âœ“' : 'Copy'}
+                  {copiedText === 'cli-view' ? '✓' : 'Copy'}
                 </button>
               </div>
 

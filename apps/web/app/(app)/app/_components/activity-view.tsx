@@ -88,7 +88,7 @@ export function formatEventGroupDate(isoDate: string): string {
   });
   const now = new Date();
   if (date.toDateString() === now.toDateString()) {
-    return `Today Â· ${dateStr}`;
+    return `Today · ${dateStr}`;
   }
   return dateStr;
 }
@@ -328,6 +328,23 @@ export function ActivityView({
     return counts;
   }, [activities]);
 
+  const activityRange = useMemo(() => {
+    const timestamps = activities
+      .map((activity) => new Date(activity.occurredAt).getTime())
+      .filter((value) => Number.isFinite(value))
+      .sort((left, right) => left - right);
+    if (!timestamps.length) return null;
+    const format = (value: number) =>
+      new Date(value).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+    const first = timestamps[0]!;
+    const last = timestamps.at(-1)!;
+    return first === last ? format(first) : `${format(first)} – ${format(last)}`;
+  }, [activities]);
+
   // Filter activities
   const filteredActivities = useMemo(() => {
     return activities.filter((act) => {
@@ -425,17 +442,17 @@ export function ActivityView({
           <div className="activity-metric-item">
             <span className="activity-metric-label">EVENT TAXONOMY</span>
             <span className="activity-metric-value">
-              {categoryCounts.report} Briefs Â· {categoryCounts.decision} Decisions Â·{' '}
+              {categoryCounts.report} Briefs · {categoryCounts.decision} Decisions ·{' '}
               {categoryCounts.rule} Rules
             </span>
             <span className="activity-metric-sub">
-              {categoryCounts.analysis} Scans Â· {categoryCounts.conflict} Conflicts
+              {categoryCounts.analysis} Scans · {categoryCounts.conflict} Conflicts
             </span>
           </div>
           <div className="activity-metric-divider" />
           <div className="activity-metric-item">
             <span className="activity-metric-label">CHRONOLOGY SPAN</span>
-            <span className="activity-metric-value">Aug 1 â€“ Aug 19, 2026</span>
+            <span className="activity-metric-value">{activityRange ?? 'No activity range'}</span>
             <span className="activity-metric-sub">Continuous audit ledger</span>
           </div>
           <div className="activity-metric-divider" />
@@ -492,7 +509,7 @@ export function ActivityView({
                 onClick={() => setSearchQuery('')}
                 aria-label="Clear search query"
               >
-                âœ•
+                ✕
               </button>
             )}
           </div>
@@ -880,8 +897,8 @@ export function ActivityView({
             </div>
             <h2 className="empty-title">No events match current filter</h2>
             <p className="empty-description">
-              No activity records found{searchQuery.trim() ? ` for â€œ${searchQuery}â€` : ''} in the
-              selected category.
+              No activity records found{searchQuery.trim() ? ` for “${searchQuery}”` : ''} in the
+              selected category. selected category.
             </p>
             <button
               type="button"
@@ -926,7 +943,7 @@ export function ActivityView({
             individual developer velocity, score, or keystroke timing.
           </p>
           <Link href="/app/documentation#boundary-guarantees" className="privacy-link">
-            Read privacy spec â†’
+            Read privacy spec →
           </Link>
         </div>
       </footer>

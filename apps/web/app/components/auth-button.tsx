@@ -24,7 +24,7 @@ export function GithubAuthButton({ callbackURL = '/onboarding' }: { callbackURL?
         disabled={state === 'loading'}
         aria-busy={state === 'loading'}
       >
-        {state === 'loading' ? 'Connecting to GitHubâ€¦' : 'Continue with GitHub'}
+        {state === 'loading' ? 'Connecting to GitHub…' : 'Continue with GitHub'}
       </button>
       {state === 'error' ? (
         <div className="auth-error-box" role="alert">

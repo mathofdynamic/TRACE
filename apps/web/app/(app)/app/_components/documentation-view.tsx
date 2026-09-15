@@ -28,7 +28,7 @@ export function DocumentationView() {
           <div className="dashboard-docs-header__eyebrow-row">
             <span className="docs-eyebrow-tag">IN-TREE SPECIFICATIONS &amp; MANUALS</span>
             <span className="docs-header-divider" aria-hidden="true">
-              Â·
+              ·
             </span>
             <span className="docs-badge docs-badge--spec">
               <svg
@@ -105,7 +105,7 @@ export function DocumentationView() {
                 className={`dashboard-docs-toc__link ${activeSection === 'execution-pipeline' ? 'is-active' : ''}`}
                 onClick={() => setActiveSection('execution-pipeline')}
               >
-                2. Local â†’ Dashboard Pipeline
+                2. Local → Dashboard Pipeline
               </a>
               <a
                 href="#local-cli"
@@ -134,10 +134,10 @@ export function DocumentationView() {
               <span className="toc-footer-label">Quick Links</span>
               <div className="toc-footer-links">
                 <Link href="/specification" className="toc-footer-link">
-                  Specification RFC â†’
+                  Specification RFC →
                 </Link>
                 <Link href="/security" className="toc-footer-link">
-                  Security Architecture â†’
+                  Security Architecture →
                 </Link>
               </div>
             </div>
@@ -218,7 +218,7 @@ export function DocumentationView() {
                           className="docs-github-link"
                           aria-label={`Open ${doc.name} on GitHub`}
                         >
-                          GitHub â†—
+                          GitHub ↗
                         </a>
                       </td>
                     </tr>
@@ -228,7 +228,7 @@ export function DocumentationView() {
             </div>
           </section>
 
-          {/* Section 2: Local â†’ Dashboard Flow */}
+          {/* Section 2: Local → Dashboard Flow */}
           <section
             id="execution-pipeline"
             className="dashboard-docs-section"
@@ -317,7 +317,7 @@ export function DocumentationView() {
                     <div className="dashboard-cli-card__meta">
                       {item.contextNote && (
                         <span className="dashboard-cli-context">
-                          <span aria-hidden="true">â†³</span> {item.contextNote}
+                          <span aria-hidden="true">↳</span> {item.contextNote}
                         </span>
                       )}
                       {item.outputFormat && (
@@ -372,7 +372,7 @@ export function DocumentationView() {
                     {item.contextNote && (
                       <div className="dashboard-cli-card__meta">
                         <span className="dashboard-cli-context">
-                          <span aria-hidden="true">â†³</span> {item.contextNote}
+                          <span aria-hidden="true">↳</span> {item.contextNote}
                         </span>
                       </div>
                     )}

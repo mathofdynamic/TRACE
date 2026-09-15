@@ -73,7 +73,7 @@ export const securityMatrix: SecurityMatrixItem[] = [
       'Local analysis executes entirely within the project environment. AST symbol extraction, conflict scanning, and deterministic checks run without requiring source-code upload to TRACE Cloud.',
     excludedNotClaimed:
       'Zero required source-code transmission. Raw repository files, uncommitted buffers, and local environment variables never leave your machine.',
-    invariantStatus: 'Active Invariant Â· 0 bytes source transmitted',
+    invariantStatus: 'Active Invariant · 0 bytes source transmitted',
   },
   {
     boundary: 'Cloud Ingestion & Processing',
@@ -83,7 +83,7 @@ export const securityMatrix: SecurityMatrixItem[] = [
       'Cloud coordination requires explicitly configured repository and model-provider boundaries. Only signed summaries, conflict digests, and approved .trace records are processed.',
     excludedNotClaimed:
       'Retention, deletion policies, and third-party model provider behaviors are documented and auditable before production claims are made.',
-    invariantStatus: 'Controlled Boundary Â· Configured scopes only',
+    invariantStatus: 'Controlled Boundary · Configured scopes only',
   },
   {
     boundary: 'Credential & Content Sanitization',
@@ -93,7 +93,7 @@ export const securityMatrix: SecurityMatrixItem[] = [
       'Credentials, tokens, prompts, raw source duplication, and private model conversations must not be written to .trace artifacts. Server-side secrets are kept outside browser and repository bundles.',
     excludedNotClaimed:
       'Automatic runtime secret remediation or unverified DLP guarantees are not claimed; developers remain responsible for local credentials.',
-    invariantStatus: 'Sanitization Rule Â· Zero secret persistence',
+    invariantStatus: 'Sanitization Rule · Zero secret persistence',
   },
   {
     boundary: 'Enterprise Governance & Policy',
@@ -103,7 +103,7 @@ export const securityMatrix: SecurityMatrixItem[] = [
       'Future phases introduce tenant authorization, tamper-evident audit logs, safe Markdown sandboxing, secret scanning, prompt-injection hardening, and quarantine workflows.',
     excludedNotClaimed:
       'SOC 2, ISO 27001, HIPAA, or formal regulatory compliance certifications are not claimed.',
-    invariantStatus: 'Roadmap Â· Implementation in progress',
+    invariantStatus: 'Roadmap · Implementation in progress',
   },
 ];
 

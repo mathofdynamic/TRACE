@@ -5,7 +5,6 @@ import { Wordmark } from './public';
 export function AuthShell({ children }: { children: ReactNode }) {
   return (
     <div className="auth-stage-wrapper">
-      <div className="auth-ambient-halo" aria-hidden="true" />
       <main className="auth-shell" id="main-content">
         <header
           className="auth-shell__top"
@@ -14,7 +13,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
         >
           <Wordmark />
           <Link href="/" className="auth-back-link">
-            Back to TRACE â†’
+            Back to TRACE →
           </Link>
         </header>
         <section

@@ -19,7 +19,7 @@ export default function HomePage() {
             <h1>Git is the history of code. TRACE is the history of understanding.</h1>
             <p>
               TRACE connects intent, changes, decisions, evidence, risks, and active-work conflicts
-              â€” then keeps the durable record portable inside <code>.trace</code>.
+              — then keeps the durable record portable inside <code>.trace</code>.
             </p>
             <div className="hero__actions">
               <Link className="trace-button trace-button--primary" href="/sign-in">
@@ -45,7 +45,7 @@ export default function HomePage() {
                 <TraceMark size={14} />
                 <span>TRACE / Change Intelligence Path</span>
               </div>
-              <span className="trace-badge trace-badge--info">Verified Record</span>
+              <span className="trace-badge trace-badge--info">Illustrative example</span>
             </div>
 
             <div className="path-rail" role="list">
@@ -69,7 +69,7 @@ export default function HomePage() {
                     <span className="mono-target">Radar #41</span>
                   </div>
                   <span className="path-node__meta">
-                    3 files Â· +84 -12 lines Â· Stream ring-buffer
+                    3 files · +84 -12 lines · Stream ring-buffer
                   </span>
                 </div>
               </div>
@@ -81,7 +81,7 @@ export default function HomePage() {
                     <span>Deterministic checks</span>
                     <span className="mono-target">AST Verified</span>
                   </div>
-                  <span className="path-node__meta">stream.rs:48 Â· Bounded memory allocation</span>
+                  <span className="path-node__meta">stream.rs:48 · Bounded memory allocation</span>
                 </div>
               </div>
 
@@ -103,7 +103,7 @@ export default function HomePage() {
                     <span>Portable .trace artifact</span>
                   </div>
                   <span className="path-node__meta">
-                    .trace/reports/daily/2026-08-19.md Â· Hash 1e9b8a
+                    .trace/reports/daily/2026-08-19.md · Hash 1e9b8a
                   </span>
                 </div>
               </div>
@@ -275,7 +275,7 @@ export default function HomePage() {
               </div>
             </div>
             <Link className="inline-link" href="/specification">
-              Read the current specification (RFC-001) â†’
+              Read the current specification (RFC-001) →
             </Link>
           </div>
 
@@ -289,16 +289,16 @@ export default function HomePage() {
               <div className="trace-pane-header">Repository Tree</div>
               <div className="trace-tree-content">
                 <div>.trace/</div>
-                <div>â”œâ”€â”€ config.yml</div>
-                <div>â”œâ”€â”€ reports/</div>
+                <div>├── config.yml</div>
+                <div>├── reports/</div>
                 <div>
-                  â”‚ â”œâ”€â”€ <span className="active-file">daily/2026-08-19.md</span>
+                  │ ├── <span className="active-file">daily/2026-08-19.md</span>
                 </div>
-                <div>â”‚ â””â”€â”€ weekly/2026-08-17.md</div>
-                <div>â”œâ”€â”€ decisions/</div>
-                <div>â”‚ â””â”€â”€ 0001-memory.md</div>
-                <div>â”œâ”€â”€ conflicts/</div>
-                <div>â””â”€â”€ state/</div>
+                <div>│ └── weekly/2026-08-17.md</div>
+                <div>├── decisions/</div>
+                <div>│ └── 0001-memory.md</div>
+                <div>├── conflicts/</div>
+                <div>└── state/</div>
               </div>
             </div>
 

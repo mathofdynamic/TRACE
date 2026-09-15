@@ -8,7 +8,7 @@ import {
 import { PageHeader, PublicLayout, SectionLabel, TraceMark } from '../components/public';
 import { CommandBlock } from './command-block';
 
-export const metadata = { title: 'Documentation â€” TRACE' };
+export const metadata = { title: 'Documentation — TRACE' };
 
 export default function DocsPage() {
   return (
@@ -44,7 +44,7 @@ export default function DocsPage() {
                   </li>
                   <li>
                     <a href="#local-to-dashboard" className="docs-toc__link">
-                      Local â†’ Dashboard Flow
+                      Local → Dashboard Flow
                     </a>
                   </li>
                   <li>
@@ -140,7 +140,7 @@ export default function DocsPage() {
                           className="doc-link-btn"
                           aria-label={`Open ${doc.name} on GitHub`}
                         >
-                          GitHub â†—
+                          GitHub ↗
                         </a>
                       </div>
                     </article>
@@ -150,7 +150,7 @@ export default function DocsPage() {
             </section>
 
             {/* =============================================================
-                Section 2: Local â†’ Dashboard Flow (Numbered Safe Workflow)
+                Section 2: Local → Dashboard Flow (Numbered Safe Workflow)
                 ============================================================= */}
             <section
               className="docs-section"
@@ -237,7 +237,7 @@ export default function DocsPage() {
                         {item.contextNote && (
                           <span className="cli-context-note">
                             <span className="note-bullet" aria-hidden="true">
-                              â†³
+                              ↳
                             </span>{' '}
                             {item.contextNote}
                           </span>
@@ -309,7 +309,7 @@ export default function DocsPage() {
                         {item.contextNote && (
                           <span className="cli-context-note">
                             <span className="note-bullet" aria-hidden="true">
-                              â†³
+                              ↳
                             </span>{' '}
                             {item.contextNote}
                           </span>
@@ -326,7 +326,7 @@ export default function DocsPage() {
                 style={{ '--motion-index': syncWorkflowCommands.length + 1 } as React.CSSProperties}
               >
                 <span className="note-icon" aria-hidden="true">
-                  âœ“
+                  ✓
                 </span>
                 <p>
                   <strong>Boundary Rule:</strong> Source files, raw code snippets, API secrets,
@@ -359,10 +359,10 @@ export default function DocsPage() {
                 </div>
                 <div className="docs-footer-action__links">
                   <Link className="trace-button trace-button--primary" href="/specification">
-                    Read .trace Spec â†’
+                    Read .trace Spec →
                   </Link>
                   <Link className="inline-link" href="/security">
-                    Security Architecture â†’
+                    Security Architecture →
                   </Link>
                 </div>
               </div>

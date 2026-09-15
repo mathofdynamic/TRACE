@@ -18,6 +18,7 @@ import {
   OverlayPortal,
   ModalBackdrop,
   CenteredDialog,
+  PresenceContext,
 } from '../(app)/app/_components/overlay-portal';
 import { usePresence, getMotionItemProps } from '../../lib/entrance-motion';
 
@@ -193,7 +194,7 @@ export function RepositorySelector({
               </span>
               <code className="installation-fact__account">{primaryInstallation.accountLogin}</code>
               <span className="installation-fact__meta">
-                {primaryInstallation.accountType === 'Organization' ? 'Org' : 'User'} Â· Read-only
+                {primaryInstallation.accountType === 'Organization' ? 'Org' : 'User'} · Read-only
               </span>
             </div>
           ) : null}
@@ -211,7 +212,7 @@ export function RepositorySelector({
               className="trace-button trace-button--secondary"
               href="/api/github/install?next=/app/repositories"
             >
-              Connect GitHub â†—
+              Connect GitHub ↗
             </Link>
           </div>
         </div>
@@ -301,7 +302,7 @@ export function RepositorySelector({
               onClick={() => setQuery('')}
               aria-label="Clear search"
             >
-              âœ•
+              ✕
             </button>
           ) : null}
         </div>
@@ -316,7 +317,7 @@ export function RepositorySelector({
           >
             <span className="filter-button__label">All</span>
             <span className="filter-button__sep" aria-hidden="true">
-              Â·
+              ·
             </span>
             <span className="filter-count-badge">{counts.all}</span>
           </button>
@@ -329,7 +330,7 @@ export function RepositorySelector({
           >
             <span className="filter-button__label">Current</span>
             <span className="filter-button__sep" aria-hidden="true">
-              Â·
+              ·
             </span>
             <span className="filter-count-badge">{counts.current}</span>
           </button>
@@ -342,7 +343,7 @@ export function RepositorySelector({
           >
             <span className="filter-button__label">Attention</span>
             <span className="filter-button__sep" aria-hidden="true">
-              Â·
+              ·
             </span>
             <span className="filter-count-badge">{counts.attention}</span>
           </button>
@@ -355,7 +356,7 @@ export function RepositorySelector({
           >
             <span className="filter-button__label">Not analyzed</span>
             <span className="filter-button__sep" aria-hidden="true">
-              Â·
+              ·
             </span>
             <span className="filter-count-badge">{counts.notAnalyzed}</span>
           </button>
@@ -376,7 +377,7 @@ export function RepositorySelector({
             style={{ '--motion-index': 0 } as React.CSSProperties}
           >
             <span className="empty-glyph" aria-hidden="true">
-              â—Œ
+              ◌
             </span>
             <h3>
               {repositories.length === 0
@@ -504,7 +505,7 @@ export function RepositorySelector({
                         </div>
                       </td>
 
-                      {/* Zone 3: Intelligence Facts (14 findings Â· 5 reports) */}
+                      {/* Zone 3: Intelligence Facts (14 findings · 5 reports) */}
                       <td className="col-facts">
                         <div className="repo-intelligence-cell">
                           <span className="intelligence-count-group">
@@ -512,7 +513,7 @@ export function RepositorySelector({
                             {repo.findingsCount === 1 ? 'finding' : 'findings'}
                           </span>
                           <span className="intelligence-sep" aria-hidden="true">
-                            Â·
+                            ·
                           </span>
                           <span className="intelligence-count-group">
                             <strong className="intelligence-number">{repo.reportsCount}</strong>{' '}
@@ -521,14 +522,14 @@ export function RepositorySelector({
                         </div>
                       </td>
 
-                      {/* Zone 4: Synchronization (5d ago Â· 4953add) */}
+                      {/* Zone 4: Synchronization (5d ago · 4953add) */}
                       <td className="col-sync">
                         <div className="repo-sync-cell">
                           <span className="sync-time">
                             {formatRelativeDate(repo.lastSynchronizedAt)}
                           </span>
                           <span className="sync-sep" aria-hidden="true">
-                            Â·
+                            ·
                           </span>
                           {repo.shortSha ? (
                             <code className="sync-sha">{repo.shortSha}</code>
@@ -629,13 +630,13 @@ export function RepositorySelector({
               onClick={() => setShowAccessForm(true)}
               aria-haspopup="dialog"
             >
-              Adjust repository selection â†‘
+              Adjust repository selection ↑
             </button>
             <Link
               className="trace-button trace-button--secondary"
               href="/api/github/install?next=/app/repositories"
             >
-              Configure GitHub App permissions â†—
+              Configure GitHub App permissions ↗
             </Link>
           </div>
         </section>
@@ -679,159 +680,168 @@ function RepositoryAccessModal({
   if (!presence.isMounted) return null;
 
   return (
-    <OverlayPortal>
-      <ModalBackdrop onClose={onClose} ariaLabel="Close repository access configuration">
-        <CenteredDialog
-          size="md"
-          titleId="repositories-access-title"
-          onClose={onClose}
-          initialFocusRef={closeBtnRef}
-          className="repositories-access-dialog repositories-access-drawer"
+    <PresenceContext.Provider value={presence}>
+      <OverlayPortal>
+        <ModalBackdrop
+          onRequestClose={presence.requestClose}
+          ariaLabel="Close repository access configuration"
         >
-          <div className="repositories-access-dialog__header" {...getMotionItemProps(0)}>
-            <div className="repositories-access-dialog__eyebrow-row">
-              <span className="eyebrow">ACCESS CONFIGURATION</span>
-              <span className="access-selected-badge">
-                {selected.size} of {repositories.length} active
-              </span>
-            </div>
-            <button
-              ref={closeBtnRef}
-              className="trace-dialog__close"
-              type="button"
-              aria-label="Close access configuration"
-              onClick={onClose}
-            >
-              Ã—
-            </button>
-          </div>
-
-          <div className="repositories-access-dialog__intro" {...getMotionItemProps(1)}>
-            <h2 id="repositories-access-title">Manage repository access</h2>
-            <p>
-              Select which repositories from{' '}
-              <strong>{primaryInstallation?.accountLogin ?? 'GitHub'}</strong> TRACE should track in
-              this workspace.
-            </p>
-          </div>
-
-          <form className="repositories-access-form" onSubmit={save}>
-            <div className="repositories-access-toolbar" {...getMotionItemProps(2)}>
-              <span className="repositories-access-toolbar__label">Available repositories</span>
-              <div className="repositories-access-toolbar__actions">
-                <button
-                  type="button"
-                  className="trace-link-btn"
-                  onClick={() => {
-                    setSelected(new Set(repositories.map((r) => r.id)));
-                    setStatus('idle');
-                  }}
-                >
-                  Select all
-                </button>
-                <span className="trace-bullet-sep" aria-hidden="true">
-                  Â·
+          <CenteredDialog
+            size="md"
+            titleId="repositories-access-title"
+            onRequestClose={presence.requestClose}
+            initialFocusRef={closeBtnRef}
+            className="repositories-access-dialog repositories-access-drawer"
+          >
+            <div className="repositories-access-dialog__header" {...getMotionItemProps(0)}>
+              <div className="repositories-access-dialog__eyebrow-row">
+                <span className="eyebrow">ACCESS CONFIGURATION</span>
+                <span className="access-selected-badge">
+                  {selected.size} of {repositories.length} active
                 </span>
-                <button
-                  type="button"
-                  className="trace-link-btn"
-                  onClick={() => {
-                    setSelected(new Set());
-                    setStatus('idle');
-                  }}
-                >
-                  Deselect all
-                </button>
               </div>
+              <button
+                ref={closeBtnRef}
+                className="trace-dialog__close"
+                type="button"
+                aria-label="Close access configuration"
+                onClick={() => presence.requestClose()}
+              >
+                ×
+              </button>
             </div>
 
-            <fieldset className="repositories-access-fieldset" {...getMotionItemProps(3)}>
-              <legend className="sr-only">Available repositories</legend>
-              <div className="repositories-access-grid">
-                {repositories.map((repo) => {
-                  const isActive = selected.has(repo.id);
-                  return (
-                    <label
-                      className={`repositories-access-item ${isActive ? 'is-selected' : ''}`}
-                      key={repo.id}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isActive}
-                        onChange={() => toggle(repo.id)}
-                        className="repositories-access-checkbox"
-                      />
-                      <div className="repositories-access-item__info">
-                        <strong>{repo.fullName}</strong>
-                        <small>
-                          {repo.visibility ?? 'repository'} Â· {repo.defaultBranch ?? 'main'}
-                        </small>
-                      </div>
-                      <span
-                        className={`access-item-state ${isActive ? 'is-active' : 'is-excluded'}`}
-                      >
-                        {isActive ? 'Active' : 'Excluded'}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            </fieldset>
+            <div className="repositories-access-dialog__intro" {...getMotionItemProps(1)}>
+              <h2 id="repositories-access-title">Manage repository access</h2>
+              <p>
+                Select which repositories from{' '}
+                <strong>{primaryInstallation?.accountLogin ?? 'GitHub'}</strong> TRACE should track
+                in this workspace.
+              </p>
+            </div>
 
-            <div className="repositories-access-actions" {...getMotionItemProps(4)}>
-              <div className="repositories-access-actions__left">
-                <button
-                  className="trace-button trace-button--primary"
-                  type="submit"
-                  disabled={status === 'loading'}
-                >
-                  {status === 'loading' ? 'Saving access...' : 'Save repository access'}
-                </button>
-                <Link
-                  className="trace-button trace-button--tertiary"
-                  href="/api/github/install?next=/app/repositories"
-                  onClick={onClose}
-                >
-                  Configure on GitHub â†—
-                </Link>
-              </div>
-              <div className="repositories-access-actions__right">
-                <button
-                  className="trace-button trace-button--secondary"
-                  type="button"
-                  onClick={onClose}
-                >
-                  Cancel
-                </button>
-              </div>
-              {status === 'saved' ? (
-                <span className="access-save-feedback is-success" role="status">
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 14 14"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                    style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }}
+            <form className="repositories-access-form" onSubmit={save}>
+              <div className="repositories-access-toolbar" {...getMotionItemProps(2)}>
+                <span className="repositories-access-toolbar__label">Available repositories</span>
+                <div className="repositories-access-toolbar__actions">
+                  <button
+                    type="button"
+                    className="trace-link-btn"
+                    onClick={() => {
+                      setSelected(new Set(repositories.map((r) => r.id)));
+                      setStatus('idle');
+                    }}
                   >
-                    <path d="M2.5 7.5 5.5 10.5 11.5 3.5" />
-                  </svg>
-                  Repository access saved successfully.
-                </span>
-              ) : null}
-              {status === 'error' ? (
-                <span className="access-save-feedback is-error" role="alert">
-                  Failed to save selection. Please try again.
-                </span>
-              ) : null}
-            </div>
-          </form>
-        </CenteredDialog>
-      </ModalBackdrop>
-    </OverlayPortal>
+                    Select all
+                  </button>
+                  <span className="trace-bullet-sep" aria-hidden="true">
+                    ·
+                  </span>
+                  <button
+                    type="button"
+                    className="trace-link-btn"
+                    onClick={() => {
+                      setSelected(new Set());
+                      setStatus('idle');
+                    }}
+                  >
+                    Deselect all
+                  </button>
+                </div>
+              </div>
+
+              <fieldset className="repositories-access-fieldset" {...getMotionItemProps(3)}>
+                <legend className="sr-only">Available repositories</legend>
+                <div className="repositories-access-grid">
+                  {repositories.map((repo) => {
+                    const isActive = selected.has(repo.id);
+                    return (
+                      <label
+                        className={`repositories-access-item ${isActive ? 'is-selected' : ''}`}
+                        key={repo.id}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isActive}
+                          onChange={() => toggle(repo.id)}
+                          className="repositories-access-checkbox"
+                        />
+                        <div className="repositories-access-item__info">
+                          <strong>{repo.fullName}</strong>
+                          <small>
+                            {repo.visibility ?? 'repository'} · {repo.defaultBranch ?? 'main'}
+                          </small>
+                        </div>
+                        <span
+                          className={`access-item-state ${isActive ? 'is-active' : 'is-excluded'}`}
+                        >
+                          {isActive ? 'Active' : 'Excluded'}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
+
+              <div className="repositories-access-actions" {...getMotionItemProps(4)}>
+                <div className="repositories-access-actions__left">
+                  <button
+                    className="trace-button trace-button--primary"
+                    type="submit"
+                    disabled={status === 'loading'}
+                  >
+                    {status === 'loading' ? 'Saving access...' : 'Save repository access'}
+                  </button>
+                  <Link
+                    className="trace-button trace-button--tertiary"
+                    href="/api/github/install?next=/app/repositories"
+                    onClick={presence.requestClose}
+                  >
+                    Configure on GitHub ↗
+                  </Link>
+                </div>
+                <div className="repositories-access-actions__right">
+                  <button
+                    className="trace-button trace-button--secondary"
+                    type="button"
+                    onClick={presence.requestClose}
+                  >
+                    Cancel
+                  </button>
+                </div>
+                {status === 'saved' ? (
+                  <span className="access-save-feedback is-success" role="status">
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 14 14"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                      style={{
+                        display: 'inline-block',
+                        verticalAlign: 'middle',
+                        marginRight: '6px',
+                      }}
+                    >
+                      <path d="M2.5 7.5 5.5 10.5 11.5 3.5" />
+                    </svg>
+                    Repository access saved successfully.
+                  </span>
+                ) : null}
+                {status === 'error' ? (
+                  <span className="access-save-feedback is-error" role="alert">
+                    Failed to save selection. Please try again.
+                  </span>
+                ) : null}
+              </div>
+            </form>
+          </CenteredDialog>
+        </ModalBackdrop>
+      </OverlayPortal>
+    </PresenceContext.Provider>
   );
 }

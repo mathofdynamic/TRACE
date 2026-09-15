@@ -1,5 +1,5 @@
 /**
- * TRACE Unified Entrance Motion Engine â€” 200ms Physical Runtime
+ * TRACE Unified Entrance Motion Engine — 200ms Physical Runtime
  *
  * Implements the shared TRACE entrance-motion contract:
  * - Opening duration: 200ms

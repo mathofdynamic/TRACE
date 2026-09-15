@@ -3,7 +3,7 @@
 import { useId, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { OverlayPortal, ModalBackdrop, CenteredDialog } from './overlay-portal';
+import { OverlayPortal, ModalBackdrop, CenteredDialog, PresenceContext } from './overlay-portal';
 import { usePresence, getMotionItemProps } from '../../../../lib/entrance-motion';
 import type { DashboardSummary } from '../../../../lib/dashboard';
 import type { TraceSession } from '@trace/auth';
@@ -29,6 +29,17 @@ export type SettingsViewProps = {
 };
 
 export type SettingsTabId = 'workspace' | 'computers' | 'privacy' | 'cli' | 'account';
+
+function initialsForName(value: string | null | undefined) {
+  const parts = (value ?? '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '—';
+  if (parts.length === 1)
+    return Array.from(parts[0] ?? '')
+      .slice(0, 2)
+      .join('')
+      .toUpperCase();
+  return `${Array.from(parts[0] ?? '')[0] ?? ''}${Array.from(parts.at(-1) ?? '')[0] ?? ''}`.toUpperCase();
+}
 
 export function SettingsView({ summary, session, devices: initialDevices }: SettingsViewProps) {
   const router = useRouter();
@@ -171,7 +182,7 @@ export function SettingsView({ summary, session, devices: initialDevices }: Sett
       setRevokeTarget(null);
       router.refresh();
     } catch {
-      setRenameError('An unexpected network error occurred.');
+      setRevokeError('An unexpected network error occurred.');
       setRevokePending(false);
     }
   }
@@ -202,7 +213,7 @@ export function SettingsView({ summary, session, devices: initialDevices }: Sett
             <div className="settings-header__eyebrow-row">
               <span className="eyebrow">Workspace Settings</span>
               <span className="settings-header__divider" aria-hidden="true">
-                Â·
+                ·
               </span>
               <span className="settings-badge settings-badge--boundary">
                 <svg
@@ -302,7 +313,9 @@ export function SettingsView({ summary, session, devices: initialDevices }: Sett
             >
               <div className="settings-panel__header">
                 <div className="settings-panel__identity">
-                  <div className="settings-panel__avatar">N</div>
+                  <div className="settings-panel__avatar">
+                    {initialsForName(summary.workspace.name)}
+                  </div>
                   <div>
                     <h3 className="settings-panel__title">{summary.workspace.name}</h3>
                     <p className="settings-panel__sub">Workspace identity is managed by TRACE</p>
@@ -382,7 +395,7 @@ export function SettingsView({ summary, session, devices: initialDevices }: Sett
                   >
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
-                  Connected
+                  {summary.github.connected ? 'Connected' : 'Not connected'}
                 </span>
               </div>
 
@@ -396,12 +409,16 @@ export function SettingsView({ summary, session, devices: initialDevices }: Sett
                 <div className="settings-fact-item">
                   <dt className="settings-fact-item__label">Last Verification</dt>
                   <dd className="settings-fact-item__val">
-                    Verified through the current workspace connection
+                    {summary.github.connected
+                      ? 'Verified through the current workspace connection'
+                      : 'Status unavailable'}
                   </dd>
                 </div>
                 <div className="settings-fact-item">
                   <dt className="settings-fact-item__label">Default Branch</dt>
-                  <dd className="settings-fact-item__val font-mono">main</dd>
+                  <dd className="settings-fact-item__val font-mono">
+                    {summary.github.defaultBranch ?? 'Default branch unavailable'}
+                  </dd>
                 </div>
                 <div className="settings-fact-item">
                   <dt className="settings-fact-item__label">Webhook Security</dt>
@@ -433,7 +450,7 @@ export function SettingsView({ summary, session, devices: initialDevices }: Sett
               <h2 className="settings-section__title">Authorized Computers</h2>
             </div>
             <span className="settings-section__meta-tag">
-              {activeDevices.length} active Â· {revokedDevices.length} revoked
+              {activeDevices.length} active · {revokedDevices.length} revoked
             </span>
           </div>
 
@@ -511,7 +528,7 @@ export function SettingsView({ summary, session, devices: initialDevices }: Sett
                           </span>
                         </div>
                         <p className="settings-device-row__ids">
-                          ID: {device.id} Â· Org: {device.organizationId}
+                          ID: {device.id} · Org: {device.organizationId}
                         </p>
 
                         {/* Metadata items */}
@@ -521,7 +538,7 @@ export function SettingsView({ summary, session, devices: initialDevices }: Sett
                             {formatDate(device.createdAt)}
                           </span>
                           <span className="meta-sep" aria-hidden="true">
-                            Â·
+                            ·
                           </span>
                           <span>
                             <span className="meta-label">Last used:</span>{' '}
@@ -530,7 +547,7 @@ export function SettingsView({ summary, session, devices: initialDevices }: Sett
                             </strong>
                           </span>
                           <span className="meta-sep" aria-hidden="true">
-                            Â·
+                            ·
                           </span>
                           <span>
                             <span className="meta-label">Expires:</span>{' '}
@@ -620,7 +637,7 @@ export function SettingsView({ summary, session, devices: initialDevices }: Sett
                   <span>Revoked Computers ({revokedDevices.length})</span>
                 </div>
                 <span className="settings-revoked-details__chevron" aria-hidden="true">
-                  â–¼
+                  ▼
                 </span>
               </summary>
 
@@ -635,8 +652,8 @@ export function SettingsView({ summary, session, devices: initialDevices }: Sett
                         </span>
                       </div>
                       <p className="settings-revoked-row__sub">
-                        Revoked {device.revokedAt ? formatDate(device.revokedAt) : 'recently'} Â·
-                        Future synchronization blocked Â· Historical records preserved
+                        Revoked {device.revokedAt ? formatDate(device.revokedAt) : 'recently'} ·
+                        Future synchronization blocked · Historical records preserved
                       </p>
                     </div>
                     <span className="settings-revoked-row__time">
@@ -712,7 +729,7 @@ export function SettingsView({ summary, session, devices: initialDevices }: Sett
               <ul className="settings-privacy-list">
                 <li className="settings-privacy-item">
                   <span className="settings-privacy-item__bullet" aria-hidden="true">
-                    âœ“
+                    ✓
                   </span>
                   <div>
                     <strong>Approved .trace Projections:</strong>
@@ -724,7 +741,7 @@ export function SettingsView({ summary, session, devices: initialDevices }: Sett
                 </li>
                 <li className="settings-privacy-item">
                   <span className="settings-privacy-item__bullet" aria-hidden="true">
-                    âœ“
+                    ✓
                   </span>
                   <div>
                     <strong>Governance Rule Checks:</strong>
@@ -735,7 +752,7 @@ export function SettingsView({ summary, session, devices: initialDevices }: Sett
                 </li>
                 <li className="settings-privacy-item">
                   <span className="settings-privacy-item__bullet" aria-hidden="true">
-                    âœ“
+                    ✓
                   </span>
                   <div>
                     <strong>Architecture Decisions (ADRs):</strong>
@@ -747,7 +764,7 @@ export function SettingsView({ summary, session, devices: initialDevices }: Sett
                 </li>
                 <li className="settings-privacy-item">
                   <span className="settings-privacy-item__bullet" aria-hidden="true">
-                    âœ“
+                    ✓
                   </span>
                   <div>
                     <strong>Cryptographic Hashes & Git Metadata:</strong>
@@ -795,7 +812,7 @@ export function SettingsView({ summary, session, devices: initialDevices }: Sett
                     className="settings-privacy-item__bullet settings-privacy-item__bullet--cross"
                     aria-hidden="true"
                   >
-                    âœ•
+                    ✕
                   </span>
                   <div>
                     <strong>Repository Source Files:</strong>
@@ -810,7 +827,7 @@ export function SettingsView({ summary, session, devices: initialDevices }: Sett
                     className="settings-privacy-item__bullet settings-privacy-item__bullet--cross"
                     aria-hidden="true"
                   >
-                    âœ•
+                    ✕
                   </span>
                   <div>
                     <strong>Inline Code Snippets & Private ASTs:</strong>
@@ -825,7 +842,7 @@ export function SettingsView({ summary, session, devices: initialDevices }: Sett
                     className="settings-privacy-item__bullet settings-privacy-item__bullet--cross"
                     aria-hidden="true"
                   >
-                    âœ•
+                    ✕
                   </span>
                   <div>
                     <strong>Secrets, Env Files & Private Keys:</strong>
@@ -840,7 +857,7 @@ export function SettingsView({ summary, session, devices: initialDevices }: Sett
                     className="settings-privacy-item__bullet settings-privacy-item__bullet--cross"
                     aria-hidden="true"
                   >
-                    âœ•
+                    ✕
                   </span>
                   <div>
                     <strong>Developer Velocity & Surveillance Metrics:</strong>
@@ -1106,14 +1123,14 @@ export function SettingsView({ summary, session, devices: initialDevices }: Sett
             style={{ '--motion-index': 1 } as React.CSSProperties}
           >
             <div className="settings-account-card__info">
-              <div className="settings-account-card__avatar">MM</div>
+              <div className="settings-account-card__avatar">{initialsForName(userName)}</div>
               <div className="settings-account-card__details">
                 <div className="settings-account-card__name-row">
                   <h3 className="settings-account-card__name">{userName}</h3>
                   <span className="settings-account-card__role">Workspace member</span>
                 </div>
                 <p className="settings-account-card__sub">
-                  {userEmail} Â· @{githubHandle}
+                  {userEmail} · @{githubHandle}
                 </p>
               </div>
             </div>
@@ -1180,69 +1197,75 @@ function DeviceRenameModal({
   if (!presence.isMounted) return null;
 
   return (
-    <OverlayPortal>
-      <ModalBackdrop onClose={onClose} ariaLabel="Close dialog">
-        <CenteredDialog size="md" titleId="rename-dialog-title" onClose={onClose}>
-          <div className="trace-dialog__header" {...getMotionItemProps(0)}>
-            <h3 id="rename-dialog-title" className="trace-dialog__title">
-              Rename Authorized Computer
-            </h3>
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={renamePending}
-              className="trace-dialog__close"
-              aria-label="Close dialog"
-            >
-              âœ•
-            </button>
-          </div>
-
-          <form onSubmit={onSubmit} className="settings-modal-form">
-            <div className="settings-form-group" {...getMotionItemProps(1)}>
-              <label htmlFor="device-label-input" className="settings-form-label">
-                Computer Label
-              </label>
-              <input
-                id="device-label-input"
-                type="text"
-                value={renameInput}
-                onChange={(e) => setRenameInput(e.target.value)}
-                disabled={renamePending}
-                maxLength={80}
-                className="trace-input"
-                autoFocus
-              />
-              <p className="settings-form-hint">Device ID: {device.id}</p>
-            </div>
-
-            {renameError ? (
-              <p className="settings-form-error" role="alert">
-                {renameError}
-              </p>
-            ) : null}
-
-            <div className="trace-dialog__actions" {...getMotionItemProps(2)}>
+    <PresenceContext.Provider value={presence}>
+      <OverlayPortal>
+        <ModalBackdrop onRequestClose={presence.requestClose} ariaLabel="Close dialog">
+          <CenteredDialog
+            size="md"
+            titleId="rename-dialog-title"
+            onRequestClose={presence.requestClose}
+          >
+            <div className="trace-dialog__header" {...getMotionItemProps(0)}>
+              <h3 id="rename-dialog-title" className="trace-dialog__title">
+                Rename Authorized Computer
+              </h3>
               <button
                 type="button"
-                onClick={onClose}
+                onClick={presence.requestClose}
                 disabled={renamePending}
-                className="trace-button trace-button--secondary"
+                className="trace-dialog__close"
+                aria-label="Close dialog"
               >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={renamePending || !renameInput.trim()}
-                className="trace-button trace-button--primary"
-              >
-                {renamePending ? 'Saving...' : 'Save Label'}
+                ✕
               </button>
             </div>
-          </form>
-        </CenteredDialog>
-      </ModalBackdrop>
-    </OverlayPortal>
+
+            <form onSubmit={onSubmit} className="settings-modal-form">
+              <div className="settings-form-group" {...getMotionItemProps(1)}>
+                <label htmlFor="device-label-input" className="settings-form-label">
+                  Computer Label
+                </label>
+                <input
+                  id="device-label-input"
+                  type="text"
+                  value={renameInput}
+                  onChange={(e) => setRenameInput(e.target.value)}
+                  disabled={renamePending}
+                  maxLength={80}
+                  className="trace-input"
+                  autoFocus
+                />
+                <p className="settings-form-hint">Device ID: {device.id}</p>
+              </div>
+
+              {renameError ? (
+                <p className="settings-form-error" role="alert">
+                  {renameError}
+                </p>
+              ) : null}
+
+              <div className="trace-dialog__actions" {...getMotionItemProps(2)}>
+                <button
+                  type="button"
+                  onClick={presence.requestClose}
+                  disabled={renamePending}
+                  className="trace-button trace-button--secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={renamePending || !renameInput.trim()}
+                  className="trace-button trace-button--primary"
+                >
+                  {renamePending ? 'Saving...' : 'Save Label'}
+                </button>
+              </div>
+            </form>
+          </CenteredDialog>
+        </ModalBackdrop>
+      </OverlayPortal>
+    </PresenceContext.Provider>
   );
 }
 
@@ -1266,82 +1289,87 @@ function DeviceRevokeModal({
   if (!presence.isMounted) return null;
 
   return (
-    <OverlayPortal>
-      <ModalBackdrop onClose={onClose} ariaLabel="Close dialog">
-        <CenteredDialog size="md" titleId="revoke-dialog-title" onClose={onClose}>
-          <div className="trace-dialog__header" {...getMotionItemProps(0)}>
-            <div className="settings-modal-title-with-icon">
-              <div className="settings-modal-warning-icon">
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
-                </svg>
+    <PresenceContext.Provider value={presence}>
+      <OverlayPortal>
+        <ModalBackdrop onRequestClose={presence.requestClose} ariaLabel="Close dialog">
+          <CenteredDialog
+            size="md"
+            titleId="revoke-dialog-title"
+            onRequestClose={presence.requestClose}
+          >
+            <div className="trace-dialog__header" {...getMotionItemProps(0)}>
+              <div className="settings-modal-title-with-icon">
+                <div className="settings-modal-warning-icon">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+                  </svg>
+                </div>
+                <h3 id="revoke-dialog-title" className="trace-dialog__title">
+                  Revoke Computer Authorization
+                </h3>
               </div>
-              <h3 id="revoke-dialog-title" className="trace-dialog__title">
-                Revoke Computer Authorization
-              </h3>
+              <button
+                type="button"
+                onClick={presence.requestClose}
+                disabled={revokePending}
+                className="trace-dialog__close"
+                aria-label="Close dialog"
+              >
+                ✕
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={revokePending}
-              className="trace-dialog__close"
-              aria-label="Close dialog"
-            >
-              âœ•
-            </button>
-          </div>
 
-          <div className="settings-modal-body" {...getMotionItemProps(1)}>
-            <p className="settings-modal-lead">
-              Are you sure you want to revoke authorization for <strong>â€œ{device.label}â€</strong>
-              ?
-            </p>
-            <div className="settings-modal-note">
-              <p>â€¢ Future local synchronization from this computer will stop immediately.</p>
-              <p>
-                â€¢ Historical project records, AST metrics, and architectural decisions will remain
-                preserved in workspace memory.
+            <div className="settings-modal-body" {...getMotionItemProps(1)}>
+              <p className="settings-modal-lead">
+                Are you sure you want to revoke authorization for <strong>“{device.label}”</strong>?
               </p>
+              <div className="settings-modal-note">
+                <p>• Future local synchronization from this computer will stop immediately.</p>
+                <p>
+                  • Historical project records, AST metrics, and architectural decisions will remain
+                  preserved in workspace memory.
+                </p>
+              </div>
             </div>
-          </div>
 
-          {revokeError ? (
-            <p className="settings-form-error" role="alert">
-              {revokeError}
-            </p>
-          ) : null}
+            {revokeError ? (
+              <p className="settings-form-error" role="alert">
+                {revokeError}
+              </p>
+            ) : null}
 
-          <div className="trace-dialog__actions" {...getMotionItemProps(2)}>
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={revokePending}
-              className="trace-button trace-button--secondary"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={onConfirm}
-              disabled={revokePending}
-              className="trace-button trace-button--secondary trace-button--danger"
-            >
-              {revokePending ? 'Revoking...' : 'Revoke Authorization'}
-            </button>
-          </div>
-        </CenteredDialog>
-      </ModalBackdrop>
-    </OverlayPortal>
+            <div className="trace-dialog__actions" {...getMotionItemProps(2)}>
+              <button
+                type="button"
+                onClick={presence.requestClose}
+                disabled={revokePending}
+                className="trace-button trace-button--secondary"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={onConfirm}
+                disabled={revokePending}
+                className="trace-button trace-button--secondary trace-button--danger"
+              >
+                {revokePending ? 'Revoking...' : 'Revoke Authorization'}
+              </button>
+            </div>
+          </CenteredDialog>
+        </ModalBackdrop>
+      </OverlayPortal>
+    </PresenceContext.Provider>
   );
 }

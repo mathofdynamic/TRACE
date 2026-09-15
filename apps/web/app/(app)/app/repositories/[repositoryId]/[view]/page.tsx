@@ -5,6 +5,7 @@ import {
   deriveTraceProjectState,
   formatDate,
   formatRelativeDate,
+  freshnessLabel,
   presentFindingDetail,
   stateToneClass,
 } from '../../../../../../lib/dashboard-state';
@@ -56,10 +57,10 @@ export default async function RepositoryViewPage({
               className="repository-identity-block__parent-link"
               href={`/app/repositories/${repository.id}`}
             >
-              â† {repository.fullName}
+              ↩ {repository.fullName}
             </Link>
             <span className="repository-identity-block__sep" aria-hidden="true">
-              Â·
+              ·
             </span>
             <span className="repository-identity-block__visibility">{repository.visibility}</span>
           </div>
@@ -129,7 +130,7 @@ export default async function RepositoryViewPage({
                     {change.branch ? (
                       <>
                         <span className="meta-sep" aria-hidden="true">
-                          Â·
+                          ·
                         </span>
                         <code>{change.branch}</code>
                       </>
@@ -137,7 +138,7 @@ export default async function RepositoryViewPage({
                     {change.affectedAreas?.length ? (
                       <>
                         <span className="meta-sep" aria-hidden="true">
-                          Â·
+                          ·
                         </span>
                         <span>{change.affectedAreas.join(', ')}</span>
                       </>
@@ -152,7 +153,7 @@ export default async function RepositoryViewPage({
                       target="_blank"
                       rel="noreferrer"
                     >
-                      Open on GitHub â†—
+                      Open on GitHub ↗
                     </a>
                   </div>
                 ) : null}
@@ -201,14 +202,10 @@ export default async function RepositoryViewPage({
                 </p>
                 <div className="repository-recent-row__meta">
                   <span className="report-freshness-tag" data-freshness={report.freshness}>
-                    {report.freshness === 'needs-refresh'
-                      ? 'Needs refresh'
-                      : report.freshness === 'attention'
-                        ? 'Sync attention'
-                        : 'Current'}
+                    {freshnessLabel(report.freshness)}
                   </span>
                   <span className="meta-sep" aria-hidden="true">
-                    Â·
+                    ·
                   </span>
                   <time dateTime={report.generatedAt}>{formatDate(report.generatedAt)}</time>
                 </div>

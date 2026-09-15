@@ -7,7 +7,7 @@ import {
 } from '../../lib/security-data';
 import { PageHeader, PublicLayout, SectionLabel, TraceMark } from '../components/public';
 
-export const metadata = { title: 'Security & Privacy Ã¢â‚¬â€ TRACE' };
+export const metadata = { title: 'Security & Privacy — TRACE' };
 
 export default function SecurityPage() {
   return (
@@ -77,7 +77,7 @@ export default function SecurityPage() {
                 >
                   <div className="gate-item__badge">
                     <span className="gate-item__icon" aria-hidden="true">
-                      Ã¢â€“Â{' '}
+                      •{' '}
                     </span>
                     <code>{gate.label}</code>
                   </div>
@@ -185,7 +185,7 @@ export default function SecurityPage() {
                 >
                   <div className="not-claimed-point__title">
                     <span className="point-bullet" aria-hidden="true">
-                      Ã¢â‚¬â€
+                      —
                     </span>
                     <strong>{point.label}</strong>
                   </div>
@@ -225,10 +225,10 @@ export default function SecurityPage() {
                 target="_blank"
                 rel="noreferrer"
               >
-                Open Security Advisory Channel Ã¢â€ â€™
+                Open Security Advisory Channel →
               </a>
               <Link className="inline-link" href="/specification">
-                Review Artifact Schema (RFC-001) Ã¢â€ â€™
+                Review Artifact Schema (RFC-001) →
               </Link>
             </div>
           </div>
