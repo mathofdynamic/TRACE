@@ -1,39 +1,39 @@
 import Link from 'next/link';
 import { getAuthenticatedDashboardSummary } from '../../../../lib/dashboard-server';
+import { ChangesView } from '../_components/changes-view';
 
 export default async function ChangesPage() {
   const { summary } = await getAuthenticatedDashboardSummary();
   return (
-    <div className="dashboard-page">
-      <div className="dashboard-page-header">
+    <div className="dashboard-page redesign-page" id="changes-dashboard-page">
+      <header
+        className="redesign-header"
+        data-trace-motion="item"
+        style={{ '--motion-index': 0 } as React.CSSProperties}
+      >
         <div>
-          <p className="section-label">Active changes</p>
-          <h1>Work currently moving through the project.</h1>
-          <p>
-            Pull request snapshots stored from connected GitHub repositories. This is project
-            context, not individual activity scoring.
+          <span className="eyebrow">Active changes</span>
+          <h1>Tracked Changes &amp; Pull Requests</h1>
+          <p className="redesign-header__description">
+            Pull request snapshots synchronized from connected GitHub repositories. Project context
+            and deterministic AST findings without individual activity scoring.
           </p>
         </div>
-      </div>
+      </header>
       {summary.latestChanges.length ? (
-        <div className="record-list">
-          {summary.latestChanges.map((change) => (
-            <article key={change.id}>
-              <span className="record-index">#{change.number}</span>
-              <div>
-                <p className="record-context">{change.repositoryName}</p>
-                <h2>{change.title}</h2>
-                <p>
-                  {change.state} · {change.authorLogin ?? 'Author unavailable'}
-                </p>
-              </div>
-              {change.url ? <a href={change.url}>Open on GitHub</a> : null}
-            </article>
-          ))}
-        </div>
+        <ChangesView
+          changes={summary.latestChanges}
+          repositories={summary.repositories}
+          conflicts={summary.conflicts}
+          attention={summary.attention}
+        />
       ) : (
-        <div className="empty-panel empty-panel--large">
-          <span aria-hidden="true">↗</span>
+        <div
+          className="empty-panel empty-panel--large"
+          data-trace-motion="item"
+          style={{ '--motion-index': 1 } as React.CSSProperties}
+        >
+          <span aria-hidden="true">â†—</span>
           <h2>No active changes stored</h2>
           <p>
             {summary.setup.repositorySelected

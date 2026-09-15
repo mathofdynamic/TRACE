@@ -1,56 +1,42 @@
 import Link from 'next/link';
 import { getAuthenticatedDashboardSummary } from '../../../../lib/dashboard-server';
+import { ConflictsView } from '../_components/conflicts-view';
 
 export default async function ConflictsPage() {
   const { summary } = await getAuthenticatedDashboardSummary();
   return (
-    <div className="dashboard-page">
-      <div className="dashboard-page-header">
+    <div className="dashboard-page conflicts-page-redesign">
+      <div
+        className="dashboard-page-header"
+        data-trace-motion="item"
+        style={{ '--motion-index': 0 } as React.CSSProperties}
+      >
         <div>
-          <p className="section-label">Conflicts</p>
-          <h1>Changes that may be correct alone but incompatible together.</h1>
-          <p>Evidence remains distinct from interpretation.</p>
+          <span className="eyebrow">Engineering Coordination</span>
+          <h1>Active Conflicts</h1>
+          <p>
+            Deterministic cross-PR AST collision discovery and architectural boundary analysis.
+            Evidence remains distinct from interpretation.
+          </p>
         </div>
         <span className="availability-label">
           {summary.conflicts.length ? `${summary.conflicts.length} synced` : 'No records synced'}
         </span>
       </div>
+
       {summary.conflicts.length ? (
-        <div className="conflict-list">
-          {summary.conflicts.map((conflict) => (
-            <article className="dashboard-card synced-record" key={conflict.id}>
-              <div className="card-heading">
-                <div>
-                  <span className="card-label">Possible conflict · Local</span>
-                  <h2>{conflict.title}</h2>
-                </div>
-              </div>
-              <p>{conflict.summary}</p>
-              {conflict.items.map((item) => (
-                <section key={item.id} className="conflict-item">
-                  <span data-severity={item.severity ?? 'medium'}>{item.severity ?? 'review'}</span>
-                  <div>
-                    <h3>{item.title}</h3>
-                    <p>{item.detail}</p>
-                    <h4>Evidence</h4>
-                    <ul>
-                      {item.evidence.map((evidence) => (
-                        <li key={evidence}>{evidence}</li>
-                      ))}
-                    </ul>
-                    <small>
-                      {item.classification === 'deterministic'
-                        ? 'Deterministic evidence'
-                        : `${item.classification ?? 'uncertain'} inference`}
-                    </small>
-                  </div>
-                </section>
-              ))}
-            </article>
-          ))}
-        </div>
+        <ConflictsView
+          conflicts={summary.conflicts}
+          changes={summary.latestChanges}
+          repositories={summary.repositories}
+          attention={summary.attention}
+        />
       ) : (
-        <div className="empty-panel empty-panel--large">
+        <div
+          className="empty-panel empty-panel--large"
+          data-trace-motion="item"
+          style={{ '--motion-index': 1 } as React.CSSProperties}
+        >
           <h2>No conflict records synced</h2>
           <p>
             {summary.setup.repositorySelected

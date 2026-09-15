@@ -34,7 +34,7 @@ export const primaryNavigation: readonly NavigationItem[] = [
 export const secondaryNavigation: readonly NavigationItem[] = [
   { label: 'Activity', href: '/app/activity', icon: 'activity', requires: 'activity' },
   { label: 'Settings', href: '/app/settings', icon: 'settings' },
-  { label: 'Documentation', href: '/docs', icon: 'docs', external: true },
+  { label: 'Documentation', href: '/app/documentation', icon: 'docs' },
 ] as const;
 
 export function isNavigationItemActive(pathname: string, href: string) {

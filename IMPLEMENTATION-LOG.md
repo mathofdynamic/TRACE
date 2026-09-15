@@ -425,3 +425,11 @@
 - Local pilot evidence: `trace analyze` on `mathofdynamic/TRACE` at the current `main` HEAD produced a valid local artifact with 233 supported files, 742 unsupported/file-level files, 7,986 symbols, four deterministic findings, and `sourceCodeSentToProvider: false`. `trace validate` passed. `trace sync --dry-run --json` selected one 4,786-byte artifact, excluded none, and reported `sourceCodeIncluded: false` and `codeSnippetsIncluded: false`.
 - Security scan: no tracked private-key or real token pattern was found. The only `trc_` match is the intentional credential-storage test fixture; the only PEM marker is parser code. `.trace` runtime output and the local private-key file remain ignored/untracked.
 - Remaining owner action: Apply and verify migrations `0004`–`0006` on the designated staging PostgreSQL database, then rerun the real CLI authorization and sync acceptance. Production was not touched.
+
+### Final redesign integration (local review)
+
+- Source baseline: `mathofdynamic/trace-redesign` at `845fd9bb85909e47711a7c12d564d03ee3d34243`.
+- Target baseline: `mathofdynamic/TRACE` at `5e41d8e99e74f2c19631b654de174d1b56e6cb57`.
+- Scope: Ported the finalized presentation system, authenticated shell, real-data view models, public visual surfaces, entrance motion, overlays, responsive behavior, and redesign documentation into the real product.
+- Boundary: Preserved real authentication, database access, GitHub integration, Local TRACE bridge, sync APIs, privacy rules, Cloudflare/OpenNext configuration, and production data semantics. Redesign mock providers, mock sessions, fixture universes, and runtime mock mode were not migrated. No migrations, deployment, or production changes were performed.
+- Verification: Web typecheck, monorepo typecheck, lint, unit tests, production build, Cloudflare build, and Playwright passed; the final E2E suite passed 17/17. Repository-wide format checking retains pre-existing baseline failures; zero redesign-changed files intersect those failures.

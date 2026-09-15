@@ -492,6 +492,7 @@ test.describe('authenticated product journey', () => {
       await expect(
         page.getByRole('heading', { name: 'Which projects should TRACE understand?' }),
       ).toBeVisible();
+      await page.getByRole('button', { name: 'Adjust access' }).click();
       await expect(page.getByRole('button', { name: 'Save repository access' })).toBeVisible();
     } finally {
       await available.cleanup();
@@ -540,6 +541,7 @@ test.describe('authenticated product journey', () => {
       await expect(page.getByText('Approved local records')).toBeVisible();
       await page.goto(`/app/repositories/${seeded.repositoryId}`);
       await expect(page.getByText('Local analysis').first()).toBeVisible();
+      await page.getByText('Technical details & provenance').click();
       await expect(page.getByText('abcdef123456').first()).toBeVisible();
       await page.goto('/app/reports');
       const dailyReport = page
