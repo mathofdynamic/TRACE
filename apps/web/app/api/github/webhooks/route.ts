@@ -1,8 +1,7 @@
-import { eq } from 'drizzle-orm';
 import { PgBoss } from 'pg-boss';
-import { d1Schema, createDatabase, schema } from '@trace/db';
+import { eq } from 'drizzle-orm';
+import { createDatabase, schema } from '@trace/db';
 import type { TraceD1Database } from '@trace/db';
-import { enqueueTraceMessage, type TraceQueueMessage } from '@trace/core';
 import { parseGitHubWebhookEnv } from '@trace/env';
 import { hashWebhookPayload, normalizeGitHubEvent, verifyGitHubSignature } from '@trace/github';
 import {
@@ -10,6 +9,7 @@ import {
   getRequestCloudflareEnv,
   getRequestDatabaseUrl,
 } from '../../../../lib/request-database';
+import { enqueueD1Webhook } from '../../../../lib/d1-webhook-queue';
 
 const MAX_BODY_BYTES = 1_048_576;
 
@@ -65,62 +65,20 @@ export async function POST(request: Request) {
     const { db, client } = await createRequestDatabase();
     const d1 = db as unknown as TraceD1Database;
     try {
-      const [inserted] = await d1
-        .insert(d1Schema.githubWebhookDeliveries)
-        .values({
-          deliveryId,
-          eventName,
-          action,
-          installationId:
-            normalized && 'installationId' in normalized ? String(normalized.installationId) : null,
-          payloadSha256: hashWebhookPayload(rawBody),
-        })
-        .onConflictDoNothing({ target: d1Schema.githubWebhookDeliveries.deliveryId })
-        .returning({ id: d1Schema.githubWebhookDeliveries.id });
-      const existing = inserted
-        ? null
-        : (
-            await d1
-              .select({
-                id: d1Schema.githubWebhookDeliveries.id,
-                status: d1Schema.githubWebhookDeliveries.status,
-              })
-              .from(d1Schema.githubWebhookDeliveries)
-              .where(eq(d1Schema.githubWebhookDeliveries.deliveryId, deliveryId))
-              .limit(1)
-          )[0];
-      const delivery = inserted ?? existing;
-      if (!delivery) {
-        return Response.json({ error: 'Webhook delivery could not be recorded.' }, { status: 503 });
-      }
-      if (!inserted && existing?.status !== 'received') {
-        return Response.json({ accepted: true, duplicate: true });
-      }
-
       const queue = cloudflareEnv.TRACE_QUEUE;
       if (!queue) {
         return Response.json({ error: 'Webhook queue is not configured.' }, { status: 503 });
       }
-      await enqueueTraceMessage(
-        { send: (message: TraceQueueMessage) => queue.send(message) },
-        {
-          version: '1',
-          type: 'github.webhook.process',
-          idempotencyKey: deliveryId,
-          enqueuedAt: new Date().toISOString(),
-          deliveryId,
-          eventName,
-          event: normalized,
-        },
-      );
-      await d1
-        .update(d1Schema.githubWebhookDeliveries)
-        .set({ status: normalized ? 'queued' : 'ignored' })
-        .where(eq(d1Schema.githubWebhookDeliveries.id, delivery.id));
-      return Response.json(
-        { accepted: true, queued: Boolean(normalized), normalized: Boolean(normalized) },
-        { status: 202 },
-      );
+      const result = await enqueueD1Webhook({
+        db: d1,
+        queue: { send: (message) => queue.send(message) },
+        deliveryId,
+        eventName,
+        action,
+        normalized,
+        payloadSha256: hashWebhookPayload(rawBody),
+      });
+      return Response.json(result, { status: 202 });
     } catch {
       return Response.json({ error: 'Webhook delivery could not be queued.' }, { status: 503 });
     } finally {

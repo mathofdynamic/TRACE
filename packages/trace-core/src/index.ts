@@ -156,12 +156,23 @@ export const defaultLocalSyncPolicy: SyncPolicy = {
 };
 
 export {
+  enqueueCloudflareTraceMessage,
   enqueueTraceMessage,
   implementedCloudflareQueueMessageTypes,
+  isCloudflareQueueMessageType,
+  parseCloudflareQueueMessage,
   parseTraceQueueMessage,
+  traceQueueJobRegistry,
   traceQueueMessageSchema,
 } from './queue.js';
-export type { TraceQueueMessage, TraceQueueMessageType, TraceQueueSender } from './queue.js';
+export type {
+  CloudflareTraceQueueMessage,
+  TraceQueueJobClassification,
+  TraceQueueJobDescriptor,
+  TraceQueueMessage,
+  TraceQueueMessageType,
+  TraceQueueSender,
+} from './queue.js';
 export { processGitHubWebhookEvent, traceGitHubEventSchema } from './github-events.js';
 export type {
   GitHubIngestionResult,

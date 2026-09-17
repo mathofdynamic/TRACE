@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chromium } from '@playwright/test';
+import { chromium, type Locator, type Page } from '@playwright/test';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const web = path.join(root, 'apps', 'web');
@@ -12,6 +12,15 @@ const config = path.join(web, 'wrangler.jsonc');
 const authSecret = 'trace-d1-e2e-secret-change-this-32-chars';
 const baseUrl = 'http://127.0.0.1:8787';
 const persistence = path.join(root, '.trace-cache', `d1-e2e-${randomUUID()}`);
+const d1TestEnvironment = {
+  ...process.env,
+  NO_UPDATE_NOTIFIER: '1',
+  WRANGLER_SEND_METRICS: 'false',
+  // This deliberately invalid legacy URL proves that the D1 worker does not
+  // fall back to PostgreSQL when the D1 binding is present.
+  DATABASE_URL: '',
+  TRACE_DATABASE_DRIVER: 'd1',
+};
 
 if (!existsSync(path.join(web, '.open-next', 'worker.js'))) {
   throw new Error('D1 E2E requires apps/web/.open-next/worker.js; run pnpm cf:build first.');
@@ -42,13 +51,58 @@ function runWrangler(args: string[]) {
     cwd: root,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, NO_UPDATE_NOTIFIER: '1', WRANGLER_SEND_METRICS: 'false' },
+    env: d1TestEnvironment,
   });
   if (result.status !== 0) {
     throw new Error(
       `Wrangler failed (${String(result.status)}): ${result.stderr.slice(-2_000)}${result.stdout.slice(-2_000)}`,
     );
   }
+}
+
+async function assertNoPageOverflow(page: Page, route: string) {
+  const metrics = await page.evaluate(() => ({
+    documentWidth: document.documentElement.scrollWidth,
+    viewportWidth: document.documentElement.clientWidth,
+    bodyWidth: document.body.scrollWidth,
+  }));
+  if (
+    metrics.documentWidth > metrics.viewportWidth + 1 ||
+    metrics.bodyWidth > metrics.viewportWidth + 1
+  ) {
+    throw new Error(
+      `D1 browser route ${route} has page-level horizontal overflow: ${JSON.stringify(metrics)}`,
+    );
+  }
+}
+
+async function waitForDialog(page: Page, name?: RegExp | string): Promise<Locator> {
+  const dialog = name ? page.getByRole('dialog', { name }) : page.getByRole('dialog').last();
+  await dialog.waitFor({ state: 'visible', timeout: 10_000 });
+  return dialog;
+}
+
+async function closeDialog(page: Page, dialog: Locator, label: string, requireClosingState = true) {
+  if (requireClosingState) {
+    await dialog.focus();
+  }
+  await page.keyboard.press('Escape');
+  if (requireClosingState) {
+    let state = await dialog.getAttribute('data-presence-state');
+    if (state !== 'closing') {
+      await page.waitForTimeout(10);
+      state = await dialog.getAttribute('data-presence-state');
+    }
+    if (state !== 'closing') {
+      const reducedMotion = await page.evaluate(
+        () => window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+      );
+      if (!reducedMotion && (await dialog.count()) > 0) {
+        throw new Error(`${label} did not expose a closing presence state`);
+      }
+    }
+  }
+  await dialog.waitFor({ state: 'detached', timeout: 5_000 });
 }
 
 async function waitForHealth(server: ChildProcess) {
@@ -93,6 +147,7 @@ async function main() {
   const token = sessionCookie(session);
   const now = Date.now();
   const headCommit = 'a'.repeat(40);
+  const remoteHeadCommit = 'b'.repeat(40);
   const operationManifest = {
     protocolVersion: '0.1',
     schemaVersion: '0.1',
@@ -145,7 +200,7 @@ async function main() {
     `INSERT INTO organizations (id, name, slug) VALUES (${sql(organizationId)}, 'D1 E2E Workspace', ${sql(`d1-e2e-${userId.slice(0, 8)}`)})`,
     `INSERT INTO memberships (id, organization_id, user_id, role) VALUES (${sql(randomUUID())}, ${sql(organizationId)}, ${sql(userId)}, 'owner')`,
     `INSERT INTO github_installations (id, organization_id, github_installation_id, account_login, account_type, state) VALUES (${sql(installationId)}, ${sql(organizationId)}, '9007199254740993', ${sql(session.githubLogin)}, 'User', 'active')`,
-    `INSERT INTO github_repositories (id, organization_id, installation_id, github_repository_id, owner, name, full_name, default_branch, visibility, state, remote_head_sha, last_synchronized_at) VALUES (${sql(repositoryId)}, ${sql(organizationId)}, ${sql(installationId)}, '9007199254740995', ${sql(session.githubLogin)}, 'trace', ${sql(`${session.githubLogin}/trace`)}, 'main', 'private', 'active', ${sql(headCommit)}, ${sql(now)})`,
+    `INSERT INTO github_repositories (id, organization_id, installation_id, github_repository_id, owner, name, full_name, default_branch, visibility, state, remote_head_sha, last_synchronized_at) VALUES (${sql(repositoryId)}, ${sql(organizationId)}, ${sql(installationId)}, '9007199254740995', ${sql(session.githubLogin)}, 'trace', ${sql(`${session.githubLogin}/trace`)}, 'main', 'private', 'active', ${sql(remoteHeadCommit)}, ${sql(now)})`,
     `INSERT INTO github_installation_repositories (id, installation_id, github_repository_id, selected, permissions) VALUES (${sql(randomUUID())}, ${sql(installationId)}, '9007199254740995', 1, ${sql(JSON.stringify({ metadata: 'read' }))})`,
     `INSERT INTO analysis_runs (id, organization_id, repository_id, idempotency_key, profile, schema_version, head_sha, status, result) VALUES (${sql(analysisRunId)}, ${sql(organizationId)}, ${sql(repositoryId)}, ${sql(`d1-e2e-analysis-${analysisRunId}`)}, 'local-sync', '0.1', ${sql(headCommit)}, 'completed', ${sql(JSON.stringify({ title: 'D1 E2E analysis', summary: 'Persisted D1 analysis', origin: 'local' }))})`,
     `INSERT INTO analysis_findings (id, analysis_run_id, external_id, title, detail, severity, classification, evidence) VALUES (${sql(findingId)}, ${sql(analysisRunId)}, 'finding-d1-e2e', 'D1 E2E finding', 'A deterministic finding from the isolated D1 fixture.', 'medium', 'deterministic', ${sql(JSON.stringify([`commit:${headCommit}`]))})`,
@@ -209,10 +264,12 @@ async function main() {
         '8787',
         '--var',
         `TRACE_AUTH_SECRET:${authSecret}`,
+        '--var',
+        'TRACE_PUBLIC_URL:http://127.0.0.1:8787',
       ],
       {
         cwd: root,
-        env: { ...process.env, NO_UPDATE_NOTIFIER: '1', WRANGLER_SEND_METRICS: 'false' },
+        env: d1TestEnvironment,
         stdio: ['ignore', 'pipe', 'pipe'],
       },
     );
@@ -226,15 +283,76 @@ async function main() {
 
     const browser = await chromium.launch({ headless: true });
     try {
-      const context = await browser.newContext({ baseURL: baseUrl });
+      const context = await browser.newContext({
+        baseURL: baseUrl,
+        reducedMotion: 'no-preference',
+      });
+      // The local Wrangler runtime can tear down while Next prefetches every
+      // navigation target in parallel. Prefetch is not part of the browser
+      // parity contract, so keep the harness focused on explicit navigations.
+      await context.route('**/*', async (route) => {
+        const headers = route.request().headers();
+        if (headers['next-router-prefetch'] === '1' || headers.purpose === 'prefetch') {
+          await route.abort();
+          return;
+        }
+        await route.continue();
+      });
+      const unauthenticatedContext = await browser.newContext({ baseURL: baseUrl });
+      try {
+        const protectedResponse = await unauthenticatedContext.request.get('/app', {
+          maxRedirects: 0,
+        });
+        if (protectedResponse.status() !== 307) {
+          throw new Error(
+            `Unauthenticated /app returned ${protectedResponse.status()} instead of a redirect`,
+          );
+        }
+        const location = protectedResponse.headers().location;
+        const redirectUrl = location ? new URL(location, baseUrl) : null;
+        if (
+          redirectUrl?.pathname !== '/sign-in' ||
+          redirectUrl.searchParams.get('next') !== '/app'
+        ) {
+          throw new Error(`Unauthenticated /app redirect was not scoped to sign-in: ${location}`);
+        }
+        const signInResponse = await unauthenticatedContext.request.get('/sign-in');
+        if (!signInResponse.ok()) {
+          throw new Error(`Sign-in route returned ${signInResponse.status()}`);
+        }
+      } finally {
+        await unauthenticatedContext.close();
+      }
       await context.addCookies([
         { name: 'trace_session', value: token, url: baseUrl, httpOnly: true, sameSite: 'Lax' },
       ]);
       const page = await context.newPage({ viewport: { width: 390, height: 844 } });
+      let allowedNavigationPath: string | null = null;
+      await context.route('**/*', async (route) => {
+        const request = route.request();
+        const requestPath = new URL(request.url()).pathname;
+        const headers = request.headers();
+        const isPrefetch =
+          headers['next-router-prefetch'] === '1' || headers.purpose === 'prefetch';
+        const isAppDocument = request.method() === 'GET' && requestPath.startsWith('/app');
+        if (isPrefetch || (isAppDocument && requestPath !== allowedNavigationPath)) {
+          await route.abort();
+          return;
+        }
+        await route.continue();
+      });
+      const navigate = async (pathname: string) => {
+        allowedNavigationPath = pathname;
+        try {
+          await page.goto(pathname, { waitUntil: 'domcontentloaded', timeout: 120_000 });
+        } finally {
+          allowedNavigationPath = null;
+        }
+      };
       const health = await context.request.get('/api/health');
       if (!health.ok()) throw new Error(`D1 health failed with ${health.status()}`);
       try {
-        await page.goto('/app', { waitUntil: 'commit', timeout: 120_000 });
+        await navigate('/app');
       } catch (error) {
         throw new Error(
           `D1 dashboard navigation failed: ${error instanceof Error ? error.message : String(error)}\n${serverLog}`,
@@ -255,47 +373,253 @@ async function main() {
           `D1 dashboard did not render the seeded repository.\n${(await page.locator('body').innerText()).slice(0, 2_000)}\n${serverLog}`,
         );
       }
-      await page.goto('/app/repositories', { waitUntil: 'commit', timeout: 120_000 });
-      await page.getByText(`${session.githubLogin}/trace`).first().waitFor({
-        state: 'visible',
-        timeout: 20_000,
-      });
-      const routeChecks: Array<[string, string]> = [
-        [`/app/repositories/${repositoryId}`, 'D1 E2E finding'],
-        [`/app/repositories/${repositoryId}/pull-requests`, 'D1 E2E change'],
-        [`/app/repositories/${repositoryId}/findings`, 'D1 E2E finding'],
-        [`/app/repositories/${repositoryId}/reports`, 'D1 E2E Daily Report'],
-        ['/app/changes', 'D1 E2E change'],
-        ['/app/conflicts', 'D1 E2E conflict'],
-        ['/app/reports', 'D1 E2E Daily Report'],
-        [`/app/reports/${dailyReportId}`, 'D1 E2E Daily Report'],
-        [`/app/reports/${weeklyReportId}`, 'D1 E2E Weekly Report'],
-        ['/app/decisions', 'D1 E2E decision'],
-        ['/app/rules', 'D1 E2E rule'],
-        ['/app/activity', 'Local analysis synced'],
-        ['/app/settings', 'Authorized Computers'],
-        ['/app/documentation', 'Authoritative documentation'],
-      ];
-      for (const [route, expectedText] of routeChecks) {
-        const response = await context.request.get(route, { timeout: 120_000 });
-        const responseBody = await response.text();
-        if (!response.ok()) {
-          throw new Error(
-            `D1 route ${route} returned ${response.status()}.\n${responseBody.slice(0, 4_000)}`,
-          );
-        }
-        if (!responseBody.includes(expectedText)) {
-          throw new Error(
-            `D1 route ${route} did not render ${expectedText}.\n${responseBody.slice(0, 4_000)}`,
-          );
-        }
+      // Exercise the real authenticated UI rather than relying only on route request-smokes.
+      // The fixture deliberately has a remote head different from its local analysis so the
+      // dashboard must present the needs-refresh workflow.
+      await navigate('/app');
+      try {
+        await page.getByRole('heading', { name: 'Needs refresh' }).waitFor({
+          state: 'visible',
+          timeout: 10_000,
+        });
+      } catch {
+        throw new Error(
+          `D1 overview did not render the needs-refresh state at ${page.url()} (server exit ${String(server?.exitCode)}).\n${(await page.locator('body').innerText()).slice(0, 4_000)}\n${serverLog}`,
+        );
+      }
+      await assertNoPageOverflow(page, '/app');
+
+      const repositoryTrigger = page.getByRole('button', { name: /^Current repository:/ });
+      await repositoryTrigger.click();
+      const switcher = await waitForDialog(page, 'Switch repository');
+      const repositorySearch = switcher.getByRole('textbox', { name: 'Search repositories' });
+      await repositorySearch.fill('trace');
+      await switcher
+        .getByText(`${session.githubLogin}/trace`)
+        .first()
+        .waitFor({ state: 'visible' });
+      await closeDialog(page, switcher, 'Project switcher', false);
+      if (!(await repositoryTrigger.evaluate((element) => element === document.activeElement))) {
+        throw new Error('Project switcher did not restore focus to its trigger');
+      }
+
+      const updateTrigger = page.getByRole('button', { name: 'Update TRACE', exact: true });
+      await updateTrigger.click();
+      const localAction = await waitForDialog(page, /Update TRACE/);
+      const localActionText = await localAction.innerText();
+      const analyzeIndex = localActionText.indexOf('trace analyze');
+      const dryRunIndex = localActionText.indexOf('trace sync --dry-run');
+      const syncIndex = localActionText.indexOf('trace sync', dryRunIndex + 1);
+      if (!(analyzeIndex >= 0 && dryRunIndex > analyzeIndex && syncIndex > dryRunIndex)) {
+        throw new Error(`Needs-refresh commands are not ordered correctly:\n${localActionText}`);
+      }
+      if (!localActionText.includes('Analysis stays on your computer')) {
+        throw new Error('Local TRACE panel omitted its local-analysis boundary');
+      }
+      if ((await page.evaluate(() => document.body.style.overflow)) !== 'hidden') {
+        throw new Error('Local TRACE dialog did not lock body scrolling');
+      }
+      if ((await localAction.getAttribute('data-presence-state')) !== 'open') {
+        throw new Error('Local TRACE dialog did not reach the open presence state');
+      }
+      await closeDialog(page, localAction, 'Local TRACE action panel');
+      if ((await page.evaluate(() => document.body.style.overflow)) !== '') {
+        throw new Error('Local TRACE dialog did not restore body scrolling');
+      }
+      if (!(await updateTrigger.evaluate((element) => element === document.activeElement))) {
+        throw new Error('Local TRACE dialog did not restore focus to its trigger');
+      }
+
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await navigate('/app/repositories');
+      const adjustAccess = page.getByRole('button', { name: 'Adjust access', exact: true });
+      try {
+        await adjustAccess.click({ timeout: 10_000 });
+      } catch {
+        throw new Error(
+          `Repository access control did not render at ${page.url()} (server exit ${String(server?.exitCode)}).\n${(await page.locator('body').innerText()).slice(0, 4_000)}\n${serverLog}`,
+        );
+      }
+      const accessDialog = await waitForDialog(page, 'Manage repository access');
+      const accessCheckbox = accessDialog.locator('input[type="checkbox"]').first();
+      const initiallySelected = await accessCheckbox.isChecked();
+      await accessCheckbox.click();
+      if ((await accessCheckbox.isChecked()) === initiallySelected) {
+        throw new Error('Repository access checkbox did not deselect');
+      }
+      const deselectResponsePromise = page.waitForResponse(
+        (response) =>
+          response.url().endsWith('/api/github/repositories') &&
+          response.request().method() === 'POST',
+      );
+      await accessDialog
+        .getByRole('button', { name: 'Save repository access', exact: true })
+        .click();
+      const deselectResponse = await deselectResponsePromise;
+      if (!deselectResponse.ok()) {
+        throw new Error(
+          `Repository access deselect returned ${deselectResponse.status()}: ${await deselectResponse.text()}`,
+        );
+      }
+      await accessDialog
+        .getByText('Repository access saved successfully.', { exact: true })
+        .waitFor({ state: 'visible' });
+      await closeDialog(page, accessDialog, 'Repository access dialog');
+
+      // Reload the server projection to prove the deselected repository remains
+      // discoverable and that the mutation was persisted in D1.
+      await navigate('/app/repositories');
+      await page.getByRole('button', { name: 'Adjust access', exact: true }).click();
+      const reloadedAccessDialog = await waitForDialog(page, 'Manage repository access');
+      const reloadedCheckbox = reloadedAccessDialog.locator('input[type="checkbox"]').first();
+      if (await reloadedCheckbox.isChecked()) {
+        throw new Error('Deselect was not persisted to the D1 repository projection');
+      }
+      await reloadedCheckbox.click();
+      if (!(await reloadedCheckbox.isChecked())) {
+        throw new Error('Repository access checkbox did not reselect');
+      }
+      const reselectResponsePromise = page.waitForResponse(
+        (response) =>
+          response.url().endsWith('/api/github/repositories') &&
+          response.request().method() === 'POST',
+      );
+      await reloadedAccessDialog
+        .getByRole('button', { name: 'Save repository access', exact: true })
+        .click();
+      const reselectResponse = await reselectResponsePromise;
+      if (!reselectResponse.ok()) {
+        throw new Error(
+          `Repository access reselect returned ${reselectResponse.status()}: ${await reselectResponse.text()}`,
+        );
+      }
+      await reloadedAccessDialog
+        .getByText('Repository access saved successfully.', { exact: true })
+        .waitFor({ state: 'visible' });
+      await closeDialog(page, reloadedAccessDialog, 'Repository access dialog');
+
+      await navigate(`/app/repositories/${repositoryId}`);
+      try {
+        await page.getByRole('heading', { name: 'What TRACE knows' }).waitFor({
+          state: 'visible',
+          timeout: 10_000,
+        });
+      } catch {
+        throw new Error(
+          `Repository detail did not render at ${page.url()} (server exit ${String(server?.exitCode)}).\n${(await page.locator('body').innerText()).slice(0, 4_000)}\n${serverLog}`,
+        );
+      }
+      const findingReview = page.getByRole('button', { name: 'Review', exact: true }).first();
+      await findingReview.click();
+      const findingDialog = await waitForDialog(page);
+      const findingDialogText = await findingDialog.innerText();
+      if (!findingDialogText.toLowerCase().includes('trace evidence records')) {
+        throw new Error(
+          `Finding detail did not distinguish TRACE evidence records:\n${findingDialogText}`,
+        );
+      }
+      await closeDialog(page, findingDialog, 'Finding detail');
+
+      await navigate('/app/changes');
+      const changeInspect = page
+        .getByRole('button', { name: 'Inspect details', exact: true })
+        .first();
+      await changeInspect.click();
+      await closeDialog(page, await waitForDialog(page), 'Change inspect');
+
+      await navigate('/app/conflicts');
+      const conflictInspect = page
+        .getByRole('button', { name: 'Inspect coordination plan', exact: true })
+        .first();
+      await conflictInspect.click();
+      await closeDialog(page, await waitForDialog(page), 'Conflict inspect');
+
+      await navigate('/app/reports');
+      await assertNoPageOverflow(page, '/app/reports');
+      await page.getByText('D1 E2E Daily Report').first().waitFor({ state: 'visible' });
+      const quickInspect = page.getByRole('button', { name: /Quick inspect report/ }).first();
+      await quickInspect.waitFor({ state: 'visible' });
+      await quickInspect.click();
+      await page.waitForTimeout(100);
+      await closeDialog(page, await waitForDialog(page), 'Report quick inspect');
+
+      for (const [reportId, expectedTitle] of [
+        [dailyReportId, 'D1 E2E Daily Report'],
+        [weeklyReportId, 'D1 E2E Weekly Report'],
+      ] as const) {
+        await navigate(`/app/reports/${reportId}`);
+        await page.getByRole('heading', { name: expectedTitle }).waitFor({ state: 'visible' });
+        await assertNoPageOverflow(page, `/app/reports/${reportId}`);
+        await page.getByRole('tab', { name: 'Canonical TRACE Markdown' }).click();
+        await page.locator('pre.raw-pre').waitFor({ state: 'visible' });
+        await assertNoPageOverflow(page, `/app/reports/${reportId}#raw`);
+      }
+
+      await navigate('/app/decisions');
+      await page.getByRole('button', { name: 'Draft decision prompt', exact: true }).click();
+      const decisionDialog = await waitForDialog(page);
+      if (
+        !(await decisionDialog.innerText())
+          .toLowerCase()
+          .includes('browser does not mutate repository')
+      ) {
+        throw new Error(
+          `Decision prompt builder did not expose copy-only semantics:\n${await decisionDialog.innerText()}`,
+        );
+      }
+      await closeDialog(page, decisionDialog, 'Decision prompt builder');
+
+      await navigate('/app/rules');
+      await page.getByRole('button', { name: 'Draft rule prompt', exact: true }).click();
+      const ruleDialog = await waitForDialog(page);
+      if (
+        !(await ruleDialog.innerText()).toLowerCase().includes('browser does not mutate repository')
+      ) {
+        throw new Error('Rule prompt builder did not expose copy-only semantics');
+      }
+      await closeDialog(page, ruleDialog, 'Rule prompt builder');
+
+      await navigate('/app/activity');
+      const activitySearch = page.getByPlaceholder(/Search activity events/);
+      await activitySearch.fill('Local analysis');
+      await page.getByText('Local analysis synced').first().waitFor({ state: 'visible' });
+
+      await navigate('/app/settings');
+      await page.getByRole('tab', { name: /Authorized Computers/ }).click();
+      await page
+        .getByRole('heading', { name: 'Authorized Computers' })
+        .waitFor({ state: 'visible' });
+      const renameTrigger = page.getByRole('button', { name: 'Rename', exact: true }).first();
+      await renameTrigger.click();
+      await closeDialog(
+        page,
+        await waitForDialog(page, 'Rename Authorized Computer'),
+        'Rename dialog',
+      );
+      const revokeTrigger = page.getByRole('button', { name: 'Revoke', exact: true }).first();
+      await revokeTrigger.click();
+      await closeDialog(
+        page,
+        await waitForDialog(page, 'Revoke Computer Authorization'),
+        'Revoke dialog',
+      );
+
+      await navigate('/app/documentation');
+      await page.getByText('Authoritative documentation').first().waitFor({ state: 'visible' });
+
+      // Recheck document-level overflow at the required responsive widths on the real D1 app.
+      for (const width of [390, 768, 1024, 1440]) {
+        await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+        await navigate('/app');
+        await page.getByRole('heading', { name: 'Needs refresh' }).waitFor({ state: 'visible' });
+        await assertNoPageOverflow(page, `/app@${width}`);
       }
       await context.close();
     } finally {
       await browser.close();
     }
     process.stdout.write(
-      'D1 Playwright E2E passed: health, persisted session, dashboard, and repositories.\n',
+      'D1 Playwright E2E passed: authenticated routes, repository access, local TRACE workflow, overlays, reports, prompt builders, settings, and responsive overflow checks.\n',
     );
   } finally {
     if (server && server.exitCode === null) {

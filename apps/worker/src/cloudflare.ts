@@ -6,6 +6,7 @@ import {
 } from '@trace/db';
 import {
   implementedCloudflareQueueMessageTypes,
+  isCloudflareQueueMessageType,
   parseTraceQueueMessage,
   processGitHubWebhookEvent,
   type TraceQueueMessage,
@@ -74,9 +75,17 @@ export async function processTraceQueueBatch(messages: readonly TraceQueueDelive
     }
 
     try {
+      if (!isCloudflareQueueMessageType(message.type)) {
+        logger.info('Queue message deferred: handler is not implemented', {
+          messageId: queuedMessage.id,
+          type: message.type,
+        });
+        queuedMessage.retry({ delaySeconds: 60 });
+        continue;
+      }
       const result = await handleTraceQueueMessage(message, env);
       if (result.status === 'not-implemented') {
-        logger.info('Queue message deferred: handler is not implemented', {
+        logger.error('Queue message rejected: handler registry is inconsistent', {
           messageId: queuedMessage.id,
           type: message.type,
         });

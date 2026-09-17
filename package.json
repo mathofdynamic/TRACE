@@ -23,6 +23,7 @@
     "test:d1": "tsx scripts/test-d1-local.ts",
     "test:d1:parity": "tsx scripts/test-d1-parity.ts",
     "test:d1:github": "tsx scripts/test-d1-github-ingestion.ts",
+    "test:d1:cf26": "tsx scripts/test-d1-cf26.ts",
     "test:d1:e2e": "tsx scripts/test-d1-e2e.ts",
     "dev:d1": "pnpm --filter @trace/web cf:dev:d1",
     "db:migrate": "pnpm --filter @trace/db db:migrate",

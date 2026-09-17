@@ -373,6 +373,7 @@ pnpm db:d1:generate
 pnpm db:d1:migrate:local
 pnpm test:d1
 pnpm test:d1:parity
+pnpm test:d1:cf26
 pnpm dev:d1
 ```
 
@@ -382,8 +383,12 @@ workspace isolation, provider-ID precision, CLI authorization, webhook
 deduplication, sync idempotency, freshness, and required indexes. `test:d1:e2e`
 creates a fresh local D1 store, applies the migration, seeds a signed session,
 starts the OpenNext worker with Wrangler's `local-d1` environment, and runs the
-core browser flow. `dev:d1` starts the same local environment interactively;
-neither command seeds production or staging data.
+authenticated product flow against D1. `test:d1:cf26` verifies the signed
+GitHub webhook → D1 → Queue → shared-ingestion-handler path, duplicate delivery
+and queue replay idempotency, unsupported-message retry behavior, tenant
+rejection, and representative indexed query plans. `dev:d1` starts the same
+local environment interactively; neither command seeds production or staging
+data.
 
 ### Query and index audit
 
@@ -451,3 +456,49 @@ placeholders, so full application parity and cutover are not claimed.
   D1 domain parity and remote D1/Queue cutover are not claimed. PostgreSQL,
   Hyperdrive, pg-boss, and the external Node worker remain in place for
   rollback/reference use.
+
+### Phase CF2.6 production-reachable Queue closure and full D1 browser parity
+
+- Status: Local parity proof complete for the production-reachable denominator;
+  no remote Cloudflare resources, migrations, deployment, push, or merge were
+  performed.
+- Date: 2026-09-17
+- Reachability denominator: The historical twelve pg-boss names are not twelve
+  active product jobs. The current source graph reaches two Cloudflare job
+  types: the D1 schema health probe and `github.webhook.process`. The latter is
+  the only product business job. Installation/repository/PR/issue sync names
+  have no current producer, replay is legacy-only, and analysis/report/conflict/
+  reconciliation names are log-only placeholders with no current producer.
+  This inventory is recorded in `DOC/cloudflare-queue-parity.md` and enforced
+  by `traceQueueJobRegistry`.
+- Queue safeguards: The D1 producer accepts only registered Cloudflare-capable
+  types. The consumer validates the discriminated contract, retries malformed,
+  unsupported, and failed messages, and acknowledges only completed handlers.
+  Unsupported historical names therefore cannot be silently treated as
+  successful work or emitted by the current D1 webhook route.
+- D1 browser parity: `scripts/test-d1-e2e.ts` now runs a fresh local D1 schema,
+  seeds a signed persisted session and real projection records, and exercises
+  the authenticated shell, repository switch/access, Needs refresh Local TRACE
+  workflow, repository detail/finding, Changes, Conflicts, Reports/Quick
+  Inspect/native daily and weekly detail, Decisions and Rules prompt builders,
+  Activity, Settings, dashboard Documentation, focus/body-scroll overlay
+  behavior, and responsive overflow at 390/768/1024/1440px. The runner sets an
+  explicit D1 driver and an empty legacy database URL; it does not connect to
+  PostgreSQL, Hyperdrive, or pg-boss.
+- End-to-end Queue proof: `scripts/test-d1-cf26.ts` verifies a signed realistic
+  pull-request webhook is deduplicated in D1, queued as a bounded reference,
+  consumed by the Cloudflare adapter, and persisted through the shared D1
+  handler. Replayed deliveries and queue messages do not duplicate state;
+  unsupported placeholder messages retry without acknowledgement; simulated
+  D1 failure retries; tenant mismatch is rejected; and representative D1
+  query plans use the expected tenant/provider indexes.
+- Sync scope: The current D1 sync flow has no Queue dependency, so a sync →
+  Queue assertion is not applicable. Sync remains local TRACE → D1 and keeps
+  its existing idempotency and source-free manifest contract.
+- Legacy boundary: PostgreSQL, Hyperdrive, pg-boss, and the external Node worker
+  remain intact as fallback/reference infrastructure. The legacy PostgreSQL
+  Playwright suite remains separate and may still require its historical local
+  database; this does not participate in the Cloudflare-native D1 parity gate.
+- Result: All production-reachable Cloudflare jobs are implemented (2/2,
+  including one infrastructure probe and one business handler). Full remote
+  D1/Queue cutover is intentionally deferred to CF3.

@@ -491,3 +491,38 @@
   uses its PostgreSQL fixture, and remote D1/Queue provisioning is deferred to
   CF3. PostgreSQL, Hyperdrive, pg-boss, and the external Node worker remain
   intentionally intact.
+
+### Phase CF2.6 production-reachable Queue closure and full D1 browser parity
+
+- Status: Local parity proof complete for the production-reachable queue
+  denominator; no remote Cloudflare resources, migrations, deployment, push,
+  or merge performed.
+- Date: 2026-09-17
+- Queue reachability: the current source graph reaches two Cloudflare job types:
+  `system.healthcheck` and `github.webhook.process`. The latter is the only
+  product business job. The remaining historical pg-boss names are explicitly
+  classified as unused, legacy-only, or log-only placeholders in
+  `DOC/cloudflare-queue-parity.md`; `traceQueueJobRegistry` prevents dormant
+  names from being emitted through the D1 producer.
+- Queue safety: Cloudflare messages use the existing strict versioned schema.
+  The consumer retries malformed, unsupported, and failed messages and only
+  acknowledges completed handlers. A signed pull-request webhook was proven
+  locally through D1 delivery dedupe, Queue publication, the shared GitHub
+  ingestion handler, duplicate delivery/replay, tenant rejection, and a
+  simulated D1 retry.
+- Browser parity: `scripts/test-d1-e2e.ts` now provisions fresh local D1,
+  seeds a persisted signed session and real projection records, then exercises
+  authenticated navigation and interactions across repository access,
+  Needs-refresh Local TRACE commands, repository/finding detail, Changes,
+  Conflicts, Reports/Quick Inspect/daily/weekly detail, Decisions and Rules
+  prompt builders, Activity, Settings, Documentation, overlays, focus/body
+  scroll lifecycle, and responsive overflow at 390/768/1024/1440px. It runs
+  with an explicit D1 driver and no usable legacy database URL, so the browser
+  suite does not depend on PostgreSQL, Hyperdrive, or pg-boss.
+- Query review: representative repository, pull-request, webhook-delivery,
+  activity, and artifact lookups use the expected D1 indexes with no observed
+  unbounded scan.
+- Limits: the legacy PostgreSQL Playwright suite and reference Node/pg-boss
+  worker remain intentionally separate. The current D1 sync path does not emit
+  Queue work, so sync → Queue is not applicable. Remote D1/Queue provisioning
+  and cutover remain deferred to CF3.
