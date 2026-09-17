@@ -268,7 +268,7 @@ export function DocumentationView() {
                   <p className="workflow-card-desc">{stage.description}</p>
                   <div className="workflow-card-boundary">
                     <span className="boundary-shield-icon" aria-hidden="true">
-                      ðŸ›¡
+                      🛡️
                     </span>
                     <code>{stage.boundaryGuarantee}</code>
                   </div>

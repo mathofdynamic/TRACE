@@ -1,7 +1,8 @@
 import { headers } from 'next/headers';
 import Link from 'next/link';
 import { inArray } from 'drizzle-orm';
-import { schema } from '@trace/db';
+import { d1Schema, isD1Database, schema } from '@trace/db';
+import type { TraceD1Database } from '@trace/db';
 import { getAuthenticatedDashboardSummary } from '../../../../lib/dashboard-server';
 import { createRequestDatabase } from '../../../../lib/request-database';
 import { getUserOrganizationIds } from '../../../../lib/workspace';
@@ -32,17 +33,29 @@ export default async function RepositoriesPage({ searchParams }: RepositoriesPag
   const { db, client } = await createRequestDatabase();
   try {
     const organizationIds = await getUserOrganizationIds(db, session.user.id);
-    const installations = organizationIds.length
-      ? await db
-          .select({
-            id: schema.githubInstallations.id,
-            accountLogin: schema.githubInstallations.accountLogin,
-            accountType: schema.githubInstallations.accountType,
-            state: schema.githubInstallations.state,
-          })
-          .from(schema.githubInstallations)
-          .where(inArray(schema.githubInstallations.organizationId, organizationIds))
-      : [];
+    const installations = isD1Database(db)
+      ? organizationIds.length
+        ? await (db as unknown as TraceD1Database)
+            .select({
+              id: d1Schema.githubInstallations.id,
+              accountLogin: d1Schema.githubInstallations.accountLogin,
+              accountType: d1Schema.githubInstallations.accountType,
+              state: d1Schema.githubInstallations.state,
+            })
+            .from(d1Schema.githubInstallations)
+            .where(inArray(d1Schema.githubInstallations.organizationId, organizationIds))
+        : []
+      : organizationIds.length
+        ? await db
+            .select({
+              id: schema.githubInstallations.id,
+              accountLogin: schema.githubInstallations.accountLogin,
+              accountType: schema.githubInstallations.accountType,
+              state: schema.githubInstallations.state,
+            })
+            .from(schema.githubInstallations)
+            .where(inArray(schema.githubInstallations.organizationId, organizationIds))
+        : [];
     const repositories = summary.repositoryCatalog;
     const activeRepositories = repositories.filter((repository) => repository.state === 'active');
     const currentStep = activeRepositories.length ? 4 : installations.length ? 3 : 2;

@@ -1,7 +1,6 @@
 import {
   cookieAttributes,
   getTracePublicUrl,
-  getTraceSession,
   isSecurePublicUrl,
   readCookie,
   safeAuthNext,
@@ -13,8 +12,9 @@ import {
   getGitHubInstallationSnapshot,
   verifyUserInstallationAccess,
 } from '@trace/github';
-import { schema } from '@trace/db';
-import { createRequestDatabase } from '../../../../lib/request-database';
+import { d1Schema, isD1Database, schema } from '@trace/db';
+import type { TraceD1Database } from '@trace/db';
+import { createRequestDatabase, getRequestTraceSession } from '../../../../lib/request-database';
 import { ensureGitHubWorkspace } from '../../../../lib/workspace';
 
 const APP_STATE_COOKIE = 'trace_github_app_state';
@@ -59,7 +59,7 @@ function redirectWithCleanup(destination: string, reason?: string) {
 
 export async function GET(request: Request) {
   const publicUrl = getTracePublicUrl();
-  const session = await getTraceSession(request.headers);
+  const session = await getRequestTraceSession(request.headers);
   if (!session?.user)
     return Response.redirect(new URL('/sign-in?next=/app/repositories', publicUrl));
 
@@ -109,6 +109,88 @@ export async function GET(request: Request) {
         type: snapshot.installation.accountType,
       });
       const now = new Date();
+      if (isD1Database(db)) {
+        const d1 = db as unknown as TraceD1Database;
+        const [installation] = await d1
+          .insert(d1Schema.githubInstallations)
+          .values({
+            organizationId: workspace.id,
+            githubInstallationId: String(snapshot.installation.id),
+            accountLogin: snapshot.installation.accountLogin,
+            accountType: snapshot.installation.accountType,
+            state: snapshot.installation.suspendedAt ? 'suspended' : 'active',
+            suspendedAt: snapshot.installation.suspendedAt
+              ? new Date(snapshot.installation.suspendedAt)
+              : null,
+          })
+          .onConflictDoUpdate({
+            target: d1Schema.githubInstallations.githubInstallationId,
+            set: {
+              organizationId: workspace.id,
+              accountLogin: snapshot.installation.accountLogin,
+              accountType: snapshot.installation.accountType,
+              state: snapshot.installation.suspendedAt ? 'suspended' : 'active',
+              suspendedAt: snapshot.installation.suspendedAt
+                ? new Date(snapshot.installation.suspendedAt)
+                : null,
+              updatedAt: now,
+            },
+          })
+          .returning({ id: d1Schema.githubInstallations.id });
+        if (!installation) throw new Error('GitHub App installation could not be persisted.');
+        for (const repository of snapshot.repositories) {
+          await d1
+            .insert(d1Schema.githubRepositories)
+            .values({
+              organizationId: workspace.id,
+              installationId: installation.id,
+              githubRepositoryId: String(repository.id),
+              owner: repository.owner,
+              name: repository.name,
+              fullName: repository.fullName,
+              defaultBranch: repository.defaultBranch,
+              visibility: repository.visibility,
+              state: 'available',
+              lastSynchronizedAt: now,
+            })
+            .onConflictDoUpdate({
+              target: d1Schema.githubRepositories.githubRepositoryId,
+              set: {
+                organizationId: workspace.id,
+                installationId: installation.id,
+                owner: repository.owner,
+                name: repository.name,
+                fullName: repository.fullName,
+                defaultBranch: repository.defaultBranch,
+                visibility: repository.visibility,
+                lastSynchronizedAt: now,
+                updatedAt: now,
+              },
+            });
+          await d1
+            .insert(d1Schema.githubInstallationRepositories)
+            .values({
+              installationId: installation.id,
+              githubRepositoryId: String(repository.id),
+              permissions: repository.permissions,
+            })
+            .onConflictDoUpdate({
+              target: [
+                d1Schema.githubInstallationRepositories.installationId,
+                d1Schema.githubInstallationRepositories.githubRepositoryId,
+              ],
+              set: { permissions: repository.permissions, updatedAt: now },
+            });
+        }
+        await d1.insert(d1Schema.auditEvents).values({
+          organizationId: workspace.id,
+          actorUserId: session.user.id,
+          action: 'github.connected',
+          subjectType: 'github_installation',
+          subjectId: installation.id,
+        });
+        return redirectWithCleanup(next, 'connected');
+      }
       const [installation] = await db
         .insert(schema.githubInstallations)
         .values({

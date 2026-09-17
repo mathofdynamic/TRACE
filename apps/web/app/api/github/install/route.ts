@@ -1,11 +1,6 @@
-import {
-  cookieAttributes,
-  getTracePublicUrl,
-  getTraceSession,
-  isSecurePublicUrl,
-  safeAuthNext,
-} from '@trace/auth';
+import { cookieAttributes, getTracePublicUrl, isSecurePublicUrl, safeAuthNext } from '@trace/auth';
 import { parseGitHubAppInstallEnv } from '@trace/env';
+import { getRequestTraceSession } from '../../../../lib/request-database';
 
 const APP_STATE_COOKIE = 'trace_github_app_state';
 const APP_NEXT_COOKIE = 'trace_github_app_next';
@@ -22,7 +17,7 @@ function appInstallUrl(slug: string, configuredUrl?: string) {
 
 export async function GET(request: Request) {
   const publicUrl = getTracePublicUrl();
-  const session = await getTraceSession(request.headers);
+  const session = await getRequestTraceSession(request.headers);
   if (!session?.user)
     return Response.redirect(new URL('/sign-in?next=/app/repositories', publicUrl));
 

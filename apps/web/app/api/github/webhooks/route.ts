@@ -1,9 +1,15 @@
 import { and, eq } from 'drizzle-orm';
 import { PgBoss } from 'pg-boss';
-import { createDatabase, schema } from '@trace/db';
+import { d1Schema, isD1Database, createDatabase, schema } from '@trace/db';
+import type { TraceD1Database } from '@trace/db';
+import { enqueueTraceMessage, type TraceQueueMessage } from '@trace/core';
 import { parseGitHubWebhookEnv } from '@trace/env';
 import { hashWebhookPayload, normalizeGitHubEvent, verifyGitHubSignature } from '@trace/github';
-import { getRequestDatabaseUrl } from '../../../../lib/request-database';
+import {
+  createRequestDatabase,
+  getRequestCloudflareEnv,
+  getRequestDatabaseUrl,
+} from '../../../../lib/request-database';
 
 const MAX_BODY_BYTES = 1_048_576;
 
@@ -54,6 +60,101 @@ export async function POST(request: Request) {
     typeof payload === 'object' && payload !== null ? (payload as Record<string, unknown>) : {};
   const action = typeof root.action === 'string' ? root.action : undefined;
   const normalized = normalizeGitHubEvent(eventName, action, payload);
+  const cloudflareEnv = await getRequestCloudflareEnv();
+  if (cloudflareEnv?.DB) {
+    const { db, client } = await createRequestDatabase();
+    const d1 = db as unknown as TraceD1Database;
+    try {
+      const [inserted] = await d1
+        .insert(d1Schema.githubWebhookDeliveries)
+        .values({
+          deliveryId,
+          eventName,
+          action,
+          installationId:
+            normalized && 'installationId' in normalized ? String(normalized.installationId) : null,
+          payloadSha256: hashWebhookPayload(rawBody),
+        })
+        .onConflictDoNothing({ target: d1Schema.githubWebhookDeliveries.deliveryId })
+        .returning({ id: d1Schema.githubWebhookDeliveries.id });
+      const existing = inserted
+        ? null
+        : (
+            await d1
+              .select({
+                id: d1Schema.githubWebhookDeliveries.id,
+                status: d1Schema.githubWebhookDeliveries.status,
+              })
+              .from(d1Schema.githubWebhookDeliveries)
+              .where(eq(d1Schema.githubWebhookDeliveries.deliveryId, deliveryId))
+              .limit(1)
+          )[0];
+      const delivery = inserted ?? existing;
+      if (!delivery) {
+        return Response.json({ error: 'Webhook delivery could not be recorded.' }, { status: 503 });
+      }
+      if (!inserted && existing?.status !== 'received') {
+        return Response.json({ accepted: true, duplicate: true });
+      }
+
+      if (normalized?.type === 'BranchPushed') {
+        const [repository] = await d1
+          .select({
+            id: d1Schema.githubRepositories.id,
+            defaultBranch: d1Schema.githubRepositories.defaultBranch,
+          })
+          .from(d1Schema.githubRepositories)
+          .where(
+            eq(d1Schema.githubRepositories.githubRepositoryId, String(normalized.repositoryId)),
+          )
+          .limit(1);
+        if (
+          repository?.defaultBranch &&
+          normalized.ref === `refs/heads/${repository.defaultBranch}` &&
+          /^[a-f0-9]{40}$/i.test(normalized.after)
+        ) {
+          await d1
+            .update(d1Schema.githubRepositories)
+            .set({ remoteHeadSha: normalized.after, updatedAt: new Date() })
+            .where(
+              and(
+                eq(d1Schema.githubRepositories.id, repository.id),
+                eq(d1Schema.githubRepositories.state, 'active'),
+              ),
+            );
+        }
+      }
+
+      const queue = cloudflareEnv.TRACE_QUEUE;
+      if (!queue) {
+        return Response.json({ error: 'Webhook queue is not configured.' }, { status: 503 });
+      }
+      await enqueueTraceMessage(
+        { send: (message: TraceQueueMessage) => queue.send(message) },
+        {
+          version: '1',
+          type: 'github.webhook.process',
+          idempotencyKey: deliveryId,
+          enqueuedAt: new Date().toISOString(),
+          deliveryId,
+          eventName,
+        },
+      );
+      await d1
+        .update(d1Schema.githubWebhookDeliveries)
+        .set({ status: normalized ? 'queued' : 'ignored' })
+        .where(eq(d1Schema.githubWebhookDeliveries.id, delivery.id));
+      return Response.json(
+        { accepted: true, queued: Boolean(normalized), normalized: Boolean(normalized) },
+        { status: 202 },
+      );
+    } catch {
+      return Response.json({ error: 'Webhook delivery could not be queued.' }, { status: 503 });
+    } finally {
+      await client.end();
+    }
+  }
+
   const databaseUrl = await getRequestDatabaseUrl();
   const { db, pool } = createDatabase(databaseUrl);
   try {

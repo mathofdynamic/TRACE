@@ -4,6 +4,12 @@ import { parseServerEnv } from '@trace/env';
 import * as schema from './schema.js';
 
 export { schema };
+export { createD1Database, d1Schema, isD1Database } from './d1.js';
+export type { TraceD1Database } from './d1.js';
+export { createD1UserStore, createPostgresUserStore } from './user-store.js';
+export type { PersistedUserInput, UserStore } from './user-store.js';
+export { createTraceId, normalizeProviderId } from './domain-types.js';
+export type { JsonObject, ProviderId, StringList, StringMap } from './domain-types.js';
 export type TraceDatabase = ReturnType<typeof createDatabase>;
 
 export function createDatabase(databaseUrl = parseServerEnv().DATABASE_URL) {

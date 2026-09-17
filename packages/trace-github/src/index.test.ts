@@ -62,6 +62,25 @@ describe('GitHub webhook security and normalization', () => {
     });
   });
 
+  it('rejects provider identifiers that would lose JavaScript integer precision', () => {
+    expect(
+      normalizeGitHubRepository({
+        id: Number.MAX_SAFE_INTEGER + 1,
+        name: 'trace',
+        full_name: 'mathofdynamic/trace',
+        owner: { login: 'mathofdynamic' },
+      }),
+    ).toBeNull();
+    expect(
+      normalizeGitHubEvent('push', undefined, {
+        repository: { id: Number.MAX_SAFE_INTEGER + 1 },
+        ref: 'refs/heads/main',
+        before: 'a'.repeat(40),
+        after: 'b'.repeat(40),
+      }),
+    ).toBeNull();
+  });
+
   it('accepts only a real GitHub commit pointer for freshness', () => {
     expect(normalizeGitHubRepositoryHead({ object: { sha: 'a'.repeat(40) } })).toBe('a'.repeat(40));
     expect(normalizeGitHubRepositoryHead({ object: { sha: '0'.repeat(40) } })).toBeNull();

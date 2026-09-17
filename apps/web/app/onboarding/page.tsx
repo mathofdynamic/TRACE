@@ -1,27 +1,36 @@
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { eq } from 'drizzle-orm';
-import { getTraceSession } from '@trace/auth';
-import { schema } from '@trace/db';
+import { d1Schema, isD1Database, schema } from '@trace/db';
+import type { TraceD1Database } from '@trace/db';
 import { OnboardingForm } from '../components/onboarding-form';
 import { SetupProgress } from '../components/setup-progress';
-import { createRequestDatabase } from '../../lib/request-database';
+import { createRequestDatabase, getRequestTraceSession } from '../../lib/request-database';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Onboarding — TRACE', robots: { index: false, follow: false } };
 
 export default async function OnboardingPage() {
-  const session = await getTraceSession(await headers());
+  const session = await getRequestTraceSession(await headers());
   if (!session?.user) redirect('/sign-in?next=/onboarding');
 
   const { db, client } = await createRequestDatabase();
   try {
-    const [profile] = await db
-      .select({ completed: schema.onboardingProfiles.completed })
-      .from(schema.onboardingProfiles)
-      .where(eq(schema.onboardingProfiles.userId, session.user.id))
-      .limit(1);
-    if (profile?.completed) redirect('/app/repositories');
+    if (isD1Database(db)) {
+      const [profile] = await (db as unknown as TraceD1Database)
+        .select({ completed: d1Schema.onboardingProfiles.completed })
+        .from(d1Schema.onboardingProfiles)
+        .where(eq(d1Schema.onboardingProfiles.userId, session.user.id))
+        .limit(1);
+      if (profile?.completed) redirect('/app/repositories');
+    } else {
+      const [profile] = await db
+        .select({ completed: schema.onboardingProfiles.completed })
+        .from(schema.onboardingProfiles)
+        .where(eq(schema.onboardingProfiles.userId, session.user.id))
+        .limit(1);
+      if (profile?.completed) redirect('/app/repositories');
+    }
   } finally {
     await client.end();
   }

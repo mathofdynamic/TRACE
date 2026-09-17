@@ -11,7 +11,7 @@ import {
   sessionCookieName,
   verifyOAuthState,
 } from '@trace/auth';
-import { upsertRequestUser } from '../../../../../lib/request-database';
+import { persistRequestAuthSession, upsertRequestUser } from '../../../../../lib/request-database';
 
 function clearCookie(name: string) {
   return `${name}=; ${cookieAttributes(0, isSecurePublicUrl())}`;
@@ -80,6 +80,7 @@ export async function GET(request: Request) {
         `Session signing error: ${error instanceof Error ? error.name : 'UnknownError'}`,
       );
     }
+    await persistRequestAuthSession(persistedUser, session);
     const response = new Response(null, {
       status: 302,
       headers: {

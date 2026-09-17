@@ -13,6 +13,7 @@ export default [
       '**/coverage/**',
       '**/node_modules/**',
       '**/worker-configuration.d.ts',
+      '**/bindings.generated.d.ts',
       '**/cloudflare-env.d.ts',
     ],
   },

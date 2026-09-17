@@ -1,175 +1,14 @@
 import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm';
-import { isD1Database, schema } from '@trace/db';
-import type { TraceD1Database } from '@trace/db';
-import type { createDatabaseClient } from '@trace/db';
-import type { RequestDatabase } from './workspace';
-import { getD1DashboardSummary } from './dashboard-d1';
-
-export type AnalysisState =
-  | 'unavailable'
-  | 'not-started'
-  | 'queued'
-  | 'running'
-  | 'completed'
-  | 'failed';
-
-export type DashboardRepository = {
-  id: string;
-  fullName: string;
-  owner: string;
-  name: string;
-  defaultBranch: string | null;
-  visibility: string | null;
-  state: string;
-  remoteHeadSha: string | null;
-  lastSynchronizedAt: string | null;
-  latestSync: {
-    operationId: string;
-    branch: string | null;
-    headCommit: string | null;
-    traceVersion: string;
-    schemaVersion: string;
-    completedAt: string;
-    stale: boolean | null;
-  } | null;
-  analysis: {
-    id: string;
-    status: AnalysisState;
-    updatedAt: string;
-  } | null;
-  syncState?: 'not_analyzed' | 'pending' | 'synced' | 'needs_refresh' | 'unknown';
-};
-
-export type DashboardAttention = {
-  id: string;
-  kind: 'analysis-failed' | 'sync-failed' | 'finding' | 'risk' | 'conflict';
-  title: string;
-  detail: string;
-  severity: string;
-  classification: string;
-  evidence: string[];
-  repositoryId: string | null;
-  repositoryName: string | null;
-  updatedAt: string;
-  affectedArea?: string | null;
-  analyzedCommit?: string | null;
-  relatedChangeId?: string | null;
-  relatedChangeNumber?: number | null;
-  provenance?: {
-    ruleId?: string | null;
-    analyzedCommit?: string | null;
-    remoteHeadCommit?: string | null;
-    isStaleWithRemote?: boolean;
-  } | null;
-};
-
-export type DashboardChange = {
-  id: string;
-  repositoryId: string;
-  repositoryName: string;
-  number: number;
-  title: string;
-  state: string;
-  url: string | null;
-  authorLogin: string | null;
-  updatedAt: string;
-  branch?: string | null;
-  baseBranch?: string | null;
-  headSha?: string | null;
-  intent?: string | null;
-  affectedAreas?: string[];
-  affectedFiles?: string[];
-  relatedConflictId?: string | null;
-  relatedChangeIds?: string[];
-  relatedFindingIds?: string[];
-};
-
-export type DashboardActivity = {
-  id: string;
-  kind: 'repository-connected' | 'analysis' | 'sync' | 'audit';
-  title: string;
-  detail: string;
-  repositoryId: string | null;
-  repositoryName: string | null;
-  occurredAt: string;
-};
-
-export type DashboardSyncedRecord = {
-  id: string;
-  artifactId: string;
-  artifactType: string;
-  repositoryId: string;
-  repositoryName: string;
-  title: string;
-  summary: string;
-  status: string | null;
-  items: Array<{
-    id: string;
-    title: string;
-    detail: string;
-    severity?: string;
-    classification?: string;
-    evidence: string[];
-    changeId?: string | null;
-    changeNumber?: number | null;
-    findingId?: string | null;
-  }>;
-  generatedAt: string;
-  syncedAt: string;
-  origin: 'local';
-  content: string;
-  path?: string | null;
-  timeWindow?: string | null;
-  freshness?: 'current' | 'needs-refresh' | 'attention' | 'unknown' | null;
-  analyzedCommit?: string | null;
-  remoteHeadCommit?: string | null;
-  relatedChangeIds?: string[];
-  relatedFindingIds?: string[];
-};
-
-export type DashboardSummary = {
-  source: 'postgresql' | 'd1';
-  preferredRepositoryId: string | null;
-  workspace: {
-    name: string;
-    profileComplete: boolean;
-    intendedUsage: string | null;
-    executionMode: string | null;
-  };
-  setup: {
-    authenticated: true;
-    githubConnected: boolean;
-    repositorySelected: boolean;
-    repositoriesAvailable: number;
-    analysisState: AnalysisState;
-    cloudAnalysisAvailable: false;
-    localAnalysisAvailable: true;
-  };
-  repositories: DashboardRepository[];
-  repositoryCatalog: DashboardRepository[];
-  github: {
-    connected: boolean;
-    accountLogin: string | null;
-    accountType: string | null;
-    defaultBranch: string | null;
-  };
-  attention: DashboardAttention[];
-  latestChanges: DashboardChange[];
-  latestReports: DashboardSyncedRecord[];
-  conflicts: DashboardSyncedRecord[];
-  decisions: DashboardSyncedRecord[];
-  risks: DashboardSyncedRecord[];
-  rules: DashboardSyncedRecord[];
-  activity: DashboardActivity[];
-  capabilities: {
-    changes: boolean;
-    conflicts: boolean;
-    reports: boolean;
-    decisions: boolean;
-    rules: boolean;
-    activity: boolean;
-  };
-};
+import { d1Schema, type TraceD1Database } from '@trace/db';
+import type {
+  AnalysisState,
+  DashboardActivity,
+  DashboardAttention,
+  DashboardChange,
+  DashboardRepository,
+  DashboardSummary,
+  DashboardSyncedRecord,
+} from './dashboard';
 
 function normalizeAnalysisState(status: string | null | undefined): AnalysisState {
   if (!status) return 'not-started';
@@ -187,7 +26,21 @@ function latestWorkspaceName(organizations: Array<{ name: string }>, intendedUsa
   return 'Personal workspace';
 }
 
-export function deriveSetupState(input: {
+function iso(value: Date | null | undefined) {
+  return value?.toISOString() ?? null;
+}
+
+function stringValue(value: unknown) {
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function stringArray(value: unknown): string[] | undefined {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string')
+    ? value
+    : undefined;
+}
+
+function setupState(input: {
   githubConnected: boolean;
   repositorySelected: boolean;
   latestAnalysisStatus?: string | null;
@@ -205,70 +58,62 @@ export function deriveSetupState(input: {
   };
 }
 
-export async function getDashboardSummary(
-  db: RequestDatabase,
-  userId: string,
-): Promise<DashboardSummary> {
-  if (isD1Database(db)) return getD1DashboardSummary(db as unknown as TraceD1Database, userId);
-  return getPostgresDashboardSummary(
-    db as Awaited<ReturnType<typeof createDatabaseClient>>['db'],
-    userId,
-  );
-}
-
-async function getPostgresDashboardSummary(
-  db: Awaited<ReturnType<typeof createDatabaseClient>>['db'],
+export async function getD1DashboardSummary(
+  db: TraceD1Database,
   userId: string,
 ): Promise<DashboardSummary> {
   const [profile] = await db
     .select({
-      completed: schema.onboardingProfiles.completed,
-      intendedUsage: schema.onboardingProfiles.intendedUsage,
-      executionMode: schema.onboardingProfiles.executionMode,
+      completed: d1Schema.onboardingProfiles.completed,
+      intendedUsage: d1Schema.onboardingProfiles.intendedUsage,
+      executionMode: d1Schema.onboardingProfiles.executionMode,
     })
-    .from(schema.onboardingProfiles)
-    .where(eq(schema.onboardingProfiles.userId, userId))
+    .from(d1Schema.onboardingProfiles)
+    .where(eq(d1Schema.onboardingProfiles.userId, userId))
     .limit(1);
 
   const organizations = await db
-    .select({ id: schema.organizations.id, name: schema.organizations.name })
-    .from(schema.memberships)
-    .innerJoin(schema.organizations, eq(schema.memberships.organizationId, schema.organizations.id))
-    .where(eq(schema.memberships.userId, userId));
+    .select({ id: d1Schema.organizations.id, name: d1Schema.organizations.name })
+    .from(d1Schema.memberships)
+    .innerJoin(
+      d1Schema.organizations,
+      eq(d1Schema.memberships.organizationId, d1Schema.organizations.id),
+    )
+    .where(eq(d1Schema.memberships.userId, userId));
   const organizationIds = organizations.map((organization) => organization.id);
 
   const installations = organizationIds.length
     ? await db
         .select({
-          id: schema.githubInstallations.id,
-          accountLogin: schema.githubInstallations.accountLogin,
-          accountType: schema.githubInstallations.accountType,
+          id: d1Schema.githubInstallations.id,
+          accountLogin: d1Schema.githubInstallations.accountLogin,
+          accountType: d1Schema.githubInstallations.accountType,
         })
-        .from(schema.githubInstallations)
+        .from(d1Schema.githubInstallations)
         .where(
           and(
-            inArray(schema.githubInstallations.organizationId, organizationIds),
-            eq(schema.githubInstallations.state, 'active'),
+            inArray(d1Schema.githubInstallations.organizationId, organizationIds),
+            eq(d1Schema.githubInstallations.state, 'active'),
           ),
         )
     : [];
   const repositoryRows = organizationIds.length
     ? await db
         .select({
-          id: schema.githubRepositories.id,
-          fullName: schema.githubRepositories.fullName,
-          owner: schema.githubRepositories.owner,
-          name: schema.githubRepositories.name,
-          defaultBranch: schema.githubRepositories.defaultBranch,
-          visibility: schema.githubRepositories.visibility,
-          state: schema.githubRepositories.state,
-          remoteHeadSha: schema.githubRepositories.remoteHeadSha,
-          lastSynchronizedAt: schema.githubRepositories.lastSynchronizedAt,
-          createdAt: schema.githubRepositories.createdAt,
+          id: d1Schema.githubRepositories.id,
+          fullName: d1Schema.githubRepositories.fullName,
+          owner: d1Schema.githubRepositories.owner,
+          name: d1Schema.githubRepositories.name,
+          defaultBranch: d1Schema.githubRepositories.defaultBranch,
+          visibility: d1Schema.githubRepositories.visibility,
+          state: d1Schema.githubRepositories.state,
+          remoteHeadSha: d1Schema.githubRepositories.remoteHeadSha,
+          lastSynchronizedAt: d1Schema.githubRepositories.lastSynchronizedAt,
+          createdAt: d1Schema.githubRepositories.createdAt,
         })
-        .from(schema.githubRepositories)
-        .where(inArray(schema.githubRepositories.organizationId, organizationIds))
-        .orderBy(desc(schema.githubRepositories.updatedAt))
+        .from(d1Schema.githubRepositories)
+        .where(inArray(d1Schema.githubRepositories.organizationId, organizationIds))
+        .orderBy(desc(d1Schema.githubRepositories.updatedAt))
     : [];
   const activeRepositoryRows = repositoryRows.filter((repository) => repository.state === 'active');
   const activeRepositoryIds = activeRepositoryRows.map((repository) => repository.id);
@@ -276,22 +121,22 @@ async function getPostgresDashboardSummary(
   const completedSyncRows = activeRepositoryIds.length
     ? await db
         .select({
-          id: schema.syncOperations.id,
-          repositoryId: schema.syncOperations.repositoryId,
-          branch: schema.syncOperations.branch,
-          headCommit: schema.syncOperations.headCommit,
-          traceVersion: schema.syncOperations.traceVersion,
-          schemaVersion: schema.syncOperations.schemaVersion,
-          completedAt: schema.syncOperations.completedAt,
+          id: d1Schema.syncOperations.id,
+          repositoryId: d1Schema.syncOperations.repositoryId,
+          branch: d1Schema.syncOperations.branch,
+          headCommit: d1Schema.syncOperations.headCommit,
+          traceVersion: d1Schema.syncOperations.traceVersion,
+          schemaVersion: d1Schema.syncOperations.schemaVersion,
+          completedAt: d1Schema.syncOperations.completedAt,
         })
-        .from(schema.syncOperations)
+        .from(d1Schema.syncOperations)
         .where(
           and(
-            inArray(schema.syncOperations.repositoryId, activeRepositoryIds),
-            eq(schema.syncOperations.status, 'completed'),
+            inArray(d1Schema.syncOperations.repositoryId, activeRepositoryIds),
+            eq(d1Schema.syncOperations.status, 'completed'),
           ),
         )
-        .orderBy(desc(schema.syncOperations.completedAt))
+        .orderBy(desc(d1Schema.syncOperations.completedAt))
     : [];
   const latestSyncByRepository = new Map<string, (typeof completedSyncRows)[number]>();
   for (const operation of completedSyncRows) {
@@ -303,40 +148,40 @@ async function getPostgresDashboardSummary(
   const failedSyncRows = activeRepositoryIds.length
     ? await db
         .select({
-          id: schema.syncOperations.id,
-          repositoryId: schema.syncOperations.repositoryId,
-          errorCode: schema.syncOperations.errorCode,
-          updatedAt: schema.syncOperations.updatedAt,
+          id: d1Schema.syncOperations.id,
+          repositoryId: d1Schema.syncOperations.repositoryId,
+          errorCode: d1Schema.syncOperations.errorCode,
+          updatedAt: d1Schema.syncOperations.updatedAt,
         })
-        .from(schema.syncOperations)
+        .from(d1Schema.syncOperations)
         .where(
           and(
-            inArray(schema.syncOperations.repositoryId, activeRepositoryIds),
-            eq(schema.syncOperations.status, 'failed'),
+            inArray(d1Schema.syncOperations.repositoryId, activeRepositoryIds),
+            eq(d1Schema.syncOperations.status, 'failed'),
           ),
         )
-        .orderBy(desc(schema.syncOperations.updatedAt))
+        .orderBy(desc(d1Schema.syncOperations.updatedAt))
         .limit(12)
     : [];
 
   const analysisRows = activeRepositoryIds.length
     ? await db
         .select({
-          id: schema.analysisRuns.id,
-          repositoryId: schema.analysisRuns.repositoryId,
-          status: schema.analysisRuns.status,
-          headSha: schema.analysisRuns.headSha,
-          result: schema.analysisRuns.result,
-          updatedAt: schema.analysisRuns.updatedAt,
+          id: d1Schema.analysisRuns.id,
+          repositoryId: d1Schema.analysisRuns.repositoryId,
+          status: d1Schema.analysisRuns.status,
+          headSha: d1Schema.analysisRuns.headSha,
+          result: d1Schema.analysisRuns.result,
+          updatedAt: d1Schema.analysisRuns.updatedAt,
         })
-        .from(schema.analysisRuns)
+        .from(d1Schema.analysisRuns)
         .where(
           and(
-            inArray(schema.analysisRuns.organizationId, organizationIds),
-            inArray(schema.analysisRuns.repositoryId, activeRepositoryIds),
+            inArray(d1Schema.analysisRuns.organizationId, organizationIds),
+            inArray(d1Schema.analysisRuns.repositoryId, activeRepositoryIds),
           ),
         )
-        .orderBy(desc(schema.analysisRuns.updatedAt))
+        .orderBy(desc(d1Schema.analysisRuns.updatedAt))
         .limit(100)
     : [];
   const latestAnalysisByRepository = new Map<string, (typeof analysisRows)[number]>();
@@ -346,6 +191,7 @@ async function getPostgresDashboardSummary(
     }
   }
 
+  const repositoryById = new Map(repositoryRows.map((repository) => [repository.id, repository]));
   const repositories: DashboardRepository[] = activeRepositoryRows.map((repository) => {
     const analysis = latestAnalysisByRepository.get(repository.id);
     const latestSync = latestSyncByRepository.get(repository.id);
@@ -358,7 +204,7 @@ async function getPostgresDashboardSummary(
       visibility: repository.visibility,
       state: repository.state,
       remoteHeadSha: repository.remoteHeadSha,
-      lastSynchronizedAt: repository.lastSynchronizedAt?.toISOString() ?? null,
+      lastSynchronizedAt: iso(repository.lastSynchronizedAt),
       latestSync: latestSync?.completedAt
         ? {
             operationId: latestSync.id,
@@ -403,7 +249,7 @@ async function getPostgresDashboardSummary(
         visibility: repository.visibility,
         state: repository.state,
         remoteHeadSha: repository.remoteHeadSha,
-        lastSynchronizedAt: repository.lastSynchronizedAt?.toISOString() ?? null,
+        lastSynchronizedAt: iso(repository.lastSynchronizedAt),
         latestSync: null,
         analysis: null,
         syncState: 'not_analyzed',
@@ -414,30 +260,29 @@ async function getPostgresDashboardSummary(
   const findingRows = analysisRows.length
     ? await db
         .select({
-          id: schema.analysisFindings.id,
-          analysisRunId: schema.analysisFindings.analysisRunId,
-          title: schema.analysisFindings.title,
-          detail: schema.analysisFindings.detail,
-          severity: schema.analysisFindings.severity,
-          classification: schema.analysisFindings.classification,
-          evidence: schema.analysisFindings.evidence,
-          updatedAt: schema.analysisFindings.updatedAt,
+          id: d1Schema.analysisFindings.id,
+          analysisRunId: d1Schema.analysisFindings.analysisRunId,
+          title: d1Schema.analysisFindings.title,
+          detail: d1Schema.analysisFindings.detail,
+          severity: d1Schema.analysisFindings.severity,
+          classification: d1Schema.analysisFindings.classification,
+          evidence: d1Schema.analysisFindings.evidence,
+          updatedAt: d1Schema.analysisFindings.updatedAt,
         })
-        .from(schema.analysisFindings)
+        .from(d1Schema.analysisFindings)
         .where(
           and(
             inArray(
-              schema.analysisFindings.analysisRunId,
+              d1Schema.analysisFindings.analysisRunId,
               analysisRows.map((run) => run.id),
             ),
-            isNull(schema.analysisFindings.disposition),
+            isNull(d1Schema.analysisFindings.disposition),
           ),
         )
-        .orderBy(desc(schema.analysisFindings.updatedAt))
+        .orderBy(desc(d1Schema.analysisFindings.updatedAt))
         .limit(20)
     : [];
   const runById = new Map(analysisRows.map((run) => [run.id, run]));
-  const repositoryById = new Map(repositoryRows.map((repository) => [repository.id, repository]));
   const attention: DashboardAttention[] = findingRows.map((finding) => {
     const run = runById.get(finding.analysisRunId);
     const repository = run?.repositoryId ? repositoryById.get(run.repositoryId) : null;
@@ -467,13 +312,12 @@ async function getPostgresDashboardSummary(
     (item) => normalizeAnalysisState(item.status) === 'failed',
   )) {
     const repository = run.repositoryId ? repositoryById.get(run.repositoryId) : null;
-    const resultMessage =
-      typeof run.result?.error === 'string' ? run.result.error : 'The analysis did not complete.';
+    const result = run.result as Record<string, unknown> | null;
     attention.unshift({
       id: `analysis-${run.id}`,
       kind: 'analysis-failed',
       title: `Analysis failed${repository ? ` for ${repository.fullName}` : ''}`,
-      detail: resultMessage,
+      detail: typeof result?.error === 'string' ? result.error : 'The analysis did not complete.',
       severity: 'high',
       classification: 'deterministic',
       evidence: [],
@@ -504,20 +348,20 @@ async function getPostgresDashboardSummary(
   const changeRows = activeRepositoryIds.length
     ? await db
         .select({
-          id: schema.githubPullRequests.id,
-          repositoryId: schema.githubPullRequests.repositoryId,
-          number: schema.githubPullRequests.number,
-          title: schema.githubPullRequests.title,
-          state: schema.githubPullRequests.state,
-          headSha: schema.githubPullRequests.headSha,
-          baseBranch: schema.githubPullRequests.baseBranch,
-          url: schema.githubPullRequests.url,
-          authorLogin: schema.githubPullRequests.authorLogin,
-          updatedAt: schema.githubPullRequests.updatedAt,
+          id: d1Schema.githubPullRequests.id,
+          repositoryId: d1Schema.githubPullRequests.repositoryId,
+          number: d1Schema.githubPullRequests.number,
+          title: d1Schema.githubPullRequests.title,
+          state: d1Schema.githubPullRequests.state,
+          headSha: d1Schema.githubPullRequests.headSha,
+          baseBranch: d1Schema.githubPullRequests.baseBranch,
+          url: d1Schema.githubPullRequests.url,
+          authorLogin: d1Schema.githubPullRequests.authorLogin,
+          updatedAt: d1Schema.githubPullRequests.updatedAt,
         })
-        .from(schema.githubPullRequests)
-        .where(inArray(schema.githubPullRequests.repositoryId, activeRepositoryIds))
-        .orderBy(desc(schema.githubPullRequests.updatedAt))
+        .from(d1Schema.githubPullRequests)
+        .where(inArray(d1Schema.githubPullRequests.repositoryId, activeRepositoryIds))
+        .orderBy(desc(d1Schema.githubPullRequests.updatedAt))
         .limit(12)
     : [];
   const latestChanges: DashboardChange[] = changeRows.map((change) => ({
@@ -532,25 +376,15 @@ async function getPostgresDashboardSummary(
   const syncedRows = latestCompletedSyncIds.length
     ? await db
         .select()
-        .from(schema.syncedArtifacts)
-        .where(inArray(schema.syncedArtifacts.operationId, latestCompletedSyncIds))
-        .orderBy(desc(schema.syncedArtifacts.generatedAt))
+        .from(d1Schema.syncedArtifacts)
+        .where(inArray(d1Schema.syncedArtifacts.operationId, latestCompletedSyncIds))
+        .orderBy(desc(d1Schema.syncedArtifacts.generatedAt))
     : [];
   const syncedRecords: DashboardSyncedRecord[] = syncedRows.map((artifact) => {
-    const projection = artifact.projection as {
-      title?: string;
-      summary?: string;
-      status?: string;
-      items?: DashboardSyncedRecord['items'];
-    };
-    const projectionRecord = artifact.projection as Record<string, unknown>;
-    const stringArray = (value: unknown): string[] | undefined =>
-      Array.isArray(value) && value.every((item) => typeof item === 'string') ? value : undefined;
-    const stringValue = (value: unknown): string | null =>
-      typeof value === 'string' && value.length ? value : null;
-    const reportRemoteHead = stringValue(projectionRecord.remoteHeadCommit);
+    const projection = artifact.projection as Record<string, unknown>;
+    const items = Array.isArray(projection.items) ? projection.items : [];
     const reportAnalyzedCommit =
-      stringValue(projectionRecord.analyzedCommit) ??
+      stringValue(projection.analyzedCommit) ??
       latestSyncByRepository.get(artifact.repositoryId)?.headCommit ??
       null;
     const repository = repositoryById.get(artifact.repositoryId);
@@ -565,22 +399,23 @@ async function getPostgresDashboardSummary(
       artifactId: artifact.artifactId,
       artifactType: artifact.artifactType,
       repositoryId: artifact.repositoryId,
-      repositoryName: repositoryById.get(artifact.repositoryId)?.fullName ?? 'Repository',
-      title: projection.title ?? artifact.artifactId,
-      summary: projection.summary ?? '',
-      status: projection.status ?? null,
-      items: projection.items ?? [],
+      repositoryName: repository?.fullName ?? 'Repository',
+      title: stringValue(projection.title) ?? artifact.artifactId,
+      summary: stringValue(projection.summary) ?? '',
+      status: stringValue(projection.status),
+      items: items as DashboardSyncedRecord['items'],
       generatedAt: artifact.generatedAt.toISOString(),
       syncedAt: artifact.syncedAt.toISOString(),
       origin: 'local',
       content: artifact.content,
       path: artifact.path,
-      timeWindow: stringValue(projectionRecord.timeWindow),
+      timeWindow: stringValue(projection.timeWindow),
       freshness,
       analyzedCommit: reportAnalyzedCommit,
-      remoteHeadCommit: reportRemoteHead ?? repository?.remoteHeadSha ?? null,
-      relatedChangeIds: stringArray(projectionRecord.relatedChangeIds),
-      relatedFindingIds: stringArray(projectionRecord.relatedFindingIds),
+      remoteHeadCommit:
+        stringValue(projection.remoteHeadCommit) ?? repository?.remoteHeadSha ?? null,
+      relatedChangeIds: stringArray(projection.relatedChangeIds),
+      relatedFindingIds: stringArray(projection.relatedFindingIds),
     };
   });
   const latestReports = syncedRecords.filter((record) =>
@@ -609,80 +444,75 @@ async function getPostgresDashboardSummary(
 
   const auditRows = await db
     .select({
-      id: schema.auditEvents.id,
-      action: schema.auditEvents.action,
-      subjectType: schema.auditEvents.subjectType,
-      subjectId: schema.auditEvents.subjectId,
-      createdAt: schema.auditEvents.createdAt,
+      id: d1Schema.auditEvents.id,
+      action: d1Schema.auditEvents.action,
+      subjectType: d1Schema.auditEvents.subjectType,
+      subjectId: d1Schema.auditEvents.subjectId,
+      createdAt: d1Schema.auditEvents.createdAt,
     })
-    .from(schema.auditEvents)
+    .from(d1Schema.auditEvents)
     .where(
       organizationIds.length
         ? or(
-            inArray(schema.auditEvents.organizationId, organizationIds),
+            inArray(d1Schema.auditEvents.organizationId, organizationIds),
             and(
-              isNull(schema.auditEvents.organizationId),
-              eq(schema.auditEvents.actorUserId, userId),
+              isNull(d1Schema.auditEvents.organizationId),
+              eq(d1Schema.auditEvents.actorUserId, userId),
             ),
           )
         : and(
-            isNull(schema.auditEvents.organizationId),
-            eq(schema.auditEvents.actorUserId, userId),
+            isNull(d1Schema.auditEvents.organizationId),
+            eq(d1Schema.auditEvents.actorUserId, userId),
           ),
     )
-    .orderBy(desc(schema.auditEvents.createdAt))
+    .orderBy(desc(d1Schema.auditEvents.createdAt))
     .limit(12);
-  const syncAuditRows = auditRows.filter(
-    (event) =>
-      !event.action.startsWith('local.sync.') ||
-      event.subjectType === 'repository' ||
-      activeRepositoryIds.includes(event.subjectId ?? '') ||
-      completedSyncRows.some((operation) => operation.id === event.subjectId) ||
-      failedSyncRows.some((operation) => operation.id === event.subjectId),
-  );
   const activitySyncRows = activeRepositoryIds.length
     ? await db
-        .select({ id: schema.syncOperations.id, repositoryId: schema.syncOperations.repositoryId })
-        .from(schema.syncOperations)
-        .where(inArray(schema.syncOperations.repositoryId, activeRepositoryIds))
+        .select({
+          id: d1Schema.syncOperations.id,
+          repositoryId: d1Schema.syncOperations.repositoryId,
+        })
+        .from(d1Schema.syncOperations)
+        .where(inArray(d1Schema.syncOperations.repositoryId, activeRepositoryIds))
     : [];
   const activityRepositoryBySubject = new Map(
     activitySyncRows.map((operation) => [operation.id, operation.repositoryId]),
   );
+  const labels: Record<string, { title: string; detail: string; kind: 'sync' | 'audit' }> = {
+    'local.sync.started': {
+      title: 'Local sync started',
+      detail: 'A source-free artifact manifest was accepted.',
+      kind: 'sync',
+    },
+    'local.sync.completed': {
+      title: 'Local analysis synced',
+      detail: 'The dashboard switched to a verified completed snapshot.',
+      kind: 'sync',
+    },
+    'local.sync.artifact_rejected': {
+      title: 'Local artifact rejected',
+      detail: 'The previous dashboard snapshot remains active.',
+      kind: 'sync',
+    },
+    'local.sync.divergence_detected': {
+      title: 'Sync requires attention',
+      detail: 'Local and dashboard artifact history diverged.',
+      kind: 'sync',
+    },
+    'cli.connection.approved': {
+      title: 'Local connection approved',
+      detail: 'A scoped CLI credential was created.',
+      kind: 'audit',
+    },
+    'cli.connection.revoked': {
+      title: 'Local connection revoked',
+      detail: 'Future sync attempts from that credential are blocked.',
+      kind: 'audit',
+    },
+  };
   const activity: DashboardActivity[] = [
-    ...syncAuditRows.map((event) => {
-      const labels: Record<string, { title: string; detail: string; kind: 'sync' | 'audit' }> = {
-        'local.sync.started': {
-          title: 'Local sync started',
-          detail: 'A source-free artifact manifest was accepted.',
-          kind: 'sync',
-        },
-        'local.sync.completed': {
-          title: 'Local analysis synced',
-          detail: 'The dashboard switched to a verified completed snapshot.',
-          kind: 'sync',
-        },
-        'local.sync.artifact_rejected': {
-          title: 'Local artifact rejected',
-          detail: 'The previous dashboard snapshot remains active.',
-          kind: 'sync',
-        },
-        'local.sync.divergence_detected': {
-          title: 'Sync requires attention',
-          detail: 'Local and dashboard artifact history diverged.',
-          kind: 'sync',
-        },
-        'cli.connection.approved': {
-          title: 'Local connection approved',
-          detail: 'A scoped CLI credential was created.',
-          kind: 'audit',
-        },
-        'cli.connection.revoked': {
-          title: 'Local connection revoked',
-          detail: 'Future sync attempts from that credential are blocked.',
-          kind: 'audit',
-        },
-      };
+    ...auditRows.map((event) => {
       const label = labels[event.action];
       const repositoryId =
         event.subjectType === 'repository'
@@ -727,19 +557,19 @@ async function getPostgresDashboardSummary(
     .map((repository) => repository.analysis)
     .filter((analysis): analysis is NonNullable<typeof analysis> => Boolean(analysis))
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0]?.status;
-  const setup = deriveSetupState({
+  const setup = setupState({
     githubConnected: installations.length > 0,
     repositorySelected: repositories.length > 0,
     latestAnalysisStatus,
   });
-
   const attentionCountByRepository = new Map<string, number>();
   for (const item of attention) {
-    if (!item.repositoryId) continue;
-    attentionCountByRepository.set(
-      item.repositoryId,
-      (attentionCountByRepository.get(item.repositoryId) ?? 0) + 1,
-    );
+    if (item.repositoryId) {
+      attentionCountByRepository.set(
+        item.repositoryId,
+        (attentionCountByRepository.get(item.repositoryId) ?? 0) + 1,
+      );
+    }
   }
   const preferredRepositoryId =
     [...repositories].sort((left, right) => {
@@ -751,7 +581,7 @@ async function getPostgresDashboardSummary(
     })[0]?.id ?? null;
 
   return {
-    source: 'postgresql',
+    source: 'd1',
     preferredRepositoryId,
     workspace: {
       name: latestWorkspaceName(organizations, profile?.intendedUsage ?? null),
@@ -785,5 +615,5 @@ async function getPostgresDashboardSummary(
       rules: rules.length > 0,
       activity: repositories.length > 0 || analysisRows.length > 0,
     },
-  };
+  } satisfies DashboardSummary;
 }

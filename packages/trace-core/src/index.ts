@@ -154,3 +154,11 @@ export const defaultLocalSyncPolicy: SyncPolicy = {
   requireApproval: true,
   allowedOrigins: ['local'],
 };
+
+export {
+  enqueueTraceMessage,
+  implementedCloudflareQueueMessageTypes,
+  parseTraceQueueMessage,
+  traceQueueMessageSchema,
+} from './queue.js';
+export type { TraceQueueMessage, TraceQueueMessageType, TraceQueueSender } from './queue.js';

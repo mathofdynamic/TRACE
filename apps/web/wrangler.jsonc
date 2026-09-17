@@ -23,6 +23,36 @@
     "TRACE_FEATURE_HYBRID_SYNC": "false",
   },
   "env": {
+    "local-d1": {
+      "name": "trace-test-local-d1",
+      "workers_dev": true,
+      "vars": {
+        "TRACE_DEPLOYMENT_ENV": "local-d1",
+        "TRACE_DATABASE_DRIVER": "d1",
+        "TRACE_PUBLIC_URL": "http://localhost:8787",
+        "NEXT_PRIVATE_MINIMAL_MODE": "1",
+        "TRACE_FEATURE_SEMANTIC_PR_FINDINGS": "false",
+        "TRACE_FEATURE_SEMANTIC_CONFLICTS": "false",
+        "TRACE_FEATURE_GITHUB_COMMENTS": "false",
+        "TRACE_FEATURE_HYBRID_SYNC": "false",
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "trace-d1-local",
+          "database_id": "00000000-0000-0000-0000-000000000001",
+          "migrations_dir": "../../packages/db/drizzle-d1",
+        },
+      ],
+      "queues": {
+        "producers": [
+          {
+            "binding": "TRACE_QUEUE",
+            "queue": "trace-jobs-local-d1",
+          },
+        ],
+      },
+    },
     "staging": {
       "name": "trace-test-staging",
       "workers_dev": true,

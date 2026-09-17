@@ -1,9 +1,11 @@
 import { eq } from 'drizzle-orm';
 import type { TraceUser } from '@trace/auth';
-import { schema } from '@trace/db';
-import type { createDatabaseClient } from '@trace/db';
+import { d1Schema, isD1Database, schema } from '@trace/db';
+import type { RequestDatabase } from './request-database';
 
-export type RequestDatabase = Awaited<ReturnType<typeof createDatabaseClient>>['db'];
+export type { RequestDatabase } from './request-database';
+
+export type WorkspaceOrganization = { id: string; name: string };
 
 function workspaceSlug(accountLogin: string, accountType: string) {
   const normalized = accountLogin
@@ -19,6 +21,37 @@ export async function ensureGitHubWorkspace(
   user: TraceUser,
   account: { login: string; type: string },
 ) {
+  if (isD1Database(db)) {
+    const d1 = db;
+    const slug = workspaceSlug(account.login, account.type);
+    let [organization] = await d1
+      .select({ id: d1Schema.organizations.id, name: d1Schema.organizations.name })
+      .from(d1Schema.organizations)
+      .where(eq(d1Schema.organizations.slug, slug))
+      .limit(1);
+
+    if (!organization) {
+      await d1
+        .insert(d1Schema.organizations)
+        .values({ name: `${account.login} on GitHub`, slug })
+        .onConflictDoNothing({ target: d1Schema.organizations.slug });
+      [organization] = await d1
+        .select({ id: d1Schema.organizations.id, name: d1Schema.organizations.name })
+        .from(d1Schema.organizations)
+        .where(eq(d1Schema.organizations.slug, slug))
+        .limit(1);
+    }
+    if (!organization) throw new Error('TRACE workspace could not be created.');
+
+    await d1
+      .insert(d1Schema.memberships)
+      .values({ organizationId: organization.id, userId: user.id, role: 'owner' })
+      .onConflictDoNothing({
+        target: [d1Schema.memberships.organizationId, d1Schema.memberships.userId],
+      });
+    return organization;
+  }
+
   const slug = workspaceSlug(account.login, account.type);
   let [organization] = await db
     .select({ id: schema.organizations.id, name: schema.organizations.name })
@@ -51,6 +84,14 @@ export async function ensureGitHubWorkspace(
 }
 
 export async function getUserOrganizationIds(db: RequestDatabase, userId: string) {
+  if (isD1Database(db)) {
+    const memberships = await db
+      .select({ organizationId: d1Schema.memberships.organizationId })
+      .from(d1Schema.memberships)
+      .where(eq(d1Schema.memberships.userId, userId));
+    return memberships.map((membership) => membership.organizationId);
+  }
+
   const memberships = await db
     .select({ organizationId: schema.memberships.organizationId })
     .from(schema.memberships)

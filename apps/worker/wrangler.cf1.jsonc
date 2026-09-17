@@ -1,0 +1,67 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "trace-background-cf1-local",
+  "main": "src/cloudflare.ts",
+  "compatibility_date": "2026-08-08",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "trace-d1-local",
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "../../packages/db/drizzle-d1",
+    },
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "TRACE_QUEUE",
+        "queue": "trace-jobs-cf1-local",
+      },
+    ],
+    "consumers": [
+      {
+        "queue": "trace-jobs-cf1-local",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "dead_letter_queue": "trace-jobs-cf1-local-dlq",
+      },
+    ],
+  },
+  "env": {
+    "cf1-staging": {
+      "name": "trace-background-cf1-staging",
+      "workers_dev": true,
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "trace-cf1-staging",
+          "database_id": "00000000-0000-0000-0000-000000000002",
+          "migrations_dir": "../../packages/db/drizzle-d1",
+        },
+      ],
+      "queues": {
+        "producers": [
+          {
+            "binding": "TRACE_QUEUE",
+            "queue": "trace-jobs-cf1-staging",
+          },
+        ],
+        "consumers": [
+          {
+            "queue": "trace-jobs-cf1-staging",
+            "max_batch_size": 10,
+            "max_batch_timeout": 5,
+            "max_retries": 3,
+            "dead_letter_queue": "trace-jobs-cf1-staging-dlq",
+          },
+        ],
+      },
+    },
+  },
+}

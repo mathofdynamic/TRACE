@@ -55,6 +55,9 @@ importers:
       '@trace/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@trace/core':
+        specifier: workspace:*
+        version: link:../../packages/trace-core
       '@trace/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -104,12 +107,21 @@ importers:
 
   apps/worker:
     dependencies:
+      '@trace/core':
+        specifier: workspace:*
+        version: link:../../packages/trace-core
+      '@trace/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@trace/env':
         specifier: workspace:*
         version: link:../../packages/env
       '@trace/logger':
         specifier: workspace:*
         version: link:../../packages/logger
+      drizzle-orm:
+        specifier: 0.44.5
+        version: 0.44.5(@types/pg@8.15.5)(kysely@0.28.17)(pg@8.16.3)
       pg-boss:
         specifier: 12.5.0
         version: 12.5.0
@@ -240,6 +252,10 @@ importers:
         version: 3.2.4(@types/node@22.15.30)(supports-color@10.2.2)(terser@5.16.9)(tsx@4.20.3)(yaml@2.8.1)
 
   packages/trace-core:
+    dependencies:
+      zod:
+        specifier: 4.0.17
+        version: 4.0.17
     devDependencies:
       typescript:
         specifier: 5.9.2

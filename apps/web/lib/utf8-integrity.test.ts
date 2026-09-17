@@ -1,5 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const suspicious = [
@@ -26,9 +27,10 @@ async function runtimeFiles(directory: string): Promise<string[]> {
 
 describe('runtime UTF-8 integrity', () => {
   it('contains no known mojibake markers', async () => {
+    const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
     const files = [
-      ...(await runtimeFiles(path.resolve(process.cwd(), 'app'))),
-      ...(await runtimeFiles(path.resolve(process.cwd(), 'lib'))),
+      ...(await runtimeFiles(path.join(webRoot, 'app'))),
+      ...(await runtimeFiles(path.join(webRoot, 'lib'))),
     ].filter((file) => !file.endsWith('utf8-integrity.test.ts'));
     const hits: string[] = [];
     for (const file of files) {

@@ -8,7 +8,8 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     }
   },
   "scripts": {
@@ -16,6 +17,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:unit": "vitest run --config vitest.config.ts",
     "db:generate": "drizzle-kit generate",
+    "db:d1:generate": "drizzle-kit generate --config drizzle.d1.config.ts",
+    "db:d1:migrate:local": "wrangler d1 migrations apply trace-d1-local --local --config wrangler.d1.jsonc",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio"
   },

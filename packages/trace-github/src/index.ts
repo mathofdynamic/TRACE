@@ -57,7 +57,7 @@ function asRecord(value: unknown): Record<string, unknown> {
 }
 
 function asNumber(value: unknown) {
-  return typeof value === 'number' ? value : 0;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : 0;
 }
 
 function asString(value: unknown) {
@@ -75,6 +75,14 @@ export function normalizeGitHubEvent(
   const repositoryId = asNumber(repository.id);
   const installationId = asNumber(installation.id);
   const normalizedAction = action ?? '';
+
+  if (
+    (eventName === 'installation' || eventName === 'installation_repositories') &&
+    !installationId
+  )
+    return null;
+  if (['repository', 'pull_request', 'push', 'issues'].includes(eventName) && !repositoryId)
+    return null;
 
   if (eventName === 'installation' && normalizedAction === 'created') {
     const account = asRecord(installation.account);
@@ -113,6 +121,9 @@ export function normalizeGitHubEvent(
     ['opened', 'synchronize', 'edited', 'closed', 'reopened'].includes(normalizedAction)
   ) {
     const pullRequest = asRecord(root.pull_request);
+    const pullRequestId = asNumber(pullRequest.id);
+    const pullRequestNumber = asNumber(pullRequest.number);
+    if (!pullRequestId || !pullRequestNumber) return null;
     return {
       type:
         normalizedAction === 'opened'
@@ -123,8 +134,8 @@ export function normalizeGitHubEvent(
               : 'PullRequestClosed'
             : 'PullRequestUpdated',
       repositoryId,
-      pullRequestId: asNumber(pullRequest.id),
-      number: asNumber(pullRequest.number),
+      pullRequestId,
+      number: pullRequestNumber,
       action: normalizedAction,
     };
   }
@@ -141,11 +152,14 @@ export function normalizeGitHubEvent(
     ['opened', 'edited', 'closed', 'reopened', 'transferred'].includes(normalizedAction)
   ) {
     const issue = asRecord(root.issue);
+    const issueId = asNumber(issue.id);
+    const issueNumber = asNumber(issue.number);
+    if (!issueId || !issueNumber) return null;
     return {
       type: 'IssueUpdated',
       repositoryId,
-      issueId: asNumber(issue.id),
-      number: asNumber(issue.number),
+      issueId,
+      number: issueNumber,
       action: normalizedAction,
     };
   }

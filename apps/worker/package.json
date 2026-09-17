@@ -5,13 +5,18 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "cf:dev": "wrangler dev --config wrangler.cf1.jsonc --local",
+    "cf:typegen": "wrangler types src/bindings.generated.d.ts --config wrangler.cf1.jsonc",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:unit": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
+    "@trace/core": "workspace:*",
+    "@trace/db": "workspace:*",
     "@trace/env": "workspace:*",
     "@trace/logger": "workspace:*",
+    "drizzle-orm": "0.44.5",
     "pg-boss": "12.5.0"
   },
   "devDependencies": {

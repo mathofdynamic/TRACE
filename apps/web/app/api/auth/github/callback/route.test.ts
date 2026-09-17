@@ -3,6 +3,7 @@ import type { TraceUser } from '@trace/auth';
 
 vi.mock('../../../../../lib/request-database', () => ({
   upsertRequestUser: vi.fn(async (user: TraceUser) => user),
+  persistRequestAuthSession: vi.fn(async () => undefined),
 }));
 
 import { GET } from './route';
