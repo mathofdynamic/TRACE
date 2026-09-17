@@ -38,6 +38,38 @@ describe('GitHub webhook security and normalization', () => {
     expect(normalizeGitHubEvent('unsupported', 'created', {})).toBeNull();
   });
 
+  it('projects bounded pull request and issue metadata for asynchronous ingestion', () => {
+    const pullRequest = normalizeGitHubEvent('pull_request', 'synchronize', {
+      installation: { id: 7001 },
+      repository: { id: 8001 },
+      pull_request: {
+        id: 9001,
+        number: 17,
+        title: 'Bounded metadata',
+        state: 'open',
+        head: { sha: 'a'.repeat(40) },
+        base: { sha: 'b'.repeat(40), ref: 'main' },
+        user: { login: 'author' },
+        html_url: 'https://github.com/example/trace/pull/17',
+        created_at: '2026-09-17T10:00:00.000Z',
+        updated_at: '2026-09-17T10:01:00.000Z',
+        body: 'source content must not be retained',
+      },
+    });
+    expect(pullRequest).toMatchObject({
+      type: 'PullRequestUpdated',
+      installationId: 7001,
+      repositoryId: 8001,
+      pullRequestId: 9001,
+      number: 17,
+      title: 'Bounded metadata',
+      headSha: 'a'.repeat(40),
+      baseBranch: 'main',
+      authorLogin: 'author',
+    });
+    expect(pullRequest).not.toHaveProperty('body');
+  });
+
   it('normalizes repository metadata without retaining source content', () => {
     expect(
       normalizeGitHubRepository({

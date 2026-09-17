@@ -8,6 +8,7 @@ const message = {
   enqueuedAt: '2026-09-16T10:00:00.000Z',
   deliveryId: 'delivery-123',
   eventName: 'pull_request',
+  event: null,
 } as const;
 
 describe('TRACE Queue contract', () => {

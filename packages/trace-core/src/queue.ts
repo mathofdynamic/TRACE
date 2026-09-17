@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { traceGitHubEventSchema } from './github-events.js';
 
 const identifier = z.string().trim().min(1).max(160);
 const timestamp = z.string().datetime({ offset: true });
@@ -17,6 +18,7 @@ export const traceQueueMessageSchema = z.discriminatedUnion('type', [
       type: z.literal('github.webhook.process'),
       deliveryId: identifier,
       eventName: identifier,
+      event: traceGitHubEventSchema.nullable(),
     })
     .strict(),
   base
@@ -96,7 +98,10 @@ export const traceQueueMessageSchema = z.discriminatedUnion('type', [
 export type TraceQueueMessage = z.infer<typeof traceQueueMessageSchema>;
 export type TraceQueueMessageType = TraceQueueMessage['type'];
 
-export const implementedCloudflareQueueMessageTypes = ['system.healthcheck'] as const;
+export const implementedCloudflareQueueMessageTypes = [
+  'system.healthcheck',
+  'github.webhook.process',
+] as const;
 
 export function parseTraceQueueMessage(input: unknown): TraceQueueMessage {
   return traceQueueMessageSchema.parse(input);

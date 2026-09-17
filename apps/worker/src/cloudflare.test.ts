@@ -6,16 +6,17 @@ describe('Cloudflare Queue consumer boundary', () => {
     const result = await handleTraceQueueMessage(
       {
         version: '1',
-        type: 'github.webhook.process',
-        idempotencyKey: 'delivery-1',
+        type: 'github.pull-request.sync',
+        idempotencyKey: 'pull-request-1',
         enqueuedAt: '2026-09-16T10:00:00.000Z',
-        deliveryId: 'delivery-1',
-        eventName: 'push',
+        organizationId: 'organization-1',
+        repositoryId: 'repository-1',
+        pullRequestNumber: 3,
       },
       { DB: {} } as Env,
     );
 
-    expect(result).toEqual({ status: 'not-implemented', type: 'github.webhook.process' });
+    expect(result).toEqual({ status: 'not-implemented', type: 'github.pull-request.sync' });
   });
 
   it('uses D1 for the implemented healthcheck', async () => {
@@ -60,11 +61,12 @@ describe('Cloudflare Queue consumer boundary', () => {
       id: 'placeholder-message',
       body: {
         version: '1',
-        type: 'github.webhook.process',
-        idempotencyKey: 'delivery-2',
+        type: 'github.pull-request.sync',
+        idempotencyKey: 'pull-request-2',
         enqueuedAt: '2026-09-16T10:00:00.000Z',
-        deliveryId: 'delivery-2',
-        eventName: 'push',
+        organizationId: 'organization-1',
+        repositoryId: 'repository-1',
+        pullRequestNumber: 3,
       },
       ack: vi.fn(),
       retry: vi.fn(),

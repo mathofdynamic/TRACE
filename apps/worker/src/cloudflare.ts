@@ -1,8 +1,13 @@
 import { sql } from 'drizzle-orm';
-import { createD1Database } from '@trace/db';
+import {
+  createD1Database,
+  createD1GitHubIngestionStore,
+  markD1WebhookDeliveryProcessed,
+} from '@trace/db';
 import {
   implementedCloudflareQueueMessageTypes,
   parseTraceQueueMessage,
+  processGitHubWebhookEvent,
   type TraceQueueMessage,
 } from '@trace/core';
 import { createLogger } from '@trace/logger';
@@ -33,6 +38,22 @@ export async function handleTraceQueueMessage(message: TraceQueueMessage, env: E
       probeId: message.probeId,
     });
     return { status: 'completed' as const, type: message.type };
+  }
+
+  if (message.type === 'github.webhook.process') {
+    const db = createD1Database(env.DB);
+    const result = await processGitHubWebhookEvent(createD1GitHubIngestionStore(db), message.event);
+    await markD1WebhookDeliveryProcessed(
+      db,
+      message.deliveryId,
+      result.status === 'processed' ? 'processed' : 'ignored',
+    );
+    logger.info('GitHub webhook business handler completed', {
+      deliveryId: message.deliveryId,
+      result: result.status,
+      type: result.type,
+    });
+    return { status: 'completed' as const, type: message.type, result };
   }
 
   return { status: 'not-implemented' as const, type: message.type };

@@ -162,3 +162,9 @@ export {
   traceQueueMessageSchema,
 } from './queue.js';
 export type { TraceQueueMessage, TraceQueueMessageType, TraceQueueSender } from './queue.js';
+export { processGitHubWebhookEvent, traceGitHubEventSchema } from './github-events.js';
+export type {
+  GitHubIngestionResult,
+  GitHubIngestionStore,
+  TraceGitHubEvent,
+} from './github-events.js';

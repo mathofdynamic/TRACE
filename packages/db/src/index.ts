@@ -11,6 +11,13 @@ export type { PersistedUserInput, UserStore } from './user-store.js';
 export { createTraceId, normalizeProviderId } from './domain-types.js';
 export type { JsonObject, ProviderId, StringList, StringMap } from './domain-types.js';
 export type TraceDatabase = ReturnType<typeof createDatabase>;
+export type TracePostgresDatabase = Awaited<ReturnType<typeof createDatabaseClient>>['db'];
+export {
+  createD1GitHubIngestionStore,
+  createPostgresGitHubIngestionStore,
+  markD1WebhookDeliveryProcessed,
+  markPostgresWebhookDeliveryProcessed,
+} from './github-ingestion.js';
 
 export function createDatabase(databaseUrl = parseServerEnv().DATABASE_URL) {
   const pool = new Pool({ connectionString: databaseUrl, max: 5 });

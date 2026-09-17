@@ -1,7 +1,8 @@
 # Cloudflare-native runtime migration
 
-Status: Phase CF2 core application parity is implemented for the authenticated
-request paths exercised by the isolated D1 harness. D1 is a parity candidate;
+Status: Phase CF2.5 GitHub ingestion and Queue business-handler parity is
+implemented for the paths exercised by the isolated D1 harness. D1 is a parity
+candidate;
 PostgreSQL, Hyperdrive, pg-boss, and the Node worker remain the authoritative
 fallback/reference until broader domain and browser parity is proven. No remote
 provisioning, staging cutover, or production deployment occurred in CF2.
@@ -12,22 +13,22 @@ The matrix records the current dual-runtime boundary. “D1” means the request
 path has an explicit D1 implementation and is covered by the isolated parity
 harness; it does not imply that PostgreSQL has been removed.
 
-| Domain                             | PostgreSQL                                  | D1                                                                                          | Browser tested                                  |
-| ---------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| Authentication, sessions, accounts | Existing request database                   | User upsert, GitHub account/session persistence, expiry and invalidation                    | D1 parity harness; core browser session         |
-| Onboarding                         | Existing request database                   | Profile read/write and audit event                                                          | D1 parity harness                               |
-| Workspace and membership           | Existing request database                   | Workspace creation, membership lookup, tenant predicates                                    | D1 tenant-isolation harness                     |
-| GitHub installation and access     | Existing request database                   | Installation, repository catalog, selected state and re-selection                           | D1 route/service coverage; provider HTTP mocked |
-| GitHub repositories                | Existing request database                   | Metadata, provider IDs as TEXT, remote-head updates                                         | D1 parity harness; core browser catalog         |
-| Pull requests and issues           | Existing request database                   | D1 schema and read projection for pull requests; issue table retained for the sync boundary | Not yet browser-seeded                          |
-| Webhook deduplication              | Existing PostgreSQL delivery path           | D1 delivery identity, status transition and Queue producer boundary                         | Service/integration harness                     |
-| Dashboard and repository detail    | Existing request database                   | Membership-scoped D1 projection, fail-closed freshness, records and activity                | D1 projection; core browser dashboard           |
-| CLI authorization                  | Existing request database                   | Device authorization, consume-once conditional claim, scoped credentials, expiry/revocation | D1 parity harness                               |
-| Local TRACE sync                   | Existing PostgreSQL transaction path        | D1 negotiate, bounded artifact staging, idempotent completion and retry recovery            | D1 parity harness                               |
-| Reports and findings               | Existing request database                   | Synced-artifact projection and finding reads from D1                                        | D1 projection/service harness                   |
-| Conflicts, decisions, rules        | Existing request database                   | Synced-artifact projection, only when a real artifact exists                                | D1 projection/service harness                   |
-| Activity and audit                 | Existing request database                   | Tenant-scoped audit projection with deterministic epoch-ms ordering                         | D1 projection/service harness                   |
-| Local browser E2E                  | PostgreSQL fixture/config remains available | Isolated local D1 schema, seed, OpenNext Worker, and Playwright flow                        | Health/session/dashboard/repositories           |
+| Domain                             | PostgreSQL                                  | D1                                                                                           | Browser tested                                  |
+| ---------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| Authentication, sessions, accounts | Existing request database                   | User upsert, GitHub account/session persistence, expiry and invalidation                     | D1 parity harness; core browser session         |
+| Onboarding                         | Existing request database                   | Profile read/write and audit event                                                           | D1 parity harness                               |
+| Workspace and membership           | Existing request database                   | Workspace creation, membership lookup, tenant predicates                                     | D1 tenant-isolation harness                     |
+| GitHub installation and access     | Existing request database                   | Installation, repository catalog, selected state and re-selection                            | D1 route/service coverage; provider HTTP mocked |
+| GitHub repositories                | Existing request database                   | Metadata, provider IDs as TEXT, remote-head updates                                          | D1 parity harness; core browser catalog         |
+| Pull requests and issues           | Existing request database                   | D1 create/update/close projection from normalized webhook metadata; provider IDs remain TEXT | D1 ingestion harness; not yet browser-seeded    |
+| Webhook deduplication              | Existing PostgreSQL delivery path           | D1 delivery identity, status transition and Queue producer boundary                          | Service/integration harness                     |
+| Dashboard and repository detail    | Existing request database                   | Membership-scoped D1 projection, fail-closed freshness, records and activity                 | D1 projection; core browser dashboard           |
+| CLI authorization                  | Existing request database                   | Device authorization, consume-once conditional claim, scoped credentials, expiry/revocation  | D1 parity harness                               |
+| Local TRACE sync                   | Existing PostgreSQL transaction path        | D1 negotiate, bounded artifact staging, idempotent completion and retry recovery             | D1 parity harness                               |
+| Reports and findings               | Existing request database                   | Synced-artifact projection and finding reads from D1                                         | D1 projection/service harness                   |
+| Conflicts, decisions, rules        | Existing request database                   | Synced-artifact projection, only when a real artifact exists                                 | D1 projection/service harness                   |
+| Activity and audit                 | Existing request database                   | Tenant-scoped audit projection with deterministic epoch-ms ordering                          | D1 projection/service harness                   |
+| Local browser E2E                  | PostgreSQL fixture/config remains available | Isolated local D1 schema, seed, OpenNext Worker, and Playwright flow                         | Health/session/dashboard/repositories           |
 
 CF2 therefore proves the D1 persistence/service seams and a core browser flow
 locally without claiming a remote cutover. The broad Playwright suite still
@@ -223,6 +224,17 @@ The current GitHub webhook route still produces through pg-boss. Switching that 
 
 Cloudflare Queues provide at-least-once delivery, not global ordering. Every real handler must use the message idempotency key plus durable D1 state. Code must not infer ordering from batch position.
 
+### CF2.5 Queue update
+
+The D1 runtime now implements `github.webhook.process`. When a D1 binding and
+Queue binding are explicitly active, the webhook route records the delivery,
+enqueues the validated normalized event, and leaves business mutation to the
+Cloudflare consumer. The consumer calls the shared D1 GitHub ingestion
+dispatcher and acknowledges permanent domain rejections as ignored; malformed
+messages and handler failures are retried. The legacy PostgreSQL route and
+pg-boss worker use the same dispatcher for webhook jobs when D1 is not active.
+The remaining queue names retain their CF1 placeholder/unused status.
+
 ## Scheduling decision
 
 - Daily and weekly report generation should use Cloudflare Cron Triggers to enqueue one bounded Queue message per organization/time window after those handlers become real.
@@ -401,3 +413,41 @@ discovery checks at a mobile viewport. The broad Playwright suite and several
 domain bridge tests still use their PostgreSQL fixtures. GitHub PR/issue write
 ingestion and Queue business handlers remain on the reference path or are
 placeholders, so full application parity and cutover are not claimed.
+
+### Phase CF2.5 GitHub ingestion and Queue business parity
+
+- Status: D1 pull-request and issue ingestion is implemented through a shared,
+  transport-neutral dispatcher. The Cloudflare Queue consumer and the legacy
+  pg-boss worker both call the same dispatcher; PostgreSQL, pg-boss,
+  Hyperdrive, and the Node worker remain reference/fallback infrastructure.
+- GitHub ingestion: normalized pull-request opened, synchronize, edited,
+  reopened, closed, and merged events update the D1 pull-request projection.
+  Normalized issue opened, edited, reopened, closed, and transferred events
+  update the D1 issue projection. Repository and installation ownership is
+  checked before mutation, provider identifiers remain precision-safe TEXT,
+  and duplicate delivery updates are idempotent.
+- Queue boundary: `github.webhook.process` messages carry the validated,
+  bounded normalized event plus delivery identity. They contain no source
+  content, credentials, tokens, private keys, or report bodies. The consumer
+  acknowledges only successful D1 handling; malformed, unimplemented, and
+  failed messages are retried for eventual dead-letter handling.
+- Implemented Cloudflare handlers: `system.healthcheck` validates the D1
+  schema and `github.webhook.process` invokes the real D1 ingestion handler.
+  The remaining declared queue names are retained as explicit placeholders or
+  unused scaffolding because their current pg-boss handlers do not perform
+  business work. No behavior is claimed for those jobs.
+- Legacy adapter: the PostgreSQL pg-boss webhook handler decodes the same
+  normalized event contract and calls the shared dispatcher. Existing
+  non-webhook worker handlers remain unchanged until their real behavior is
+  separately ported.
+- Verification: `pnpm test:d1:github` runs an isolated local D1 migration and
+  verifies pull-request and issue create/update/close flows, duplicate
+  idempotency, installation/repository tenant rejection, removed-repository
+  selection state, Queue contract validation, and successful Queue consumer
+  acknowledgement. Core, GitHub, DB, and worker focused tests cover the shared
+  dispatcher and both transport adapters.
+- Current limits: the D1 browser runner still covers the CF2 core flow rather
+  than every reports/findings/conflicts/decisions/rules/settings surface. Full
+  D1 domain parity and remote D1/Queue cutover are not claimed. PostgreSQL,
+  Hyperdrive, pg-boss, and the external Node worker remain in place for
+  rollback/reference use.

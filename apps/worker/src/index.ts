@@ -1,4 +1,10 @@
 import { PgBoss, type Job } from 'pg-boss';
+import {
+  createDatabaseClient,
+  createPostgresGitHubIngestionStore,
+  markPostgresWebhookDeliveryProcessed,
+} from '@trace/db';
+import { processGitHubWebhookEvent, traceGitHubEventSchema } from '@trace/core';
 import { getOptionalServerEnv } from '@trace/env';
 import { createLogger } from '@trace/logger';
 
@@ -23,7 +29,38 @@ export async function startWorker(databaseUrl: string) {
     logger.info('system healthcheck completed', { jobId: jobs[0]?.id });
   });
   await boss.work('github.webhook.process', async (jobs: Job[]) => {
-    logger.info('github webhook queued for processing', { jobId: jobs[0]?.id });
+    const { db, client } = await createDatabaseClient(databaseUrl);
+    try {
+      const store = createPostgresGitHubIngestionStore(db);
+      for (const job of jobs) {
+        const data: Record<string, unknown> =
+          typeof job.data === 'object' && job.data !== null
+            ? (job.data as Record<string, unknown>)
+            : {};
+        const normalizedInput = 'normalized' in data ? data.normalized : null;
+        const normalized =
+          normalizedInput === null
+            ? { success: true as const, data: null }
+            : traceGitHubEventSchema.safeParse(normalizedInput);
+        if (!normalized.success) throw new Error('GitHub webhook job payload is invalid');
+        const result = await processGitHubWebhookEvent(store, normalized.data);
+        const deliveryId =
+          'deliveryId' in data && typeof data.deliveryId === 'string' ? data.deliveryId : null;
+        if (deliveryId)
+          await markPostgresWebhookDeliveryProcessed(
+            db,
+            deliveryId,
+            result.status === 'processed' ? 'processed' : 'ignored',
+          );
+        logger.info('github webhook business handler completed', {
+          jobId: job.id,
+          result: result.status,
+          type: result.type,
+        });
+      }
+    } finally {
+      await client.end();
+    }
   });
   await boss.work('analysis.changes', async (jobs: Job[]) => {
     logger.info('analysis job accepted', { jobId: jobs[0]?.id, source: 'worker-boundary' });

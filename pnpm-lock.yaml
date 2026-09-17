@@ -156,6 +156,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@trace/core':
+        specifier: workspace:*
+        version: link:../trace-core
       '@trace/env':
         specifier: workspace:*
         version: link:../env

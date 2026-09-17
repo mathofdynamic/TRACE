@@ -23,6 +23,7 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@trace/core": "workspace:*",
     "@trace/env": "workspace:*",
     "drizzle-orm": "0.44.5",
     "pg": "8.16.3",

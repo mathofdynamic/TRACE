@@ -1,6 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { Octokit } from '@octokit/rest';
 import { importPKCS8, SignJWT } from 'jose';
+import type { TraceGitHubEvent } from '@trace/core';
 
 export type GitHubDelivery = {
   deliveryId: string;
@@ -9,30 +10,7 @@ export type GitHubDelivery = {
   payload: unknown;
 };
 
-export type NormalizedGitHubEvent =
-  | {
-      type: 'InstallationCreated';
-      installationId: number;
-      accountLogin: string;
-      accountType: string;
-    }
-  | { type: 'InstallationRepositoriesChanged'; installationId: number; repositoryIds: number[] }
-  | {
-      type: 'RepositoryConnected';
-      repositoryId: number;
-      fullName: string;
-      owner: string;
-      name: string;
-    }
-  | {
-      type: 'PullRequestOpened' | 'PullRequestUpdated' | 'PullRequestClosed' | 'PullRequestMerged';
-      repositoryId: number;
-      pullRequestId: number;
-      number: number;
-      action: string;
-    }
-  | { type: 'BranchPushed'; repositoryId: number; ref: string; before: string; after: string }
-  | { type: 'IssueUpdated'; repositoryId: number; issueId: number; number: number; action: string };
+export type NormalizedGitHubEvent = TraceGitHubEvent;
 
 export function isReplaySafeDelivery(
   delivery: GitHubDelivery,
@@ -62,6 +40,16 @@ function asNumber(value: unknown) {
 
 function asString(value: unknown) {
   return typeof value === 'string' ? value : '';
+}
+
+function optionalString(value: unknown, maximum = 4_000) {
+  const result = asString(value);
+  return result.length > 0 && result.length <= maximum ? result : undefined;
+}
+
+function optionalTimestamp(value: unknown) {
+  const result = optionalString(value, 64);
+  return result && !Number.isNaN(Date.parse(result)) ? result : undefined;
 }
 
 export function normalizeGitHubEvent(
@@ -97,10 +85,14 @@ export function normalizeGitHubEvent(
     eventName === 'installation_repositories' &&
     ['added', 'removed'].includes(normalizedAction)
   ) {
+    const repositoryAction =
+      normalizedAction === 'added' || normalizedAction === 'removed' ? normalizedAction : null;
+    if (!repositoryAction) return null;
     const repositories = Array.isArray(root.repositories) ? root.repositories : [];
     return {
       type: 'InstallationRepositoriesChanged',
       installationId,
+      action: repositoryAction,
       repositoryIds: repositories.map((item) => asNumber(asRecord(item).id)).filter(Boolean),
     };
   }
@@ -110,10 +102,17 @@ export function normalizeGitHubEvent(
   ) {
     return {
       type: 'RepositoryConnected',
+      ...(installationId ? { installationId } : {}),
       repositoryId,
       fullName: asString(repository.full_name),
       owner: asString(asRecord(repository.owner).login),
       name: asString(repository.name),
+      ...(optionalString(repository.default_branch, 255)
+        ? { defaultBranch: optionalString(repository.default_branch, 255) }
+        : {}),
+      ...(optionalString(repository.visibility, 64)
+        ? { visibility: optionalString(repository.visibility, 64) }
+        : {}),
     };
   }
   if (
@@ -124,6 +123,11 @@ export function normalizeGitHubEvent(
     const pullRequestId = asNumber(pullRequest.id);
     const pullRequestNumber = asNumber(pullRequest.number);
     if (!pullRequestId || !pullRequestNumber) return null;
+    const head = asRecord(pullRequest.head);
+    const base = asRecord(pullRequest.base);
+    const user = asRecord(pullRequest.user);
+    const merged = Boolean(asString(pullRequest.merged_at));
+    const state = merged ? 'merged' : asString(pullRequest.state);
     return {
       type:
         normalizedAction === 'opened'
@@ -137,11 +141,28 @@ export function normalizeGitHubEvent(
       pullRequestId,
       number: pullRequestNumber,
       action: normalizedAction,
+      ...(installationId ? { installationId } : {}),
+      ...(optionalString(pullRequest.title) ? { title: optionalString(pullRequest.title) } : {}),
+      ...(state === 'open' || state === 'closed' || state === 'merged' ? { state } : {}),
+      ...(optionalString(head.sha, 64) ? { headSha: optionalString(head.sha, 64) } : {}),
+      ...(optionalString(base.sha, 64) ? { baseSha: optionalString(base.sha, 64) } : {}),
+      ...(optionalString(base.ref, 255) ? { baseBranch: optionalString(base.ref, 255) } : {}),
+      ...(optionalString(user.login, 255) ? { authorLogin: optionalString(user.login, 255) } : {}),
+      ...(optionalString(pullRequest.html_url, 2_000)
+        ? { url: optionalString(pullRequest.html_url, 2_000) }
+        : {}),
+      ...(optionalTimestamp(pullRequest.created_at)
+        ? { createdAt: optionalTimestamp(pullRequest.created_at) }
+        : {}),
+      ...(optionalTimestamp(pullRequest.updated_at)
+        ? { updatedAt: optionalTimestamp(pullRequest.updated_at) }
+        : {}),
     };
   }
   if (eventName === 'push')
     return {
       type: 'BranchPushed',
+      ...(installationId ? { installationId } : {}),
       repositoryId,
       ref: asString(root.ref),
       before: asString(root.before),
@@ -155,12 +176,27 @@ export function normalizeGitHubEvent(
     const issueId = asNumber(issue.id);
     const issueNumber = asNumber(issue.number);
     if (!issueId || !issueNumber) return null;
+    const user = asRecord(issue.user);
+    const state = asString(issue.state);
     return {
       type: 'IssueUpdated',
+      ...(installationId ? { installationId } : {}),
       repositoryId,
       issueId,
       number: issueNumber,
       action: normalizedAction,
+      ...(optionalString(issue.title) ? { title: optionalString(issue.title) } : {}),
+      ...(state === 'open' || state === 'closed' ? { state } : {}),
+      ...(optionalString(user.login, 255) ? { authorLogin: optionalString(user.login, 255) } : {}),
+      ...(optionalString(issue.html_url, 2_000)
+        ? { url: optionalString(issue.html_url, 2_000) }
+        : {}),
+      ...(optionalTimestamp(issue.created_at)
+        ? { createdAt: optionalTimestamp(issue.created_at) }
+        : {}),
+      ...(optionalTimestamp(issue.updated_at)
+        ? { updatedAt: optionalTimestamp(issue.updated_at) }
+        : {}),
     };
   }
   return null;

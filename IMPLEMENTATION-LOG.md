@@ -460,3 +460,34 @@
 - Verification rerun: D1 local schema, D1 parity, and D1 browser E2E passed. The root lint, monorepo typecheck (26/26 tasks), unit suite (26 tasks; web 32 passed and six optional PostgreSQL tests skipped), optimized build, and Cloudflare/OpenNext build passed. Targeted Prettier validation covered 54 changed files with zero failures. The repository-wide format check retains unrelated baseline failures and was not mass-formatted.
 - Provider safety: GitHub normalization now rejects unsafe numeric provider identifiers instead of allowing precision-loss values to cross the application boundary; string identifiers remain the D1 representation.
 - Next: Expand the isolated D1 browser seed/server lifecycle across reports, findings, conflicts, decisions, rules, activity, settings, and CLI flows; port any unexercised GitHub PR/issue persistence; then validate an isolated remote D1/Queue staging cutover in CF3 while retaining PostgreSQL rollback infrastructure.
+
+### Phase CF2.5 D1 GitHub ingestion and Queue business parity
+
+- Status: Partial parity implementation complete locally; no remote Cloudflare
+  resources, migrations, deployment, push, or merge performed.
+- Date: 2026-09-17
+- GitHub ingestion: Added a bounded normalized event contract and shared
+  transport-neutral dispatcher for pull-request, issue, branch, repository,
+  and installation-repository webhook events. D1 handlers now create/update/
+  close PR and issue projections, enforce installation/repository ownership,
+  preserve provider IDs as text, update default-branch heads, and retain
+  idempotent natural-key behavior. The legacy PostgreSQL adapter calls the same
+  dispatcher for webhook jobs.
+- Queue: The D1 webhook route now sends the validated normalized event in the
+  reference-only `github.webhook.process` message. The Cloudflare consumer
+  handles D1 healthchecks and real GitHub webhook ingestion; malformed,
+  failed, and not-yet-implemented message types are retried. pg-boss,
+  PostgreSQL, Hyperdrive, and the Node worker remain the fallback/reference
+  path, and the seven existing log-only worker handlers were not presented as
+  migrated business behavior.
+- Verification: `pnpm test:d1:github` passed against an isolated local D1
+  database, covering realistic PR and issue create/update/close flows,
+  duplicate idempotency, installation mismatch, unknown repository rejection,
+  repository removal selection state, Queue schema validation, and successful
+  Queue consumer acknowledgement. Focused `@trace/core`, `@trace/github`,
+  `@trace/db`, and worker tests passed during implementation.
+- Limits: Full D1 application/browser parity is not claimed. Remaining queue
+  jobs are placeholders or unused scaffolding, the broad Playwright suite still
+  uses its PostgreSQL fixture, and remote D1/Queue provisioning is deferred to
+  CF3. PostgreSQL, Hyperdrive, pg-boss, and the external Node worker remain
+  intentionally intact.

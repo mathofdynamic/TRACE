@@ -1,6 +1,6 @@
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { PgBoss } from 'pg-boss';
-import { d1Schema, isD1Database, createDatabase, schema } from '@trace/db';
+import { d1Schema, createDatabase, schema } from '@trace/db';
 import type { TraceD1Database } from '@trace/db';
 import { enqueueTraceMessage, type TraceQueueMessage } from '@trace/core';
 import { parseGitHubWebhookEnv } from '@trace/env';
@@ -97,34 +97,6 @@ export async function POST(request: Request) {
         return Response.json({ accepted: true, duplicate: true });
       }
 
-      if (normalized?.type === 'BranchPushed') {
-        const [repository] = await d1
-          .select({
-            id: d1Schema.githubRepositories.id,
-            defaultBranch: d1Schema.githubRepositories.defaultBranch,
-          })
-          .from(d1Schema.githubRepositories)
-          .where(
-            eq(d1Schema.githubRepositories.githubRepositoryId, String(normalized.repositoryId)),
-          )
-          .limit(1);
-        if (
-          repository?.defaultBranch &&
-          normalized.ref === `refs/heads/${repository.defaultBranch}` &&
-          /^[a-f0-9]{40}$/i.test(normalized.after)
-        ) {
-          await d1
-            .update(d1Schema.githubRepositories)
-            .set({ remoteHeadSha: normalized.after, updatedAt: new Date() })
-            .where(
-              and(
-                eq(d1Schema.githubRepositories.id, repository.id),
-                eq(d1Schema.githubRepositories.state, 'active'),
-              ),
-            );
-        }
-      }
-
       const queue = cloudflareEnv.TRACE_QUEUE;
       if (!queue) {
         return Response.json({ error: 'Webhook queue is not configured.' }, { status: 503 });
@@ -138,6 +110,7 @@ export async function POST(request: Request) {
           enqueuedAt: new Date().toISOString(),
           deliveryId,
           eventName,
+          event: normalized,
         },
       );
       await d1
@@ -164,32 +137,6 @@ export async function POST(request: Request) {
       .onConflictDoNothing({ target: schema.githubWebhookDeliveries.deliveryId })
       .returning({ id: schema.githubWebhookDeliveries.id });
     if (!delivery) return Response.json({ accepted: true, duplicate: true });
-
-    if (normalized?.type === 'BranchPushed') {
-      const [repository] = await db
-        .select({
-          id: schema.githubRepositories.id,
-          defaultBranch: schema.githubRepositories.defaultBranch,
-        })
-        .from(schema.githubRepositories)
-        .where(eq(schema.githubRepositories.githubRepositoryId, normalized.repositoryId))
-        .limit(1);
-      if (
-        repository?.defaultBranch &&
-        normalized.ref === `refs/heads/${repository.defaultBranch}` &&
-        /^[a-f0-9]{40}$/i.test(normalized.after)
-      ) {
-        await db
-          .update(schema.githubRepositories)
-          .set({ remoteHeadSha: normalized.after, updatedAt: new Date() })
-          .where(
-            and(
-              eq(schema.githubRepositories.id, repository.id),
-              eq(schema.githubRepositories.state, 'active'),
-            ),
-          );
-      }
-    }
 
     const boss = new PgBoss({ connectionString: databaseUrl });
     await boss.start();
