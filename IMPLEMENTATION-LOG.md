@@ -526,3 +526,34 @@
   worker remain intentionally separate. The current D1 sync path does not emit
   Queue work, so sync → Queue is not applicable. Remote D1/Queue provisioning
   and cutover remain deferred to CF3.
+
+### Phase CF3 remote D1 and Queue staging
+
+- Status: Staging resources provisioned, but remote schema application is
+  blocked by the Cloudflare account's exhausted D1 free-tier daily row-read
+  quota. No staging Worker deployment or data migration was attempted after
+  the quota response.
+- Date: 2026-09-18
+- Resources: Created the isolated `trace-test-staging-db` D1 database and
+  `trace-staging-jobs` Queue in the existing `mathofdynamic2` account. The
+  existing `trace-test-staging` Worker, Pages proxy, Hyperdrive, GitHub App,
+  and secrets were not deleted, changed, or rotated.
+- Runtime wiring: `apps/web/wrangler.jsonc` now binds staging `DB` to the
+  dedicated D1 database, binds `TRACE_QUEUE` to the dedicated Queue, selects
+  `TRACE_DATABASE_DRIVER=d1`, and attaches a same-Worker Queue consumer with
+  bounded batch/retry settings. `apps/web/custom-worker.ts` wraps the
+  generated OpenNext fetch handler and exposes `queue()`; no second Worker was
+  created.
+- Local verification: Wrangler 4.120.1 dry-run resolved the intended staging
+  D1, Queue, and preserved Hyperdrive bindings. The OpenNext Cloudflare build,
+  web typecheck, local D1 integration, CF2.6 queue parity, GitHub ingestion,
+  and D1 Playwright E2E passed. The dry-run reported only existing esbuild
+  duplicate-case warnings in generated OpenNext output.
+- Blocker: `wrangler d1 migrations apply trace-test-staging-db --remote`
+  returned Cloudflare API error 7500: the account exceeded D1's free-tier
+  daily row-read limit. The zero-to-D1 migration therefore has not been
+  applied remotely, the Queue has no consumer until a staging deployment is
+  completed, and remote auth/webhook/browser acceptance remains pending.
+- Next: after the account-level D1 quota resets or the account owner changes
+  the plan, apply the migration, deploy `--env staging`, verify the Pages
+  proxy and same-Worker Queue consumer, then run the real staging acceptance.

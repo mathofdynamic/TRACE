@@ -25,6 +25,7 @@
   "env": {
     "local-d1": {
       "name": "trace-test-local-d1",
+      "main": "custom-worker.ts",
       "workers_dev": true,
       "vars": {
         "TRACE_DEPLOYMENT_ENV": "local-d1",
@@ -51,13 +52,24 @@
             "queue": "trace-jobs-local-d1",
           },
         ],
+        "consumers": [
+          {
+            "queue": "trace-jobs-local-d1",
+            "max_batch_size": 10,
+            "max_batch_timeout": 5,
+            "max_retries": 3,
+            "retry_delay": 60,
+          },
+        ],
       },
     },
     "staging": {
       "name": "trace-test-staging",
+      "main": "custom-worker.ts",
       "workers_dev": true,
       "vars": {
         "TRACE_DEPLOYMENT_ENV": "staging",
+        "TRACE_DATABASE_DRIVER": "d1",
         "NEXT_PRIVATE_MINIMAL_MODE": "1",
         "TRACE_PUBLIC_URL": "https://trace-code.pages.dev",
         "TRACE_FEATURE_SEMANTIC_PR_FINDINGS": "false",
@@ -71,6 +83,31 @@
           "id": "2d1e4821c1484d6299d88e29f2884310",
         },
       ],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "trace-test-staging-db",
+          "database_id": "c4df63bc-8270-4500-9dab-c1c6439efa64",
+          "migrations_dir": "../../packages/db/drizzle-d1",
+        },
+      ],
+      "queues": {
+        "producers": [
+          {
+            "binding": "TRACE_QUEUE",
+            "queue": "trace-staging-jobs",
+          },
+        ],
+        "consumers": [
+          {
+            "queue": "trace-staging-jobs",
+            "max_batch_size": 10,
+            "max_batch_timeout": 5,
+            "max_retries": 3,
+            "retry_delay": 60,
+          },
+        ],
+      },
     },
   },
 }
