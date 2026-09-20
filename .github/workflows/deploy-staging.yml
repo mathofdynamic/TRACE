@@ -7,12 +7,9 @@ on:
         description: Exact commit SHA to deploy to staging
         required: true
         type: string
-  pull_request:
-    types: [labeled, synchronize]
 
 permissions:
   contents: read
-  pull-requests: read
 
 concurrency:
   group: trace-staging-deployment
@@ -20,27 +17,17 @@ concurrency:
 
 jobs:
   deploy:
-    if: >-
-      ${{
-        github.event_name == 'workflow_dispatch' ||
-        (
-          github.event_name == 'pull_request' &&
-          github.event.pull_request.head.repo.full_name == github.repository &&
-          contains(github.event.pull_request.labels.*.name, 'deploy-staging')
-        )
-      }}
     runs-on: ubuntu-latest
     environment: staging
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-      CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgresql://trace:change-me@127.0.0.1:5432/trace_dev
-      TRACE_STAGING_URL: https://trace-test-staging.mathofdynamic2.workers.dev
+      TRACE_STAGING_URL: https://trace-code.pages.dev
     steps:
       - name: Check out the exact source commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || inputs.sha || github.sha }}
+          ref: ${{ inputs.sha }}
           fetch-depth: 0
 
       - name: Set up pnpm
@@ -61,7 +48,7 @@ jobs:
         id: source
         shell: bash
         env:
-          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || inputs.sha || github.sha }}
+          EXPECTED_SHA: ${{ inputs.sha }}
         run: |
           set -euo pipefail
           actual_sha="$(git rev-parse HEAD)"
@@ -79,6 +66,21 @@ jobs:
           fi
           echo "source_sha=$actual_sha" >> "$GITHUB_OUTPUT"
           echo "Checked-out source SHA: $actual_sha"
+
+      - name: Verify Cloudflare credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+            echo "The staging environment secret CLOUDFLARE_API_TOKEN is unavailable." >&2
+            exit 1
+          fi
+          if [[ "${CLOUDFLARE_ACCOUNT_ID:-}" != "c5d6cf110905c91fc3eed1abaf8236a2" ]]; then
+            echo "The staging environment variable CLOUDFLARE_ACCOUNT_ID is not the expected TRACE account." >&2
+            exit 1
+          fi
+          echo "Cloudflare staging credentials are configured."
+          pnpm exec wrangler whoami
 
       - name: Record current staging deployment
         id: baseline
@@ -104,8 +106,31 @@ jobs:
       - name: Build the Cloudflare bundle
         run: pnpm cf:build
 
+      - name: Verify direct Wrangler artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f apps/web/custom-worker.ts
+          test -f apps/web/.open-next/worker.js
+          test -d apps/web/.open-next/assets
+          grep -Fq "nextWorker.fetch" apps/web/custom-worker.ts
+          grep -Fq "processTraceQueueBatch" apps/web/custom-worker.ts
+          grep -Fq '"name": "trace-test-staging"' apps/web/wrangler.jsonc
+          grep -Fq '"main": "custom-worker.ts"' apps/web/wrangler.jsonc
+          grep -Fq '"TRACE_DATABASE_DRIVER": "d1"' apps/web/wrangler.jsonc
+          grep -Fq '"database_name": "trace-test-staging-db"' apps/web/wrangler.jsonc
+          grep -Fq '"queue": "trace-staging-jobs"' apps/web/wrangler.jsonc
+          echo "OpenNext fetch, Queue handler, D1 binding, and Queue binding are present."
+
       - name: Deploy the staging Worker
-        run: pnpm --dir apps/web exec opennextjs-cloudflare deploy --env staging
+        id: deploy
+        continue-on-error: true
+        run: |
+          set +e
+          pnpm exec wrangler deploy --config apps/web/wrangler.jsonc --env staging --no-bundle --message "CF3.5 staging ${GITHUB_SHA}"
+          status=$?
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit 0
 
       - name: Verify new staging deployment
         id: deployment
@@ -113,6 +138,7 @@ jobs:
         env:
           PREVIOUS_DEPLOYMENT_ID: ${{ steps.baseline.outputs.deployment_id }}
           PREVIOUS_VERSION_ID: ${{ steps.baseline.outputs.version_id }}
+          DEPLOY_EXIT_CODE: ${{ steps.deploy.outputs.exit_code }}
         run: |
           set -euo pipefail
           pnpm exec wrangler deployments list --config apps/web/wrangler.jsonc --env staging --json > "$RUNNER_TEMP/staging-deployments-after.json"
@@ -130,6 +156,9 @@ jobs:
           }
           if (version.percentage !== 100) throw new Error(`Staging traffic is ${version.percentage}%, not 100%.`);
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `deployment_id=${latest.id}\nversion_id=${version.version_id}\ntraffic=${version.percentage}\ncreated_on=${latest.created_on}\n`);
+          if (process.env.DEPLOY_EXIT_CODE && process.env.DEPLOY_EXIT_CODE !== '0') {
+            console.log(`Wrangler exited ${process.env.DEPLOY_EXIT_CODE}, but Cloudflare reports a new active deployment.`);
+          }
           console.log(`Staging deployment: ${latest.id}`);
           console.log(`Staging Worker version: ${version.version_id}`);
           console.log(`Staging traffic: ${version.percentage}%`);
