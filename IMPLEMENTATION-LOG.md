@@ -579,3 +579,7 @@
   typecheck passed. The D1 integration test covers first discovery, repeated
   refresh idempotency, selected-repository preservation, suspended state, and
   cross-workspace reassociation rejection.
+- E2E follow-up: `scripts/test-d1-e2e.ts` now accepts `TRACE_D1_E2E_PORT` and
+  derives its Wrangler port, browser base URL, and `TRACE_PUBLIC_URL` from the
+  same validated value. The full D1 Playwright suite passed on port `8789`;
+  the unrelated RBD process on port `8787` was left untouched.

@@ -10,7 +10,15 @@ const web = path.join(root, 'apps', 'web');
 const wrangler = path.join(root, 'node_modules', 'wrangler', 'bin', 'wrangler.js');
 const config = path.join(web, 'wrangler.jsonc');
 const authSecret = 'trace-d1-e2e-secret-change-this-32-chars';
-const baseUrl = 'http://127.0.0.1:8787';
+const configuredPort = process.env.TRACE_D1_E2E_PORT ?? '8787';
+if (!/^\d+$/.test(configuredPort)) {
+  throw new Error(`TRACE_D1_E2E_PORT must be numeric, received ${configuredPort}`);
+}
+const d1E2ePort = Number(configuredPort);
+if (!Number.isInteger(d1E2ePort) || d1E2ePort < 1024 || d1E2ePort > 65_535) {
+  throw new Error(`TRACE_D1_E2E_PORT must be between 1024 and 65535, received ${configuredPort}`);
+}
+const baseUrl = `http://127.0.0.1:${d1E2ePort}`;
 const persistence = path.join(root, '.trace-cache', `d1-e2e-${randomUUID()}`);
 const d1TestEnvironment = {
   ...process.env,
@@ -261,11 +269,11 @@ async function main() {
         '--ip',
         '127.0.0.1',
         '--port',
-        '8787',
+        String(d1E2ePort),
         '--var',
         `TRACE_AUTH_SECRET:${authSecret}`,
         '--var',
-        'TRACE_PUBLIC_URL:http://127.0.0.1:8787',
+        `TRACE_PUBLIC_URL:${baseUrl}`,
       ],
       {
         cwd: root,
