@@ -136,14 +136,59 @@ jobs:
           apps/web/custom-worker.ts apps/worker/src/cloudflare.ts
 
       - name: Validate the direct Wrangler artifact
-        run: pnpm exec wrangler deploy --config apps/web/wrangler.jsonc --env staging --no-bundle --dry-run
+        env:
+          BUNDLE_DIR: ${{ runner.temp }}/trace-staging-worker-bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$BUNDLE_DIR"
+          mkdir -p "$BUNDLE_DIR"
+          dry_run_log="$BUNDLE_DIR/wrangler-dry-run.log"
+          pnpm exec wrangler deploy \
+            --config apps/web/wrangler.jsonc \
+            --env staging \
+            --dry-run \
+            --outdir "$BUNDLE_DIR" \
+            --metafile "$BUNDLE_DIR/bundle-meta.json" 2>&1 | tee "$dry_run_log"
+          bundle_entry="$BUNDLE_DIR/custom-worker.js"
+          test -s "$bundle_entry"
+          node --check "$bundle_entry"
+          test -d apps/web/.open-next/assets
+          test -n "$(find apps/web/.open-next/assets -type f -print -quit)"
+          grep -Fq 'env.DB (trace-test-staging-db)' "$dry_run_log"
+          grep -Fq 'env.TRACE_QUEUE (trace-staging-jobs)' "$dry_run_log"
+          BUNDLE_ENTRY="$bundle_entry" node <<'NODE'
+          const fs = require('node:fs');
+          const source = fs.readFileSync(process.env.BUNDLE_ENTRY, 'utf8');
+          const required = [
+            /\bfetch\s*:\s*[A-Za-z_$][\w$]*\.fetch\b/,
+            /\basync\s+queue\s*\(/,
+            /\bprocessTraceQueueBatch\b/,
+            /\bDOQueueHandler\b/,
+            /\bDOShardedTagCache\b/,
+            /\bBucketCachePurge\b/,
+          ];
+          const forbidden = [
+            /\bMessageBatch\s*</,
+            /\bExportedHandler\s*</,
+            /\bsatisfies\s+ExportedHandler\b/,
+            /\b(?:batch|env)\s*:\s*(?:MessageBatch|Env)\b/,
+          ];
+          for (const pattern of required) {
+            if (!pattern.test(source)) throw new Error(`Missing bundled Worker marker: ${pattern}`);
+          }
+          for (const pattern of forbidden) {
+            if (pattern.test(source)) throw new Error(`Untranspiled TypeScript remains in bundle: ${pattern}`);
+          }
+          console.log(`Validated bundled Worker JavaScript: ${source.length} bytes`);
+          NODE
 
       - name: Deploy the staging Worker
         id: deploy
         continue-on-error: true
         run: |
           set +e
-          pnpm exec wrangler deploy --config apps/web/wrangler.jsonc --env staging --no-bundle --message "CF3.5 staging ${GITHUB_SHA}"
+          pnpm exec wrangler deploy --config apps/web/wrangler.jsonc --env staging --message "CF3.5 staging ${GITHUB_SHA}"
           status=$?
           echo "exit_code=$status" >> "$GITHUB_OUTPUT"
           exit 0
