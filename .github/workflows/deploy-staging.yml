@@ -106,6 +106,12 @@ jobs:
       - name: Build the Cloudflare bundle
         run: pnpm cf:build
 
+      - name: Generate Cloudflare worker types
+        working-directory: apps/web
+        run: |
+          pnpm exec wrangler types --config wrangler.jsonc --env staging --strict-vars=false worker-configuration.d.ts
+          test -s worker-configuration.d.ts
+
       - name: Verify direct Wrangler artifact
         shell: bash
         run: |
