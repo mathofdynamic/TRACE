@@ -2,6 +2,8 @@ import { createHmac } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   exchangeGitHubAppCode,
+  getGitHubAuthenticatedUser,
+  listGitHubUserInstallations,
   normalizeGitHubEvent,
   normalizeGitHubRepositoryHead,
   normalizeGitHubRepository,
@@ -160,5 +162,88 @@ describe('GitHub webhook security and normalization', () => {
         headers: expect.any(Headers),
       }),
     );
+  });
+
+  it('lists only installations belonging to the current App', async () => {
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        installations: [
+          {
+            id: 123,
+            app_id: 456,
+            account: { login: 'trace-org', type: 'Organization' },
+            suspended_at: null,
+          },
+          {
+            id: 789,
+            app_id: 999,
+            account: { login: 'other-app', type: 'User' },
+            suspended_at: null,
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(listGitHubUserInstallations('user-token', 456)).resolves.toEqual([
+      {
+        id: 123,
+        appId: 456,
+        accountLogin: 'trace-org',
+        accountType: 'Organization',
+        suspendedAt: null,
+      },
+    ]);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.github.com/user/installations?per_page=100&page=1',
+      expect.objectContaining({ headers: expect.any(Headers) }),
+    );
+  });
+
+  it('continues pagination when the first page is full of other Apps', async () => {
+    const otherAppPage = Array.from({ length: 100 }, (_, index) => ({
+      id: index + 1,
+      app_id: 999,
+      account: { login: `other-${index}`, type: 'User' },
+      suspended_at: null,
+    }));
+    const fetchMock = vi.fn(async (url: string) =>
+      url.endsWith('page=1')
+        ? Response.json({ installations: otherAppPage })
+        : Response.json({
+            installations: [
+              {
+                id: 9001,
+                app_id: 456,
+                account: { login: 'trace-org', type: 'Organization' },
+                suspended_at: null,
+              },
+            ],
+          }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(listGitHubUserInstallations('user-token', 456)).resolves.toEqual([
+      {
+        id: 9001,
+        appId: 456,
+        accountLogin: 'trace-org',
+        accountType: 'Organization',
+        suspendedAt: null,
+      },
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('validates the OAuth viewer before installation reconciliation', async () => {
+    const fetchMock = vi.fn(async () =>
+      Response.json({ id: 123, login: 'trace-owner' }, { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(getGitHubAuthenticatedUser('user-token')).resolves.toEqual({
+      id: 123,
+      login: 'trace-owner',
+    });
   });
 });

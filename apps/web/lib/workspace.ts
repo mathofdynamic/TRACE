@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import type { TraceUser } from '@trace/auth';
 import { d1Schema, isD1Database, schema } from '@trace/db';
-import type { RequestDatabase } from './request-database';
+import type { AnyRequestDatabase } from './request-database';
 
 export type { RequestDatabase } from './request-database';
 
@@ -16,11 +16,53 @@ function workspaceSlug(accountLogin: string, accountType: string) {
   return `github-${type}-${normalized || 'account'}`;
 }
 
+export async function findGitHubWorkspace(
+  db: AnyRequestDatabase,
+  account: { login: string; type: string },
+) {
+  const slug = workspaceSlug(account.login, account.type);
+  if (isD1Database(db)) {
+    const [organization] = await db
+      .select({ id: d1Schema.organizations.id, name: d1Schema.organizations.name })
+      .from(d1Schema.organizations)
+      .where(eq(d1Schema.organizations.slug, slug))
+      .limit(1);
+    return organization ?? null;
+  }
+
+  const [organization] = await db
+    .select({ id: schema.organizations.id, name: schema.organizations.name })
+    .from(schema.organizations)
+    .where(eq(schema.organizations.slug, slug))
+    .limit(1);
+  return organization ?? null;
+}
+
 export async function ensureGitHubWorkspace(
-  db: RequestDatabase,
+  db: AnyRequestDatabase,
   user: TraceUser,
   account: { login: string; type: string },
 ) {
+  const existing = await findGitHubWorkspace(db, account);
+  if (existing) {
+    if (isD1Database(db)) {
+      await db
+        .insert(d1Schema.memberships)
+        .values({ organizationId: existing.id, userId: user.id, role: 'owner' })
+        .onConflictDoNothing({
+          target: [d1Schema.memberships.organizationId, d1Schema.memberships.userId],
+        });
+    } else {
+      await db
+        .insert(schema.memberships)
+        .values({ organizationId: existing.id, userId: user.id, role: 'owner' })
+        .onConflictDoNothing({
+          target: [schema.memberships.organizationId, schema.memberships.userId],
+        });
+    }
+    return existing;
+  }
+
   if (isD1Database(db)) {
     const d1 = db;
     const slug = workspaceSlug(account.login, account.type);
@@ -83,7 +125,7 @@ export async function ensureGitHubWorkspace(
   return organization;
 }
 
-export async function getUserOrganizationIds(db: RequestDatabase, userId: string) {
+export async function getUserOrganizationIds(db: AnyRequestDatabase, userId: string) {
   if (isD1Database(db)) {
     const memberships = await db
       .select({ organizationId: d1Schema.memberships.organizationId })

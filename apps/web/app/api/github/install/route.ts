@@ -4,6 +4,9 @@ import { getRequestTraceSession } from '../../../../lib/request-database';
 
 const APP_STATE_COOKIE = 'trace_github_app_state';
 const APP_NEXT_COOKIE = 'trace_github_app_next';
+const RECONCILE_STATE_COOKIE = 'trace_github_reconcile_state';
+const RECONCILE_NEXT_COOKIE = 'trace_github_reconcile_next';
+const RECONCILE_INSTALLATION_COOKIE = 'trace_github_reconcile_installation';
 
 function randomState() {
   const bytes = new Uint8Array(32);
@@ -37,6 +40,16 @@ export async function GET(request: Request) {
     status: 302,
     headers: { location: installUrl.toString() },
   });
+  for (const cookie of [
+    RECONCILE_STATE_COOKIE,
+    RECONCILE_NEXT_COOKIE,
+    RECONCILE_INSTALLATION_COOKIE,
+  ]) {
+    response.headers.append(
+      'set-cookie',
+      `${cookie}=; ${cookieAttributes(0, isSecurePublicUrl())}`,
+    );
+  }
   response.headers.append('set-cookie', `${APP_STATE_COOKIE}=${state}; ${attributes}`);
   response.headers.append(
     'set-cookie',

@@ -502,3 +502,25 @@ placeholders, so full application parity and cutover are not claimed.
 - Result: All production-reachable Cloudflare jobs are implemented (2/2,
   including one infrastructure probe and one business handler). Full remote
   D1/Queue cutover is intentionally deferred to CF3.
+
+### Phase CF3 verified staging baseline and CF4.1 reconciliation
+
+- Staging source: `9f29f6d74632fbf20808d2ebd9e3061d8c1519e2`.
+- Staging Worker: `trace-test-staging`, version
+  `9ebfa182-2d41-4e13-83b5-4a7e4e0fc2d6`.
+- Staging resources: D1 `trace-test-staging-db`, Queue
+  `trace-staging-jobs`, and the existing `trace-code.pages.dev` Pages proxy.
+- CF3 acceptance: a signed fixture issue webhook was deduplicated, persisted
+  in D1, delivered through the same-Worker Queue consumer, and processed by
+  the shared D1 handler. No production cutover was performed.
+- CF4.1 correction: an authenticated **Refresh GitHub access** flow now
+  reauthorizes the existing GitHub App user token for one request, discovers
+  installations through `GET /user/installations`, filters to the configured
+  App, verifies the signed-in identity and installation access, and reuses the
+  tenant-scoped installation/repository upsert. The token is not persisted.
+  Multiple accessible installations fail closed unless an explicitly
+  authorized installation ID is selected. Existing repository selection is
+  preserved on refresh.
+- The existing `/api/github/setup` callback remains the validated installation
+  path and is covered by regression tests. Production provisioning and legacy
+  infrastructure retirement remain separate CF4 work.

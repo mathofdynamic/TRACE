@@ -529,10 +529,8 @@
 
 ### Phase CF3 remote D1 and Queue staging
 
-- Status: Staging resources provisioned, but remote schema application is
-  blocked by the Cloudflare account's exhausted D1 free-tier daily row-read
-  quota. No staging Worker deployment or data migration was attempted after
-  the quota response.
+- Status: Staging resources provisioned and accepted through the Cloudflare
+  native D1/Queue path. Production cutover remains deferred.
 - Date: 2026-09-18
 - Resources: Created the isolated `trace-test-staging-db` D1 database and
   `trace-staging-jobs` Queue in the existing `mathofdynamic2` account. The
@@ -549,11 +547,35 @@
   web typecheck, local D1 integration, CF2.6 queue parity, GitHub ingestion,
   and D1 Playwright E2E passed. The dry-run reported only existing esbuild
   duplicate-case warnings in generated OpenNext output.
-- Blocker: `wrangler d1 migrations apply trace-test-staging-db --remote`
-  returned Cloudflare API error 7500: the account exceeded D1's free-tier
-  daily row-read limit. The zero-to-D1 migration therefore has not been
-  applied remotely, the Queue has no consumer until a staging deployment is
-  completed, and remote auth/webhook/browser acceptance remains pending.
-- Next: after the account-level D1 quota resets or the account owner changes
-  the plan, apply the migration, deploy `--env staging`, verify the Pages
-  proxy and same-Worker Queue consumer, then run the real staging acceptance.
+- Acceptance: after the account quota reset, migration `0000_cheerful_legion.sql`
+  was applied remotely. The deployed Worker, D1 bindings, same-Worker Queue
+  consumer, authentication, GitHub issue ingestion, duplicate delivery
+  protection, and authenticated browser flows passed staging verification.
+- Historical risk: D1 error 7500 remains a production-capacity concern and
+  must be rechecked before production provisioning.
+
+### Phase CF4.1 existing GitHub installation reconciliation
+
+- Status: Staging-first reconciliation correction implemented locally; no
+  deployment, push, merge, migration, resource, credential, or production
+  change performed.
+- Date: 2026-09-20
+- Root cause: The GitHub App setup callback persisted installations, but the
+  authenticated repository page only read persisted rows and never discovered
+  an already-authorized installation. Reinstalling the App therefore appeared
+  to fix the connection by invoking the callback again.
+- Implementation: Added an authenticated Refresh GitHub access flow using a
+  separate state cookie and the existing setup callback. The short-lived App
+  user token is used to verify the signed-in GitHub identity, list installations
+  accessible to that App user, select one candidate only, verify installation
+  access and snapshot identity, and then discard the token. Multiple candidates
+  fail closed. Installation/repository persistence is shared with the existing
+  callback and preserves repository selection on conflict updates.
+- Security: Installation ownership and workspace mapping are checked against
+  existing D1/PostgreSQL rows before reassociation. No new App, permission,
+  persistent OAuth token, or client-supplied workspace association was added.
+- Verification: GitHub package tests, setup/reconciliation callback tests,
+  installation-selection tests, D1 reconciliation integration tests, and web
+  typecheck passed. The D1 integration test covers first discovery, repeated
+  refresh idempotency, selected-repository preservation, suspended state, and
+  cross-workspace reassociation rejection.

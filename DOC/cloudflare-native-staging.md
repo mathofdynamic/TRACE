@@ -44,6 +44,29 @@ part of the Cloudflare-native staging path.
 No production D1 database, Queue, DNS record, custom domain, or GitHub App
 configuration is part of CF3.
 
+CF3 verification baseline (source `9f29f6d74632fbf20808d2ebd9e3061d8c1519e2`):
+the deployed Worker version is
+`9ebfa182-2d41-4e13-83b5-4a7e4e0fc2d6`. A signed GitHub issue event from the
+private staging fixture was persisted to D1, processed by the same-Worker Queue
+consumer, and safely rejected on legitimate redelivery. This proves the
+staging path only; it is not production cutover evidence.
+
+## Existing-installation reconciliation
+
+The repository connection page now exposes **Refresh GitHub access**. The flow
+starts an explicit, short-lived GitHub App user authorization and reuses the
+existing `/api/github/setup` callback with a separate state cookie. The token
+is used only for the current reconciliation request and is not persisted.
+
+Reconciliation lists installations accessible to the authenticated GitHub App
+user, filters to the configured App ID, verifies the signed-in GitHub identity,
+checks installation access and snapshot identity, then performs the existing
+tenant-scoped installation/repository upserts. A single candidate is selected;
+multiple candidates fail closed unless an explicitly authorized installation ID
+is supplied. Existing repository `selected` values are preserved by the
+upsert. Callback state validation and the original installation flow remain
+unchanged.
+
 ## Migrations
 
 The migration directory is `packages/db/drizzle-d1`. Apply the complete
@@ -89,10 +112,9 @@ resources:
 7. Logs show no PostgreSQL, Hyperdrive, pg-boss, or external Node-worker work
    for the tested D1 flows.
 
-The current CF3 attempt is blocked before migration because the Cloudflare
-account has exhausted the D1 free-tier daily row-read limit (API error 7500).
-No staging migration or deployment should be attempted until that account-level
-quota resets or the account owner changes the plan.
+The CF3 staging migration and deployment completed after the account quota
+reset. The historical D1 error 7500 remains a production-capacity risk and
+must be rechecked before any production provisioning.
 
 ## Rollback
 

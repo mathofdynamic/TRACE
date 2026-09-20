@@ -17,13 +17,25 @@ function setupMessage(value: string | string[] | undefined) {
   const setup = Array.isArray(value) ? value[0] : value;
   return setup === 'connected'
     ? 'GitHub connected. TRACE has discovered the repositories in your workspace.'
-    : setup === 'cancelled'
-      ? 'GitHub App installation was cancelled.'
-      : setup === 'not-configured'
-        ? 'Repository connection is not configured in this environment yet.'
-        : setup === 'github-app'
-          ? 'We could not finish connecting GitHub. Your account is still signed in.'
-          : null;
+    : setup === 'github-reconciled'
+      ? 'GitHub access refreshed. TRACE recognized the existing installation.'
+      : setup === 'cancelled'
+        ? 'GitHub App installation was cancelled.'
+        : setup === 'not-configured'
+          ? 'Repository connection is not configured in this environment yet.'
+          : setup === 'github-app'
+            ? 'We could not finish connecting GitHub. Your account is still signed in.'
+            : setup === 'github-reconcile'
+              ? 'We could not refresh GitHub access. Your account is still signed in.'
+              : setup === 'github-installation-not-found'
+                ? 'No accessible TRACE GitHub App installation was found for this account.'
+                : setup === 'github-installation-ambiguous'
+                  ? 'More than one TRACE GitHub App installation is accessible. Choose one explicitly before refreshing access.'
+                  : setup === 'github-installation-suspended'
+                    ? 'The GitHub App installation is suspended. TRACE did not enable repository access.'
+                    : setup === 'github-account-mismatch'
+                      ? 'The GitHub account used for refresh does not match the signed-in TRACE account.'
+                      : null;
 }
 
 export default async function RepositoriesPage({ searchParams }: RepositoriesPageProps) {
@@ -75,6 +87,12 @@ export default async function RepositoriesPage({ searchParams }: RepositoriesPag
               href="/api/github/install?next=/app/repositories"
             >
               Connect GitHub
+            </Link>
+            <Link
+              className="trace-button trace-button--secondary"
+              href="/api/github/reconcile?next=/app/repositories"
+            >
+              Refresh GitHub access
             </Link>
             <details className="access-disclosure">
               <summary>What TRACE can access</summary>

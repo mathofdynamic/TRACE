@@ -219,6 +219,19 @@ export type GitHubInstallationSnapshot = {
   permissions: Record<string, string>;
 };
 
+export type GitHubAuthenticatedUser = {
+  id: number;
+  login: string;
+};
+
+export type GitHubUserInstallation = {
+  id: number;
+  accountLogin: string;
+  accountType: string;
+  appId: number;
+  suspendedAt: string | null;
+};
+
 export type GitHubRepositorySnapshot = {
   id: number;
   owner: string;
@@ -361,6 +374,52 @@ export async function verifyUserInstallationAccess(accessToken: string, installa
     { token: accessToken },
   );
   return true;
+}
+
+export async function getGitHubAuthenticatedUser(accessToken: string) {
+  const user = await githubRequest<{ id?: unknown; login?: unknown }>(
+    'https://api.github.com/user',
+    {
+      token: accessToken,
+    },
+  );
+  const id = asNumber(user.id);
+  const login = asString(user.login);
+  if (!id || !login) throw new Error('GitHub authenticated user response invalid');
+  return { id, login } satisfies GitHubAuthenticatedUser;
+}
+
+export async function listGitHubUserInstallations(accessToken: string, appId: number) {
+  const installations: GitHubUserInstallation[] = [];
+  for (let page = 1; page <= 10; page += 1) {
+    const response = await githubRequest<{ installations?: unknown[] }>(
+      `https://api.github.com/user/installations?per_page=100&page=${page}`,
+      { token: accessToken },
+    );
+    const rawInstallations = response.installations ?? [];
+    const pageInstallations = rawInstallations
+      .map((value): GitHubUserInstallation | null => {
+        const installation = asRecord(value);
+        const id = asNumber(installation.id);
+        const candidateAppId = asNumber(installation.app_id);
+        const account = asRecord(installation.account);
+        const accountLogin = asString(account.login);
+        const accountType = asString(account.type);
+        if (!id || candidateAppId !== appId || !accountLogin || !accountType) return null;
+        const suspendedAt = installation.suspended_at;
+        return {
+          id,
+          accountLogin,
+          accountType,
+          appId: candidateAppId,
+          suspendedAt: typeof suspendedAt === 'string' ? suspendedAt : null,
+        };
+      })
+      .filter((value): value is GitHubUserInstallation => value !== null);
+    installations.push(...pageInstallations);
+    if (rawInstallations.length < 100) break;
+  }
+  return installations;
 }
 
 function permissionMap(value: unknown) {
