@@ -635,3 +635,29 @@
   sessions, installation, selected repository, issue, delivery, and recovery
   metadata. Remote Time Travel restore was not run; it requires an owner-
   approved separate destination and fresh Free-plan quota headroom.
+
+### Phase CF4.8 isolated Cloudflare D1 restore rehearsal
+
+- Status: Remote Time Travel restoration proven on an isolated synthetic D1;
+  live staging and production were not restored or rebound.
+- Date: 2026-09-21
+- Destination: Created exactly one unbound database,
+  `trace-restore-rehearsal-20260921` (`5075dc29-954f-4f65-a38a-0d22e7c076ac`).
+  The staging database ID was asserted before migration and restore; no Queue,
+  Worker, Pages route, GitHub callback, or external application used the
+  destination.
+- Data: Applied migrations `0000_cheerful_legion.sql` and
+  `0001_goofy_lester.sql`, then inserted only `cf48-*` synthetic records with a
+  nonfunctional placeholder session token. No live sessions, OAuth values,
+  webhook payloads, or provider identifiers were exported.
+- Restore: Captured destination bookmark
+  `00000000-0000001a-000050ed-90d1f46fc0c152afc1e24ba13ae0fe5d`, mutated one
+  synthetic issue and added one synthetic delivery, then restored once in
+  place. The original issue state and recovery metadata returned, and the
+  post-bookmark delivery disappeared. Index checks passed and
+  `PRAGMA foreign_key_check` returned no rows.
+- Safety: Staging remained at Worker version
+  `7cfc8de1-0291-47dc-a180-cb691bef2943` with the existing fixture data and
+  health response. The rehearsal database remains allocated and unbound for
+  owner-directed cleanup. This proves isolated remote recovery only; it is not
+  a production recovery rehearsal.

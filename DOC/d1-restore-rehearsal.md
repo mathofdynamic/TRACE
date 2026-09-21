@@ -2,9 +2,9 @@
 
 ## Scope
 
-This run prepared the recovery procedure and proved a local-only export/import
-rehearsal. No remote database was restored, no staging binding changed, and no
-new Cloudflare resource was created.
+CF4.6 prepared the recovery procedure and proved a local-only export/import
+rehearsal. CF4.8 then proved Cloudflare remote Time Travel on one isolated
+synthetic database. The live staging database and bindings were not modified.
 
 Staging reference:
 
@@ -19,6 +19,88 @@ Staging reference:
 The older bookmark is retained as historical recovery evidence. The latest
 bookmark is the current read-only reference and must be re-queried immediately
 before any future remote rehearsal.
+
+## CF4.8 remote isolated Time Travel rehearsal (verified)
+
+Date: 2026-09-21
+
+The rehearsal used only the `mathofdynamic2` account and created exactly one
+new, unbound database:
+
+- Destination: `trace-restore-rehearsal-20260921`
+- Destination ID: `5075dc29-954f-4f65-a38a-0d22e7c076ac`
+- Staging source ID: `c4df63bc-8270-4500-9dab-c1c6439efa64`
+- Destination region: `EEUR`
+- Wrangler: `4.120.1`
+
+The destination ID was checked against the complete account inventory before
+use. No Worker, Queue, Pages project, route, GitHub callback, or external
+application was bound to it. No RADAR resource was changed.
+
+The destination was migrated with a temporary untracked Wrangler
+configuration whose only binding was the destination:
+
+```powershell
+$env:CLOUDFLARE_ACCOUNT_ID='c5d6cf110905c91fc3eed1abaf8236a2'
+.\node_modules\.bin\wrangler.cmd d1 migrations apply DB --remote --config apps/web/wrangler.cf48-restore.jsonc
+```
+
+Migrations `0000_cheerful_legion.sql` and `0001_goofy_lester.sql` both applied.
+The synthetic dataset used only `cf48-*` identifiers, a nonfunctional
+placeholder session token, and no real installation IDs, webhook payloads,
+OAuth values, or staging records.
+
+The destination-specific bookmark was captured at approximately
+`2026-09-21T17:04:41Z`:
+
+```text
+00000000-0000001a-000050ed-90d1f46fc0c152afc1e24ba13ae0fe5d
+```
+
+The command is remote by default; the installed Wrangler rejects an unnecessary
+`--remote` flag for `time-travel info`:
+
+```powershell
+.\node_modules\.bin\wrangler.cmd d1 time-travel info DB --config apps/web/wrangler.cf48-restore.jsonc --json
+```
+
+Before restore, the issue was changed from `open` to `closed` and a second
+synthetic queued delivery was inserted. The destination was then restored in
+place to the recorded bookmark, exactly once:
+
+```powershell
+.\node_modules\.bin\wrangler.cmd d1 time-travel restore DB --config apps/web/wrangler.cf48-restore.jsonc --bookmark=00000000-0000001a-000050ed-90d1f46fc0c152afc1e24ba13ae0fe5d --json
+```
+
+Cloudflare returned the target bookmark above and previous bookmark
+`00000000-ffffffff-000050ed-c13f82fdeaea055dc1ea2f922640b9df`.
+
+Post-restore validation passed:
+
+- migrations: `0000_cheerful_legion.sql`, `0001_goofy_lester.sql`
+- tables: 25 SQLite tables, including migration/internal tables and 23 application tables
+- representative indexes: 5 present
+- `PRAGMA foreign_key_check`: no rows
+- synthetic user, placeholder session, organization, membership, installation, selected repository, issue, and original processed delivery: one each
+- issue state/title restored to `open` / `CF48 synthetic issue`
+- post-bookmark delivery: absent
+- recovery metadata: present on the original delivery
+
+The staging database remained unchanged by the restore. Read-only checks still
+showed its two migrations, one selected fixture repository, two fixture issues,
+one delivery, Worker version `7cfc8de1-0291-47dc-a180-cb691bef2943` at 100%, and
+`/api/health` returning HTTP 200.
+
+At the time of the rehearsal, the account had eight databases after creating
+the destination. The latest staging rolling metrics were 15,922 rows read and
+67 rows written over 24 hours; exact account-wide current-day usage was not
+available through Wrangler. Free-plan Time Travel retention is seven days;
+bookmarks must be refreshed before future rehearsals. The rehearsal database
+remains allocated and unbound for owner-directed cleanup.
+
+This proves remote Time Travel restoration of the TRACE schema and synthetic
+records on an isolated database. It does not prove restoration of the live
+staging database or a production snapshot.
 
 ## Local-only rehearsal (verified)
 
@@ -42,7 +124,7 @@ the following matched after import:
 This proves the local export/import tooling and schema shape only. It does not
 prove Cloudflare remote Time Travel restoration.
 
-## Remote rehearsal procedure (not executed)
+## Remote rehearsal procedure (historical plan)
 
 1. Confirm current account identity, Workers plan, D1 quota headroom, and the
    exact staging database ID. Do not use a production database.
@@ -50,24 +132,30 @@ prove Cloudflare remote Time Travel restoration.
 
    ```powershell
    $env:CLOUDFLARE_ACCOUNT_ID='c5d6cf110905c91fc3eed1abaf8236a2'
-   .\node_modules\.bin\wrangler.cmd d1 time-travel info trace-test-staging-db --remote --config apps/web/wrangler.jsonc --env staging --json
+   .\node_modules\.bin\wrangler.cmd d1 time-travel info trace-test-staging-db --config apps/web/wrangler.jsonc --env staging --json
    ```
 
 3. Protect current staging state by recording the bookmark, migration list,
    active Worker version, D1 binding, Queue binding, and sanitized row-count
    checks. Do not export tokens, sessions, or raw webhook payloads.
-4. Use an owner-approved, separate disposable D1 destination. Creating that
-   destination is a remote resource mutation and was intentionally not done in
-   CF4.6. Bind it only in an isolated Wrangler environment; never repoint
-   `trace-test-staging`.
-5. Prefer a supported Cloudflare database copy/fork operation if the account
-   exposes one. If no isolated copy operation is available, use a remote SQL
-   export and import into the approved destination. Both paths consume D1
-   quota and require explicit resource/quota approval.
-6. Do not run `d1 time-travel restore` against staging. Wrangler exposes restore
-   by bookmark/timestamp for a target database; it is a target-mutating
-   operation. Use it only when the destination is isolated and the owner has
-   approved the exact target and bookmark.
+4. Use an owner-approved, separate disposable D1 destination. Time Travel
+   currently restores a specified database in place; it does not clone/fork a
+   source database into a new destination. Bind the destination only in an
+   isolated Wrangler environment; never repoint `trace-test-staging`.
+5. If a separate data copy is required, use an approved sanitized SQL
+   export/import path. The Wrangler syntax is:
+
+   ```powershell
+   .\node_modules\.bin\wrangler.cmd d1 export trace-test-staging-db --remote --output <protected.sql>
+   .\node_modules\.bin\wrangler.cmd d1 execute <destination> --remote --file <sanitized.sql> --yes
+   ```
+
+   Do not export sessions, credentials, raw webhook payloads, or secrets.
+   Both operations consume D1 quota and require explicit approval.
+
+6. Do not run `d1 time-travel restore` against staging. Restore is a
+   target-mutating operation and must only run after the target identity and
+   bookmark have been independently asserted.
 7. Apply/verify schema in the destination, then validate indexes, foreign keys,
    sessions, installations, selected repository, issues, webhook deliveries,
    and recovery fields. Compare counts and stable identifiers without exposing
@@ -87,8 +175,8 @@ explicit owner decision. During a D1 outage, recovery listing/replay cannot be
 considered successful, and after Queue retention expires an old message may no
 longer be replayable. The current Workers Free account has a finite daily D1
 row-read quota; remote export, migration, restore, and validation all consume
-quota. Stop on error `7500` and wait for quota recovery rather than retrying in
-a loop or changing the plan.
+quota. Free-plan Time Travel retention is seven days. Stop on error `7500` and
+wait for quota recovery rather than retrying in a loop or changing the plan.
 
 ## Cleanup boundary
 
