@@ -681,3 +681,25 @@
   `trace-restore-rehearsal-20260921` database remains unbound and retained.
 - Documentation: production topology, staging local/deployed boundaries,
   Free-plan gates, recovery procedure, and release checklist were updated.
+
+### Phase CF4.10 staging no-fallback regression and capacity evidence
+
+- Status: Local no-fallback regression proof and read-only staging/capacity
+  evidence completed. No push, staging deployment, production resource,
+  migration, route, callback, or secret change was performed.
+- Guard coverage: request-database tests now exercise valid production D1
+  selection, missing D1 binding, and incorrect production driver rejection.
+  Webhook route tests prove that production without D1 returns 503 before
+  pg-boss/PostgreSQL construction, while the normal staging D1 path remains
+  Queue-backed.
+- Remote read-only evidence: staging D1
+  `c4df63bc-8270-4500-9dab-c1c6439efa64` has 23 tables and no pending
+  migrations; active Worker version remains
+  `7cfc8de1-0291-47dc-a180-cb691bef2943` at 100%. The Pages project
+  `trace-code.pages.dev` and workers.dev endpoint
+  `trace-test-staging.mathofdynamic2.workers.dev` both serve health checks.
+- Capacity limits: eight D1 databases are currently listed. Wrangler exposes
+  rolling database metrics, but exact account-wide current-UTC-day row totals,
+  aggregate Worker CPU distribution, and Queue backlog/retry metrics were not
+  available. Those gates remain UNKNOWN; no load test or quota-consuming probe
+  was run.

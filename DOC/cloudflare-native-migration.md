@@ -561,3 +561,31 @@ placeholders, so full application parity and cutover are not claimed.
   proof, owner recovery, tenant isolation, retry/idempotency evidence, and
   sanitized runtime metrics. Stop on quota exhaustion, missing bindings,
   Worker CPU or bundle limits, callback ambiguity, or any legacy database use.
+
+### Phase CF4.10 staging no-fallback regression and capacity evidence
+
+- Source: local `79ce9f879601cd50d09b817214273e017119fc4b`. The deployed
+  staging Worker remains `7cfc8de1-0291-47dc-a180-cb691bef2943` from source
+  `1bc3fc09c19084545df8191a3ae63a8377aa40e0`; CF4.9 is not staging evidence.
+- No-fallback proof: request-database tests cover valid production D1
+  selection, missing production binding, and an incorrect production driver.
+  Webhook route tests prove a production request returns 503 without a D1
+  binding and never constructs pg-boss, and that the normal staging D1 path
+  publishes to the Queue producer. No deployment was performed in CF4.10.
+- Remote parity: `trace-test-staging-db` (`c4df63bc-8270-4500-9dab-c1c6439efa64`)
+  reports 23 tables and no pending migrations. The existing staging Worker
+  remains on the previously deployed source and data.
+- Capacity evidence: the account inventory contains eight D1 databases and
+  the retained unbound restore rehearsal. Wrangler exposes per-database
+  rolling 24-hour metrics but not exact account-wide current-UTC-day totals,
+  aggregate Worker CPU percentiles, or Queue backlog/retry metrics in this
+  operating context. Current-day D1 quota, Worker CPU headroom, and Queue
+  headroom therefore remain `UNKNOWN`; rolling values must not be treated as
+  daily quota.
+- Routing: `https://trace-code.pages.dev` remains the Pages project and staging
+  proxy. The deployed staging Worker is also reachable at
+  `https://trace-test-staging.mathofdynamic2.workers.dev`. No production route
+  or GitHub callback was changed.
+- Release status: the no-fallback guard is locally verified but not deployed;
+  production resources, routing, callback decisions, and capacity evidence
+  remain open gates.
