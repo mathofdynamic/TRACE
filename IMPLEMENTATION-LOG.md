@@ -1,5 +1,19 @@
 # TRACE Implementation Log
 
+### Phase CF4.3 Queue retry and business idempotency
+
+- Status: Local D1 fault-injection proof complete; no staging or production
+  deployment, resource, migration, credential, or legacy-infrastructure change.
+- Date: 2026-09-21
+- Verification: `pnpm test:d1:cf43` proves transient failure retry, replay after
+  a business write before acknowledgement, one logical PR projection, tenant
+  and repository preservation, and retry exhaustion without false success.
+- Operational gap: staging uses `max_retries: 3` without a dead-letter queue.
+  Exhausted messages are not acknowledged and leave the D1 delivery row
+  `queued`; Cloudflare logs/Queue metrics are the only current operator signal.
+  Production cutover requires a bounded DLQ or an owner-only durable replay
+  path.
+
 ### Staging hardening and merge readiness
 
 - Status: Hardening is implemented, deployed to staging, and regression-tested locally. Immutable Worker version `4817dae0-dd68-4e7b-9a7a-51ef00260882` is serving 100% of staging traffic; GitHub-backed freshness refresh and the completion-race fix are live.
