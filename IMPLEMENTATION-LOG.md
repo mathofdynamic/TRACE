@@ -1,5 +1,25 @@
 # TRACE Implementation Log
 
+### Phase CF4.4 Durable webhook recovery
+
+- Status: Local D1 owner-only recovery implemented; no remote migration,
+  deployment, push, merge, resource, credential, or production change.
+- Date: 2026-09-21
+- Recovery contract: D1 webhook deliveries now retain the trusted normalized
+  event, tenant/repository scope, bounded attempts, sanitized failure metadata,
+  replay claim state, and operator identity. Queue/handler failures become
+  `potentially_unresolved`; this does not claim remote retry exhaustion.
+- Access: Owners can list at most 50 unresolved deliveries and request one
+  replay by delivery ID. Server-side checks enforce workspace ownership,
+  current installation/repository state, stored event validity, and an atomic
+  single-winner `replaying` transition. Enqueue failures return to the
+  recoverable state. Recovery actions are audited.
+- Verification: `pnpm test:d1:cf44` covers normal completion, transient retry,
+  post-write replay, four modeled failures, owner replay, existing-effect
+  replay, concurrent claims, tenant/non-owner rejection, revoked access,
+  enqueue failure/recovery, and exactly-one issue projection. These are local
+  simulations; remote Queue exhaustion is not claimed.
+
 ### Phase CF4.3 Queue retry and business idempotency
 
 - Status: Local D1 fault-injection proof complete; no staging or production

@@ -1,5 +1,10 @@
 import { eq } from 'drizzle-orm';
-import { d1Schema, type TraceD1Database } from '@trace/db';
+import {
+  d1Schema,
+  resolveD1WebhookScope,
+  sanitizeWebhookError,
+  type TraceD1Database,
+} from '@trace/db';
 import {
   enqueueCloudflareTraceMessage,
   type TraceGitHubEvent,
@@ -23,10 +28,19 @@ export type D1WebhookQueueResult =
 
 /**
  * Persist a verified webhook before publishing its bounded Queue reference.
- * A delivery left in `received` remains retryable if publishing fails; a
- * queued/ignored delivery is acknowledged as a duplicate on redelivery.
+ * Queue publication failures become explicitly recoverable rather than being
+ * left as an ambiguous `received` row that blocks operator recovery.
  */
 export async function enqueueD1Webhook(input: D1WebhookQueueInput): Promise<D1WebhookQueueResult> {
+  const scope = await resolveD1WebhookScope(
+    input.db,
+    input.normalized,
+    input.normalized &&
+      'installationId' in input.normalized &&
+      input.normalized.installationId !== undefined
+      ? String(input.normalized.installationId)
+      : null,
+  );
   const [inserted] = await input.db
     .insert(d1Schema.githubWebhookDeliveries)
     .values({
@@ -34,9 +48,14 @@ export async function enqueueD1Webhook(input: D1WebhookQueueInput): Promise<D1We
       eventName: input.eventName,
       action: input.action,
       installationId:
-        input.normalized && 'installationId' in input.normalized
+        input.normalized &&
+        'installationId' in input.normalized &&
+        input.normalized.installationId !== undefined
           ? String(input.normalized.installationId)
           : null,
+      organizationId: scope.organizationId,
+      repositoryId: scope.repositoryId,
+      normalizedEvent: input.normalized,
       payloadSha256: input.payloadSha256,
     })
     .onConflictDoNothing({ target: d1Schema.githubWebhookDeliveries.deliveryId })
@@ -73,11 +92,24 @@ export async function enqueueD1Webhook(input: D1WebhookQueueInput): Promise<D1We
     eventName: input.eventName,
     event: input.normalized,
   } satisfies TraceQueueMessage;
-  await enqueueCloudflareTraceMessage(input.queue, message);
-  await input.db
-    .update(d1Schema.githubWebhookDeliveries)
-    .set({ status: input.normalized ? 'queued' : 'ignored' })
-    .where(eq(d1Schema.githubWebhookDeliveries.id, delivery.id));
+  try {
+    await enqueueCloudflareTraceMessage(input.queue, message);
+    await input.db
+      .update(d1Schema.githubWebhookDeliveries)
+      .set({ status: input.normalized ? 'queued' : 'ignored', updatedAt: new Date() })
+      .where(eq(d1Schema.githubWebhookDeliveries.id, delivery.id));
+  } catch (error) {
+    await input.db
+      .update(d1Schema.githubWebhookDeliveries)
+      .set({
+        status: 'potentially_unresolved',
+        lastError: sanitizeWebhookError(error),
+        lastAttemptAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(d1Schema.githubWebhookDeliveries.id, delivery.id));
+    throw error;
+  }
   return {
     accepted: true,
     duplicate: false,

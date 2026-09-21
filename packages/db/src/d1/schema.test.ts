@@ -33,8 +33,22 @@ describe('D1 schema', () => {
     expect(d1Tables.size).toBe(22);
     expect([...d1Tables.keys()].sort()).toEqual([...postgresTables.keys()].sort());
     for (const [tableName, columns] of postgresTables) {
-      expect(d1Tables.get(tableName), tableName).toEqual(columns);
+      const d1Columns = d1Tables.get(tableName);
+      expect(d1Columns, tableName).toEqual(expect.arrayContaining(columns));
     }
+    expect(d1Tables.get('github_webhook_deliveries')).toEqual(
+      expect.arrayContaining([
+        'normalizedEvent',
+        'organizationId',
+        'repositoryId',
+        'attempts',
+        'lastError',
+        'lastAttemptAt',
+        'replayRequestedAt',
+        'replayRequestedBy',
+        'replayCount',
+      ]),
+    );
   });
 
   it('stores provider identifiers without JavaScript precision loss', () => {

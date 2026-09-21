@@ -18,6 +18,16 @@ export {
   markD1WebhookDeliveryProcessed,
   markPostgresWebhookDeliveryProcessed,
 } from './github-ingestion.js';
+export {
+  D1_WEBHOOK_RECOVERY_STATUSES,
+  D1WebhookRecoveryError,
+  listD1WebhookRecoveriesForOwner,
+  markD1WebhookDeliveryFailure,
+  requestD1WebhookReplay,
+  resolveD1WebhookScope,
+  sanitizeWebhookError,
+} from './webhook-recovery.js';
+export type { D1WebhookRecoveryDelivery, D1WebhookRecoveryStatus } from './webhook-recovery.js';
 
 export function createDatabase(databaseUrl = parseServerEnv().DATABASE_URL) {
   const pool = new Pool({ connectionString: databaseUrl, max: 5 });

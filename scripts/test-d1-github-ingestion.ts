@@ -12,19 +12,21 @@ import {
 import { normalizeGitHubEvent } from '@trace/github';
 import { processTraceQueueBatch } from '../apps/worker/src/cloudflare.js';
 
-const migrationPath = new URL(
-  '../packages/db/drizzle-d1/0000_cheerful_legion.sql',
-  import.meta.url,
-);
+const migrationPaths = [
+  new URL('../packages/db/drizzle-d1/0000_cheerful_legion.sql', import.meta.url),
+  new URL('../packages/db/drizzle-d1/0001_goofy_lester.sql', import.meta.url),
+];
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
 async function applyMigration(binding: D1Database) {
-  const migration = await readFile(migrationPath, 'utf8');
-  for (const statement of migration.split('--> statement-breakpoint')) {
-    if (statement.trim()) await binding.prepare(statement.trim()).run();
+  for (const migrationPath of migrationPaths) {
+    const migration = await readFile(migrationPath, 'utf8');
+    for (const statement of migration.split('--> statement-breakpoint')) {
+      if (statement.trim()) await binding.prepare(statement.trim()).run();
+    }
   }
 }
 

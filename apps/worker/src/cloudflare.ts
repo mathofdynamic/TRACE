@@ -3,6 +3,7 @@ import {
   createD1Database,
   createD1GitHubIngestionStore,
   markD1WebhookDeliveryProcessed,
+  markD1WebhookDeliveryFailure,
 } from '@trace/db';
 import {
   implementedCloudflareQueueMessageTypes,
@@ -16,7 +17,9 @@ import { createLogger } from '@trace/logger';
 const logger = createLogger('trace-cloudflare-worker');
 const implemented = new Set<string>(implementedCloudflareQueueMessageTypes);
 
-type TraceQueueDelivery = Pick<Message<unknown>, 'id' | 'body' | 'ack' | 'retry'>;
+type TraceQueueDelivery = Pick<Message<unknown>, 'id' | 'body' | 'ack' | 'retry'> & {
+  attempts?: number;
+};
 
 export async function assertD1Schema(binding: D1Database) {
   const row = await binding
@@ -25,7 +28,7 @@ export async function assertD1Schema(binding: D1Database) {
   if (row?.name !== 'users') throw new Error('TRACE D1 schema is not initialized.');
 }
 
-export async function handleTraceQueueMessage(message: TraceQueueMessage, env: Env) {
+export async function handleTraceQueueMessage(message: TraceQueueMessage, env: Env, attempt = 1) {
   if (!implemented.has(message.type)) {
     return { status: 'not-implemented' as const, type: message.type };
   }
@@ -48,6 +51,7 @@ export async function handleTraceQueueMessage(message: TraceQueueMessage, env: E
       db,
       message.deliveryId,
       result.status === 'processed' ? 'processed' : 'ignored',
+      attempt,
     );
     logger.info('GitHub webhook business handler completed', {
       deliveryId: message.deliveryId,
@@ -83,7 +87,7 @@ export async function processTraceQueueBatch(messages: readonly TraceQueueDelive
         queuedMessage.retry({ delaySeconds: 60 });
         continue;
       }
-      const result = await handleTraceQueueMessage(message, env);
+      const result = await handleTraceQueueMessage(message, env, queuedMessage.attempts ?? 1);
       if (result.status === 'not-implemented') {
         logger.error('Queue message rejected: handler registry is inconsistent', {
           messageId: queuedMessage.id,
@@ -94,6 +98,22 @@ export async function processTraceQueueBatch(messages: readonly TraceQueueDelive
       }
       queuedMessage.ack();
     } catch (error) {
+      if (message.type === 'github.webhook.process') {
+        try {
+          await markD1WebhookDeliveryFailure(
+            createD1Database(env.DB),
+            message.deliveryId,
+            queuedMessage.attempts ?? 1,
+            error,
+          );
+        } catch (failureStateError) {
+          logger.error('Webhook failure state could not be persisted', {
+            messageId: queuedMessage.id,
+            deliveryId: message.deliveryId,
+            error: failureStateError instanceof Error ? failureStateError.message : 'Unknown error',
+          });
+        }
+      }
       logger.error('Queue message processing failed', {
         messageId: queuedMessage.id,
         type: message.type,

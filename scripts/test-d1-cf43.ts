@@ -7,19 +7,21 @@ import { enqueueD1Webhook } from '../apps/web/lib/d1-webhook-queue';
 import { processTraceQueueBatch } from '../apps/worker/src/cloudflare.js';
 import type { TraceGitHubEvent, TraceQueueMessage } from '@trace/core';
 
-const migrationPath = new URL(
-  '../packages/db/drizzle-d1/0000_cheerful_legion.sql',
-  import.meta.url,
-);
+const migrationPaths = [
+  new URL('../packages/db/drizzle-d1/0000_cheerful_legion.sql', import.meta.url),
+  new URL('../packages/db/drizzle-d1/0001_goofy_lester.sql', import.meta.url),
+];
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
 async function applyMigration(binding: D1Database) {
-  const migration = await readFile(migrationPath, 'utf8');
-  for (const statement of migration.split('--> statement-breakpoint')) {
-    if (statement.trim()) await binding.prepare(statement.trim()).run();
+  for (const migrationPath of migrationPaths) {
+    const migration = await readFile(migrationPath, 'utf8');
+    for (const statement of migration.split('--> statement-breakpoint')) {
+      if (statement.trim()) await binding.prepare(statement.trim()).run();
+    }
   }
 }
 
@@ -201,7 +203,9 @@ async function main() {
     const transientAfterFailure = await readDelivery(db, transientDeliveryId);
     assert(transientRetry === 1 && transientAck === 0, 'Transient failure was acknowledged');
     assert(
-      transientAfterFailure?.status === 'queued' && !transientAfterFailure.processedAt,
+      (transientAfterFailure?.status === 'queued' ||
+        transientAfterFailure?.status === 'potentially_unresolved') &&
+        !transientAfterFailure.processedAt,
       'Transient failure changed delivery state before a successful retry',
     );
 

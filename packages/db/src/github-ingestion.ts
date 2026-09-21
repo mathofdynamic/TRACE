@@ -505,10 +505,17 @@ export async function markD1WebhookDeliveryProcessed(
   db: TraceD1Database,
   deliveryId: string,
   status: 'processed' | 'ignored' = 'processed',
+  attempt = 1,
 ) {
   await db
     .update(d1Schema.githubWebhookDeliveries)
-    .set({ status, processedAt: new Date(), updatedAt: new Date() })
+    .set({
+      status,
+      attempts: Math.max(1, Math.floor(attempt)),
+      lastAttemptAt: new Date(),
+      processedAt: new Date(),
+      updatedAt: new Date(),
+    })
     .where(eq(d1Schema.githubWebhookDeliveries.deliveryId, deliveryId));
 }
 

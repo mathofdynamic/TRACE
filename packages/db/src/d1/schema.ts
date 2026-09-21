@@ -289,9 +289,24 @@ export const githubWebhookDeliveries = sqliteTable(
     eventName: text('event_name').notNull(),
     action: text('action'),
     installationId: text('installation_id'),
+    organizationId: referenceId('organization_id').references(() => organizations.id, {
+      onDelete: 'set null',
+    }),
+    repositoryId: referenceId('repository_id').references(() => githubRepositories.id, {
+      onDelete: 'set null',
+    }),
+    normalizedEvent: text('normalized_event', { mode: 'json' }).$type<JsonObject | null>(),
     payloadSha256: text('payload_sha256').notNull(),
     status: text('status').notNull().default('received'),
     jobId: text('job_id'),
+    attempts: integer('attempts').notNull().default(0),
+    lastError: text('last_error'),
+    lastAttemptAt: timestamp('last_attempt_at'),
+    replayRequestedAt: timestamp('replay_requested_at'),
+    replayRequestedBy: referenceId('replay_requested_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    replayCount: integer('replay_count').notNull().default(0),
     receivedAt: timestamp('received_at')
       .notNull()
       .default(sql`(unixepoch() * 1000)`),
@@ -301,6 +316,7 @@ export const githubWebhookDeliveries = sqliteTable(
   (table) => [
     uniqueIndex('github_webhook_deliveries_delivery_unique').on(table.deliveryId),
     index('github_webhook_deliveries_status_idx').on(table.status),
+    index('github_webhook_deliveries_org_status_idx').on(table.organizationId, table.status),
   ],
 );
 
