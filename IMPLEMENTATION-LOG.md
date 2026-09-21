@@ -617,3 +617,21 @@
   derives its Wrangler port, browser base URL, and `TRACE_PUBLIC_URL` from the
   same validated value. The full D1 Playwright suite passed on port `8789`;
   the unrelated RBD process on port `8787` was left untouched.
+
+### Phase CF4.6 recovery API isolation and D1 restore readiness
+
+- Status: Local verification and restore rehearsal preparation complete; no
+  staging or production change performed.
+- Date: 2026-09-21
+- Verification: Added `scripts/test-d1-cf46.ts` and `test:d1:cf46`. The test
+  creates two independent owner/member workspaces with installations,
+  repositories, selected access, and unresolved deliveries. It proves owner
+  scope, non-owner and cross-tenant denial, payload omission, mismatched
+  installation/repository rejection, duplicate-installation rejection,
+  concurrent replay single-winner behavior, Queue business processing, and
+  stable organization assignment.
+- Restore readiness: Added `DOC/d1-restore-rehearsal.md`. A local-only
+  Wrangler D1 export/import rehearsal preserved schema, indexes, foreign keys,
+  sessions, installation, selected repository, issue, delivery, and recovery
+  metadata. Remote Time Travel restore was not run; it requires an owner-
+  approved separate destination and fresh Free-plan quota headroom.
