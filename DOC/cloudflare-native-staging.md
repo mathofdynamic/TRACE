@@ -116,6 +116,20 @@ The CF3 staging migration and deployment completed after the account quota
 reset. The historical D1 error 7500 remains a production-capacity risk and
 must be rechecked before any production provisioning.
 
+## CF4.9 local-versus-deployed boundary
+
+The deployed staging Worker remains the CF4.5 source
+`1bc3fc09c19084545df8191a3ae63a8377aa40e0` at the last verified version. The
+local branch contains later recovery, restore, and production no-fallback
+changes that have not been deployed. Do not use local test results as live
+staging evidence.
+
+The current production plan is documented in
+`DOC/production-architecture.md`. It proposes a separate Worker, D1, and
+Queue; it does not add a production environment to this staging Wrangler
+file. The staging Hyperdrive binding remains legacy rollback infrastructure,
+but D1 staging requests must continue to select `TRACE_DATABASE_DRIVER=d1`.
+
 ## Rollback
 
 The prior staging Worker version remains available in Wrangler deployment

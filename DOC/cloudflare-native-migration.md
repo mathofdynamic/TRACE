@@ -317,7 +317,8 @@ The request database now selects an explicit runtime driver:
 ```text
 Cloudflare DB binding or TRACE_DATABASE_DRIVER=d1 -> D1
 explicit TRACE_DATABASE_DRIVER=postgres          -> PostgreSQL
-no binding/selector                               -> legacy PostgreSQL configuration
+no binding/selector in non-production reference   -> legacy PostgreSQL configuration
+production without D1 configuration              -> fail closed
 ```
 
 The selector fails closed when D1 is requested without a `DB` binding or when
@@ -342,8 +343,9 @@ directly.
   artifacts, reports, conflicts, decisions, rules, and audit activity. Unknown
   GitHub freshness remains unknown rather than becoming `Current`.
 - A D1 webhook branch records delivery identity before it enqueues a bounded
-  Queue reference. The legacy PostgreSQL/pg-boss path remains in place when no
-  D1 binding is present.
+  Queue reference. The legacy PostgreSQL/pg-boss path remains only for
+  non-production reference environments; production D1 selection without a
+  binding returns a visible configuration error.
 
 ### Remaining PostgreSQL-only or reference paths
 
@@ -524,3 +526,38 @@ placeholders, so full application parity and cutover are not claimed.
 - The existing `/api/github/setup` callback remains the validated installation
   path and is covered by regression tests. Production provisioning and legacy
   infrastructure retirement remain separate CF4 work.
+
+### Phase CF4.9 production topology and release gates
+
+- Status: Production plan and no-fallback guard prepared locally; no production
+  resource, migration, deployment, route, OAuth/App setting, or secret changed.
+- Local source: `e1ce189f2a447a05d1f9637f3b05bb844662303d` before the CF4.9
+  working-tree changes. The deployed staging Worker remains the CF4.5 source
+  `1bc3fc09c19084545df8191a3ae63a8377aa40e0`; CF4.6--CF4.9 local changes are
+  not staging evidence.
+- Proposed resources: Worker `trace-production`, D1
+  `trace-production-db`, and Queue `trace-production-jobs`. None exists yet.
+  The isolated `trace-restore-rehearsal-20260921` database remains allocated,
+  unbound, and excluded from production configuration.
+- Free-plan gate: the account currently has eight D1 databases, including the
+  staging and rehearsal databases. Wrangler reports 474 staging reads and 9
+  writes in its rolling 24-hour window, and 15/72 for the rehearsal; exact
+  account-wide current-UTC-day totals and aggregate Worker CPU are not exposed
+  by the available read-only CLI output. Treat current-day quota headroom as
+  UNKNOWN until Dashboard/GraphQL metrics are available. The current staging
+  Wrangler dry run measured 13,749.19 KiB uncompressed upload, 144 asset files,
+  and no size-limit breach. These measurements are not a production capacity
+  guarantee.
+- Guard: `request-database.ts` now treats production or explicit D1 selection
+  as D1-required. Missing `DB`/driver configuration throws; the webhook route
+  returns 503 instead of constructing a PostgreSQL client or pg-boss instance.
+  The legacy branch remains available for non-production reference
+  environments that have not selected D1. The guard is local and awaits
+  staging regression/deployment.
+- Release gates: production requires a dedicated D1/Queue binding, explicit
+  `TRACE_DEPLOYMENT_ENV=production` and `TRACE_DATABASE_DRIVER=d1`, a selected
+  production hostname, a coordinated GitHub callback/App decision, a fresh
+  Time Travel bookmark, authenticated canary, signed webhook -> D1 -> Queue
+  proof, owner recovery, tenant isolation, retry/idempotency evidence, and
+  sanitized runtime metrics. Stop on quota exhaustion, missing bindings,
+  Worker CPU or bundle limits, callback ambiguity, or any legacy database use.

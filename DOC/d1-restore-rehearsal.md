@@ -102,6 +102,24 @@ This proves remote Time Travel restoration of the TRACE schema and synthetic
 records on an isolated database. It does not prove restoration of the live
 staging database or a production snapshot.
 
+## CF4.9 production recovery gate
+
+The CF4.8 rehearsal is the only remote restore evidence currently accepted for
+release planning. Before production provisioning, capture a fresh bookmark on
+the dedicated production D1 and record it with the Worker release SHA. Free
+Time Travel retention is seven days, so the bookmark is a recovery reference,
+not an indefinite backup. A production incident requires an owner decision:
+pause webhook/Queue intake, restore the production database in place to a
+validated bookmark, verify migrations/indexes/foreign keys and tenant-scoped
+records, then reconcile delivery states with the durable idempotency keys
+before re-enabling intake. A Worker rollback alone does not restore data.
+
+Never restore staging or production into the CF4.8 rehearsal database. Do not
+replay raw payloads from a restored database; use the normalized delivery
+record and the owner-only bounded recovery path. If Queue retention has
+expired or D1 is unavailable, mark recovery as blocked rather than claiming
+success. A synthetic isolated restore does not prove a production snapshot.
+
 ## Local-only rehearsal (verified)
 
 The isolated Wrangler D1 environments `trace-cf46-source` and

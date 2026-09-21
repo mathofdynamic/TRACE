@@ -661,3 +661,23 @@
   health response. The rehearsal database remains allocated and unbound for
   owner-directed cleanup. This proves isolated remote recovery only; it is not
   a production recovery rehearsal.
+
+### Phase CF4.9 production topology and Workers Free release gates
+
+- Status: Local production-readiness guard and runbook updates prepared. No
+  production resource, migration, deployment, route, OAuth/App setting, or
+  secret changed.
+- No-fallback guard: `request-database.ts` treats production or explicit D1
+  selection as D1-required. Missing D1 configuration fails visibly, and the
+  webhook route returns 503 rather than constructing PostgreSQL/pg-boss work.
+  The guard is not deployed to staging or production yet.
+- Capacity evidence: the account currently contains eight D1 databases. The
+  read-only Wrangler output exposes rolling 24-hour database metrics but not
+  exact account-wide current-UTC-day totals or aggregate Worker CPU; those
+  release gates remain UNKNOWN. The existing staging dry run measured 13,749.19
+  KiB uncompressed and 144 assets, below the Workers Free size/file limits.
+- Proposed production resources remain uncreated: Worker `trace-production`,
+  D1 `trace-production-db`, and Queue `trace-production-jobs`. The isolated
+  `trace-restore-rehearsal-20260921` database remains unbound and retained.
+- Documentation: production topology, staging local/deployed boundaries,
+  Free-plan gates, recovery procedure, and release checklist were updated.

@@ -8,6 +8,7 @@ import {
   createRequestDatabase,
   getRequestCloudflareEnv,
   getRequestDatabaseUrl,
+  requiresD1Runtime,
 } from '../../../../lib/request-database';
 import { enqueueD1Webhook } from '../../../../lib/d1-webhook-queue';
 
@@ -61,7 +62,13 @@ export async function POST(request: Request) {
   const action = typeof root.action === 'string' ? root.action : undefined;
   const normalized = normalizeGitHubEvent(eventName, action, payload);
   const cloudflareEnv = await getRequestCloudflareEnv();
-  if (cloudflareEnv?.DB) {
+  if (cloudflareEnv?.DB || requiresD1Runtime(cloudflareEnv)) {
+    if (!cloudflareEnv?.DB) {
+      return Response.json(
+        { error: 'Webhook D1 database binding is not configured.' },
+        { status: 503 },
+      );
+    }
     const { db, client } = await createRequestDatabase();
     const d1 = db as unknown as TraceD1Database;
     try {

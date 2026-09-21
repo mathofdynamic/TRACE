@@ -33,6 +33,7 @@ type TraceCloudflareEnv = CloudflareEnv & {
   DB?: AnyD1Database;
   TRACE_QUEUE?: TraceQueueBinding;
   TRACE_DATABASE_DRIVER?: string;
+  TRACE_DEPLOYMENT_ENV?: string;
 };
 
 export type RequestDatabase = Awaited<ReturnType<typeof createDatabaseClient>>['db'];
@@ -59,8 +60,29 @@ export function createD1RequestDatabase(binding: AnyD1Database): RequestDatabase
   return { db: createD1Database(binding) as unknown as RequestDatabase, client: noopClient };
 }
 
+type TraceRuntimeConfig = Pick<
+  TraceCloudflareEnv,
+  'TRACE_DATABASE_DRIVER' | 'TRACE_DEPLOYMENT_ENV'
+>;
+
+/**
+ * D1 is mandatory for production and for any runtime that explicitly selects
+ * the D1 driver. Callers must not silently fall back to Hyperdrive/Postgres
+ * when that configuration is incomplete.
+ */
+export function requiresD1Runtime(cloudflareEnv: TraceRuntimeConfig | null) {
+  const requestedDriver = cloudflareEnv?.TRACE_DATABASE_DRIVER ?? process.env.TRACE_DATABASE_DRIVER;
+  const deploymentEnv = cloudflareEnv?.TRACE_DEPLOYMENT_ENV ?? process.env.TRACE_DEPLOYMENT_ENV;
+  return requestedDriver === 'd1' || deploymentEnv === 'production';
+}
+
 export async function getRequestDatabaseUrl() {
-  const cloudflareUrl = (await getRequestCloudflareEnv())?.HYPERDRIVE?.connectionString;
+  const cloudflareEnv = await getRequestCloudflareEnv();
+  if (requiresD1Runtime(cloudflareEnv)) {
+    throw new Error('TRACE D1 runtime is required; PostgreSQL fallback is disabled.');
+  }
+
+  const cloudflareUrl = cloudflareEnv?.HYPERDRIVE?.connectionString;
 
   const databaseUrl = cloudflareUrl ?? process.env.DATABASE_URL;
   if (!databaseUrl) {
@@ -73,6 +95,13 @@ export async function createRequestDatabase() {
   const cloudflareEnv = await getRequestCloudflareEnv();
 
   const requestedDriver = cloudflareEnv?.TRACE_DATABASE_DRIVER ?? process.env.TRACE_DATABASE_DRIVER;
+  if (requiresD1Runtime(cloudflareEnv)) {
+    if (requestedDriver !== 'd1') {
+      throw new Error('TRACE production requires TRACE_DATABASE_DRIVER=d1.');
+    }
+    if (!cloudflareEnv?.DB) throw new Error('TRACE D1 database binding is not configured.');
+    return createD1RequestDatabase(cloudflareEnv.DB);
+  }
   if (requestedDriver === 'd1' || cloudflareEnv?.DB) {
     if (!cloudflareEnv?.DB) throw new Error('TRACE D1 database binding is not configured.');
     return createD1RequestDatabase(cloudflareEnv.DB);
