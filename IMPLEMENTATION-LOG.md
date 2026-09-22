@@ -703,3 +703,28 @@
   aggregate Worker CPU distribution, and Queue backlog/retry metrics were not
   available. Those gates remain UNKNOWN; no load test or quota-consuming probe
   was run.
+
+### Phase CF4.12 operational evidence and production integration decision
+
+- Status: Staging evidence was refreshed read-only; no staging or production
+  mutation was performed.
+- Source/deployment: local and deployed source is
+  `6daa74568846f0313010797a38b49d0e097f5fb6`; active staging Worker is
+  `5930a184-d797-4b70-9aee-d7f0647ab1fa` with deployment
+  `cfa6e971-7406-4c34-a629-f3f202ca6564`.
+- D1 readback: fixture issues `#1` and `#2` remain open in the expected
+  workspace/repository. Delivery
+  `45efb6c0-b5c3-11f1-8385-adc2e6c87a39` is processed. The read was
+  sanitized and did not include payloads, sessions, or tokens.
+- Operational limits: the account has eight D1 databases and the staging D1
+  exposes only rolling 24-hour metrics (784 read queries, 41 write queries,
+  20,947 rows read, 185 rows written). Current-UTC-day account totals,
+  aggregate Worker CPU/limit errors, and Queue backlog/retry metrics remain
+  UNKNOWN through the available authorized surfaces.
+- Integration decision: production should use a separate GitHub App and OAuth
+  App with the exact production routes documented in
+  `DOC/production-architecture.md` and `DOC/production-canary.md`; staging
+  callbacks remain unchanged.
+- Live owner recovery GET: UNVERIFIED because the browser path returned
+  `ERR_BLOCKED_BY_CLIENT`; local owner and tenant-isolation evidence remains
+  valid.
