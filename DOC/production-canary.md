@@ -230,3 +230,50 @@ index, foreign-key, and application-count checks unverified.
 No bookmark was captured and `trace-production-jobs` was not created. The next
 operation must use corrected SQL in one fresh bounded read-only pass; it must
 not rerun migrations. Queue creation remains gated on that successful pass.
+
+## CF4.14D completed provisioning
+
+The validation SQL was corrected locally against a fresh isolated D1. The
+failed query used double-quoted string literals in
+`type IN ("table", "index")`; the valid SQLite form is
+`type IN ('table', 'index')`. Local validation also split application counts
+into standalone statements to avoid the local compound-SELECT term limit.
+
+Remote production verification then passed for D1
+`7a566f2e-da27-46e7-8c3f-271e5566f225`:
+
+- migration history contains exactly `0000_cheerful_legion.sql` and
+  `0001_goofy_lester.sql`;
+- all 22 TRACE application tables, `d1_migrations`, recovery columns on
+  `github_webhook_deliveries`, and the migration-defined indexes are present;
+- `PRAGMA foreign_key_check` returned zero rows;
+- users, sessions, organizations, memberships, GitHub installations,
+  repositories, issues, and webhook deliveries all contain zero rows.
+
+Time Travel bookmark captured at `2026-09-22T10:10:03.5758536Z`:
+
+```text
+00000003-00000000-000050ee-ba60b7e52d232df30b5f7d22fafb7c14
+```
+
+The bookmark belongs to the production D1 and is subject to the Workers Free
+seven-day retention limitation. No restore was performed.
+
+After verification, exactly one Queue was created:
+
+| Resource | Name                    | ID                                 | Producers | Consumers |
+| -------- | ----------------------- | ---------------------------------- | --------- | --------- |
+| Queue    | `trace-production-jobs` | `9ef092975a554ba296a63b162b16522f` | 0         | 0         |
+
+The Queue was created with one-day message retention and remains unbound,
+unpublished, and isolated from `trace-staging-jobs`. The planned consumer
+configuration remains batch size 10, timeout 5 seconds, three retries, and
+60-second retry delay for the later closed-canary Worker deployment.
+
+The production validate-only preflight passed with the real D1 ID, Queue name,
+Worker name, D1-only runtime, and closed-canary mode. Production secrets and
+GitHub App/OAuth configuration remain pending. Staging continuity was
+verified: Worker version `5930a184-d797-4b70-9aee-d7f0647ab1fa` remains at
+100%, `/api/health` returns 200, staging D1 remains
+`c4df63bc-8270-4500-9dab-c1c6439efa64`, and `trace-staging-jobs` remains bound
+to `trace-test-staging` as its sole producer and consumer.

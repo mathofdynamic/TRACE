@@ -810,3 +810,28 @@
   bookmark capture, or further remote mutation was attempted.
 - Queue: `trace-production-jobs` remains uncreated and isolated from staging.
   Production Worker deployment and customer intake remain disabled.
+
+### Phase CF4.14D completed production D1 and Queue provisioning
+
+- SQL correction: The prior `7500` validation was caused by double-quoted
+  SQLite string literals. Corrected `sqlite_master` SQL uses
+  `type IN ('table', 'index')`; local validation passed against a fresh D1
+  with both migrations and standalone zero-row count statements.
+- Remote D1 verification: Production ID
+  `7a566f2e-da27-46e7-8c3f-271e5566f225` has exactly migrations `0000` and
+  `0001`, all 22 application tables, recovery columns and indexes,
+  zero `PRAGMA foreign_key_check` violations, and zero rows in the checked
+  users, sessions, workspace, GitHub, issue, and delivery tables.
+- Recovery: Time Travel bookmark
+  `00000003-00000000-000050ee-ba60b7e52d232df30b5f7d22fafb7c14` captured at
+  `2026-09-22T10:10:03.5758536Z`; no restore performed. Workers Free retention
+  is seven days.
+- Queue: Created exactly one isolated Queue
+  `trace-production-jobs` with ID `9ef092975a554ba296a63b162b16522f` and
+  one-day retention. It has zero producers and zero consumers; no messages or
+  DLQ were created.
+- Handoff: Production validate-only preflight passed with the real resource
+  identities and closed-canary/D1-only settings. Staging remained at Worker
+  version `5930a184-d797-4b70-9aee-d7f0647ab1fa`, health 200, and its existing
+  D1/Queue bindings. Production Worker, secrets, GitHub App/OAuth, and public
+  intake remain disabled.
