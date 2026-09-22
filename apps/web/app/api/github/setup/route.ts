@@ -14,7 +14,15 @@ import {
   listGitHubUserInstallations,
   verifyUserInstallationAccess,
 } from '@trace/github';
-import { createRequestDatabase, getRequestTraceSession } from '../../../../lib/request-database';
+import {
+  createRequestDatabase,
+  getRequestCloudflareEnv,
+  getRequestTraceSession,
+} from '../../../../lib/request-database';
+import {
+  isClosedProductionCanary,
+  productionCanaryClosedResponse,
+} from '../../../../lib/production-canary';
 import {
   chooseGitHubInstallation,
   persistGitHubInstallationSnapshot,
@@ -175,6 +183,10 @@ async function reconcileExistingInstallation(
 }
 
 export async function GET(request: Request) {
+  if (isClosedProductionCanary(await getRequestCloudflareEnv())) {
+    return productionCanaryClosedResponse();
+  }
+
   const publicUrl = getTracePublicUrl();
   const session = await getRequestTraceSession(request.headers);
   if (!session?.user)

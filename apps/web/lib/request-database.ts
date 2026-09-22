@@ -34,6 +34,7 @@ type TraceCloudflareEnv = CloudflareEnv & {
   TRACE_QUEUE?: TraceQueueBinding;
   TRACE_DATABASE_DRIVER?: string;
   TRACE_DEPLOYMENT_ENV?: string;
+  TRACE_CANARY_MODE?: string;
 };
 
 export type RequestDatabase = Awaited<ReturnType<typeof createDatabaseClient>>['db'];

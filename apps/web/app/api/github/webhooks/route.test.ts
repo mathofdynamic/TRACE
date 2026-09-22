@@ -74,6 +74,25 @@ describe('GitHub webhook D1 runtime boundary', () => {
     expect(mocks.pgBoss).not.toHaveBeenCalled();
   });
 
+  it('rejects production webhook intake while the canary is closed', async () => {
+    mocks.cloudflareEnv.mockResolvedValue({
+      TRACE_DEPLOYMENT_ENV: 'production',
+      TRACE_DATABASE_DRIVER: 'd1',
+      TRACE_CANARY_MODE: 'closed',
+      DB: {},
+      TRACE_QUEUE: { send: vi.fn(async () => undefined) },
+    });
+
+    const response = await POST(webhookRequest());
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: 'GitHub integration is disabled during the closed production canary.',
+    });
+    expect(mocks.enqueueD1Webhook).not.toHaveBeenCalled();
+    expect(mocks.pgBoss).not.toHaveBeenCalled();
+  });
+
   it('keeps the normal D1 staging path on the Queue producer', async () => {
     const client = { end: vi.fn(async () => undefined) };
     const db = {};

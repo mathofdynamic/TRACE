@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "accountId": "c5d6cf110905c91fc3eed1abaf8236a2",
+  "workerName": "trace-production",
+  "publicUrl": "https://trace-production.mathofdynamic2.workers.dev",
+  "runtime": {
+    "deploymentEnv": "production",
+    "databaseDriver": "d1",
+    "canaryMode": "closed"
+  },
+  "d1": {
+    "binding": "DB",
+    "databaseName": "trace-production-db",
+    "databaseIdEnv": "TRACE_PRODUCTION_D1_ID",
+    "stagingDatabaseId": "c4df63bc-8270-4500-9dab-c1c6439efa64",
+    "rehearsalDatabaseId": "5075dc29-954f-4f65-a38a-0d22e7c076ac",
+    "migrationsDir": "packages/db/drizzle-d1"
+  },
+  "queue": {
+    "binding": "TRACE_QUEUE",
+    "queueName": "trace-production-jobs",
+    "queueNameEnv": "TRACE_PRODUCTION_QUEUE_NAME",
+    "stagingQueueName": "trace-staging-jobs",
+    "maxBatchSize": 10,
+    "maxBatchTimeout": 5,
+    "maxRetries": 3,
+    "retryDelay": 60
+  },
+  "migrations": ["0000_cheerful_legion.sql", "0001_goofy_lester.sql"],
+  "requiredSecretNames": [
+    "GITHUB_APP_ID",
+    "GITHUB_APP_CLIENT_ID",
+    "GITHUB_APP_CLIENT_SECRET",
+    "GITHUB_APP_PRIVATE_KEY",
+    "GITHUB_WEBHOOK_SECRET",
+    "GITHUB_APP_SLUG",
+    "GITHUB_APP_CALLBACK_URL",
+    "GITHUB_APP_INSTALL_URL",
+    "GITHUB_OAUTH_CLIENT_ID",
+    "GITHUB_OAUTH_CLIENT_SECRET",
+    "TRACE_AUTH_SECRET"
+  ]
+}

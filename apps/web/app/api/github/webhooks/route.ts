@@ -11,10 +11,17 @@ import {
   requiresD1Runtime,
 } from '../../../../lib/request-database';
 import { enqueueD1Webhook } from '../../../../lib/d1-webhook-queue';
+import {
+  isClosedProductionCanary,
+  productionCanaryClosedResponse,
+} from '../../../../lib/production-canary';
 
 const MAX_BODY_BYTES = 1_048_576;
 
 export async function POST(request: Request) {
+  const cloudflareEnv = await getRequestCloudflareEnv();
+  if (isClosedProductionCanary(cloudflareEnv)) return productionCanaryClosedResponse();
+
   if (!request.headers.get('content-type')?.toLowerCase().includes('application/json')) {
     return Response.json({ error: 'application/json is required.' }, { status: 415 });
   }
@@ -61,7 +68,6 @@ export async function POST(request: Request) {
     typeof payload === 'object' && payload !== null ? (payload as Record<string, unknown>) : {};
   const action = typeof root.action === 'string' ? root.action : undefined;
   const normalized = normalizeGitHubEvent(eventName, action, payload);
-  const cloudflareEnv = await getRequestCloudflareEnv();
   if (cloudflareEnv?.DB || requiresD1Runtime(cloudflareEnv)) {
     if (!cloudflareEnv?.DB) {
       return Response.json(

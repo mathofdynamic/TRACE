@@ -728,3 +728,27 @@
 - Live owner recovery GET: UNVERIFIED because the browser path returned
   `ERR_BLOCKED_BY_CLIENT`; local owner and tenant-isolation evidence remains
   valid.
+
+### Phase CF4.13 isolated production canary configuration
+
+- Status: Production configuration and validation tooling implemented locally;
+  no production resource, migration, deployment, secret, or GitHub setting
+  changed.
+- Configuration: Added `apps/web/production-canary.json` with the dedicated
+  Worker/D1/Queue names, D1-only variables, closed-canary mode, migration
+  allowlist, and secret names. No production IDs or secret values are tracked.
+- Preflight: Added `scripts/production-canary-preflight.ts`. Validate-only mode
+  checks the manifest and bundle. Deploy mode requires real provisioned IDs,
+  rejects staging/rehearsal identity reuse, and materializes an ignored
+  Wrangler config without Hyperdrive.
+- Safety: Production webhook, install, reconciliation, and setup routes return
+  a cache-disabled 503 while `TRACE_CANARY_MODE=closed`. Staging has no canary
+  variable and its webhook path remains Queue-backed.
+- Workflow: Added the manual-only
+  `.github/workflows/validate-production-canary.yml`; validate-only is the
+  default and deploy mode requires explicit confirmation plus provisioned
+  resources. The workflow was not dispatched.
+- Verification: Production canary helper, webhook, setup, reconciliation,
+  request-database, and no-fallback tests passed. Production resources remain
+  uncreated and customer cutover remains blocked on provisioning and
+  operational evidence.

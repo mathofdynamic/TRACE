@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const mocks = vi.hoisted(() => ({
+  getRequestCloudflareEnv: vi.fn(async (): Promise<Record<string, string> | null> => null),
+}));
+
 vi.mock('../../../../lib/request-database', () => ({
   getRequestTraceSession: vi.fn(async () => ({
     user: {
@@ -11,6 +15,7 @@ vi.mock('../../../../lib/request-database', () => ({
     },
     session: { expiresAt: new Date(Date.now() + 60_000) },
   })),
+  getRequestCloudflareEnv: mocks.getRequestCloudflareEnv,
 }));
 
 import { GET } from './route';
@@ -34,6 +39,7 @@ function restoreEnvironment() {
 
 describe('GitHub installation reconciliation start', () => {
   beforeEach(() => {
+    mocks.getRequestCloudflareEnv.mockResolvedValue(null);
     process.env.TRACE_PUBLIC_URL = 'https://trace-code.pages.dev';
     process.env.GITHUB_APP_ID = '123';
     process.env.GITHUB_APP_CLIENT_ID = 'app-client';
@@ -63,5 +69,21 @@ describe('GitHub installation reconciliation start', () => {
     expect(location.searchParams.get('allow_signup')).toBe('false');
     expect(location.searchParams.get('state')).toHaveLength(64);
     expect(response.headers.get('set-cookie')).toContain('trace_github_reconcile_state=');
+  });
+
+  it('rejects installation reconciliation while production canary intake is closed', async () => {
+    mocks.getRequestCloudflareEnv.mockResolvedValue({
+      TRACE_DEPLOYMENT_ENV: 'production',
+      TRACE_CANARY_MODE: 'closed',
+    });
+
+    const response = await GET(
+      new Request('https://trace-code.pages.dev/api/github/reconcile?next=/app/repositories'),
+    );
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: 'GitHub integration is disabled during the closed production canary.',
+    });
   });
 });

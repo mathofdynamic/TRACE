@@ -1,6 +1,10 @@
 import { cookieAttributes, getTracePublicUrl, isSecurePublicUrl, safeAuthNext } from '@trace/auth';
 import { parseGitHubAppInstallEnv } from '@trace/env';
-import { getRequestTraceSession } from '../../../../lib/request-database';
+import { getRequestCloudflareEnv, getRequestTraceSession } from '../../../../lib/request-database';
+import {
+  isClosedProductionCanary,
+  productionCanaryClosedResponse,
+} from '../../../../lib/production-canary';
 
 const APP_STATE_COOKIE = 'trace_github_app_state';
 const APP_NEXT_COOKIE = 'trace_github_app_next';
@@ -19,6 +23,10 @@ function appInstallUrl(slug: string, configuredUrl?: string) {
 }
 
 export async function GET(request: Request) {
+  if (isClosedProductionCanary(await getRequestCloudflareEnv())) {
+    return productionCanaryClosedResponse();
+  }
+
   const publicUrl = getTracePublicUrl();
   const session = await getRequestTraceSession(request.headers);
   if (!session?.user)

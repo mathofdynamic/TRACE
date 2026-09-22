@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const mocks = vi.hoisted(() => ({
+  getRequestCloudflareEnv: vi.fn(async (): Promise<Record<string, string> | null> => null),
+}));
+
 vi.mock('../../../../lib/request-database', () => ({
   createRequestDatabase: vi.fn(async () => ({ db: {}, client: { end: vi.fn() } })),
   getRequestTraceSession: vi.fn(async () => ({
@@ -12,6 +16,7 @@ vi.mock('../../../../lib/request-database', () => ({
     },
     session: { expiresAt: new Date(Date.now() + 60_000) },
   })),
+  getRequestCloudflareEnv: mocks.getRequestCloudflareEnv,
 }));
 
 vi.mock('../../../../lib/github-installation', () => ({
@@ -65,6 +70,7 @@ describe('GitHub App setup callback', () => {
   };
 
   beforeEach(() => {
+    mocks.getRequestCloudflareEnv.mockResolvedValue(null);
     process.env.TRACE_PUBLIC_URL = 'https://trace-code.pages.dev';
     process.env.TRACE_AUTH_SECRET = 'trace-auth-test-secret-change-this-32-chars';
     vi.clearAllMocks();
@@ -135,6 +141,23 @@ describe('GitHub App setup callback', () => {
     expect(response.headers.get('location')).toBe(
       'https://trace-code.pages.dev/auth/error?setup=github-app-state',
     );
+    expect(persistGitHubInstallationSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('rejects setup callbacks while production canary intake is closed', async () => {
+    mocks.getRequestCloudflareEnv.mockResolvedValue({
+      TRACE_DEPLOYMENT_ENV: 'production',
+      TRACE_CANARY_MODE: 'closed',
+    });
+
+    const response = await GET(
+      new Request('https://trace-code.pages.dev/api/github/setup?state=state&code=code'),
+    );
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: 'GitHub integration is disabled during the closed production canary.',
+    });
     expect(persistGitHubInstallationSnapshot).not.toHaveBeenCalled();
   });
 });

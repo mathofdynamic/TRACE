@@ -1,7 +1,8 @@
 # TRACE production canary runbook
 
-This runbook is a non-deployable plan produced by CF4.12. It does not create
-Cloudflare resources or change GitHub configuration.
+This runbook is the controlled production-canary plan produced by CF4.12 and
+implemented in CF4.13. The validate-only path is the only path exercised so
+far; no Cloudflare resources or GitHub configuration have been changed.
 
 ## Proposed resources
 
@@ -119,3 +120,24 @@ CF4.13 may provision the isolated resources and run the no-webhook canary
 only after the owner approves the exact resource names and current capacity
 evidence is captured. It must not switch staging routing, alter the existing
 GitHub App, or expose a customer-facing production callback.
+
+## CF4.13 implementation in this checkout
+
+- `apps/web/production-canary.json` is the tracked production manifest. It
+  contains names, bindings, closed-canary variables, migration names, and
+  required secret names, but no production resource IDs or secret values.
+- `scripts/production-canary-preflight.ts --mode validate-only` validates the
+  manifest and built bundle without writing a deployable configuration. It
+  reports resource IDs as not provisioned rather than inventing them.
+- `--mode deploy` requires a real UUID in `TRACE_PRODUCTION_D1_ID`, the exact
+  `trace-production-jobs` Queue name, the exact Worker name, and an account ID
+  match. It rejects staging and rehearsal D1 IDs and writes only an ignored,
+  generated Wrangler config after those checks pass.
+- `.github/workflows/validate-production-canary.yml` is manual-only. Its
+  default `validate-only` mode builds and validates the artifact. Deploy mode
+  additionally requires `DEPLOY_TRACE_PRODUCTION_CANARY`, provisioned resource
+  variables, Cloudflare credentials, a production dry run, and the generated
+  production config. It is not dispatched by CF4.13.
+- `TRACE_CANARY_MODE=closed` blocks production webhook, install,
+  reconciliation, and setup mutation routes with a cache-disabled 503. The
+  staging environment has no canary variable and remains unchanged.
