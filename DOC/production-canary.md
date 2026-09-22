@@ -207,3 +207,26 @@ capturing a production bookmark or creating `trace-production-jobs`. The Queue
 must not be created until the schema read-back succeeds. No Worker, binding,
 consumer, message, GitHub integration, secret, or customer traffic was
 changed.
+
+## CF4.14C verification stop
+
+The production database remained the exact target
+`7a566f2e-da27-46e7-8c3f-271e5566f225`; the account inventory showed nine D1
+databases, with staging and rehearsal IDs unchanged. A bounded read-only pass
+confirmed `SELECT 1` and returned this migration history:
+
+```text
+1  0000_cheerful_legion.sql  2026-09-22 09:24:57
+2  0001_goofy_lester.sql     2026-09-22 09:25:02
+```
+
+The subsequent `sqlite_master` schema query was malformed for SQLite because
+it used double-quoted string literals. Cloudflare returned API code `7500`
+with `SQLITE_ERROR` (`near "table": syntax error`). Per the provisioning
+boundary, verification stopped immediately on that code. This is a query
+validation error, not evidence of a quota failure, but it still leaves schema,
+index, foreign-key, and application-count checks unverified.
+
+No bookmark was captured and `trace-production-jobs` was not created. The next
+operation must use corrected SQL in one fresh bounded read-only pass; it must
+not rerun migrations. Queue creation remains gated on that successful pass.

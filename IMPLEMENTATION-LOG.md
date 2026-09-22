@@ -794,3 +794,19 @@
   creation remain gated on a successful read-only schema validation pass. No
   Worker, consumer, message, staging resource, secret, or customer traffic
   changed.
+
+### Phase CF4.14C production D1 verification stop
+
+- Identity: Production D1 `trace-production-db`
+  (`7a566f2e-da27-46e7-8c3f-271e5566f225`) remained distinct from staging and
+  rehearsal. The account inventory contained nine D1 databases.
+- Migration history: A bounded remote read confirmed migration rows for
+  `0000_cheerful_legion.sql` and `0001_goofy_lester.sql` at
+  `2026-09-22 09:24:57` and `2026-09-22 09:25:02`.
+- Verification stop: The following schema query used double-quoted string
+  literals and returned Cloudflare API code `7500` with SQLite syntax error
+  `near "table": syntax error`. The code is recorded exactly; it is not
+  interpreted as a quota failure. Per the task boundary, no corrected query,
+  bookmark capture, or further remote mutation was attempted.
+- Queue: `trace-production-jobs` remains uncreated and isolated from staging.
+  Production Worker deployment and customer intake remain disabled.
