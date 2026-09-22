@@ -183,3 +183,27 @@ validation succeed.
 Staging remained on its existing D1/Queue and Worker. The rehearsal database
 remains unbound and retained. No production Worker, Queue consumer, GitHub
 integration, secret, or customer traffic was changed.
+
+## CF4.14B recovery outcome
+
+On the next authorized recovery pass, the account and resource identity were
+rechecked. The production database remained
+`7a566f2e-da27-46e7-8c3f-271e5566f225`; staging and rehearsal IDs remained
+distinct. `wrangler d1 info` and a minimal remote `SELECT 1` succeeded, and
+`wrangler d1 migrations list --remote` showed both migrations pending. This
+evidence indicates that the earlier `7003` was transient control-plane
+routing/propagation; no account mismatch or authorization failure was found.
+
+The two existing migrations were then applied exactly once to the verified
+production target. Wrangler reported both
+`0000_cheerful_legion.sql` and `0001_goofy_lester.sql` as successful. A later
+read-only schema/count validation pass failed with a transport-level
+`fetch failed` before results were returned. Therefore the migration command
+result is recorded, but independent post-migration table, index, foreign-key,
+and empty-data validation remains pending.
+
+Because that validation could not be completed, the safety gate stopped before
+capturing a production bookmark or creating `trace-production-jobs`. The Queue
+must not be created until the schema read-back succeeds. No Worker, binding,
+consumer, message, GitHub integration, secret, or customer traffic was
+changed.

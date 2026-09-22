@@ -772,3 +772,25 @@
   and customer traffic were unchanged. The production Worker remains
   undeployed. A fresh production bookmark was not captured because schema
   application did not complete.
+
+### Phase CF4.14B production D1 provisioning recovery
+
+- Identity: Account `mathofdynamic2` was revalidated. The existing production
+  D1 remained `trace-production-db`
+  (`7a566f2e-da27-46e7-8c3f-271e5566f225`), with staging and rehearsal IDs
+  excluded. Inventory contained nine D1 databases after the prior creation.
+- Diagnosis: `wrangler d1 info` and a minimal `SELECT 1` succeeded on the
+  production database, and the remote migration list showed both migrations
+  pending. This rules out a persistent identity or authorization failure; the
+  original `7003` is recorded as transient control-plane routing/propagation,
+  although Cloudflare supplied no request identifier proving the precise cause.
+- Migrations: `0000_cheerful_legion.sql` and `0001_goofy_lester.sql` were
+  applied exactly once. Wrangler reported both successful.
+- Validation stop: The subsequent read-only schema/index/foreign-key/count
+  pass failed with transport error `fetch failed`. No further remote retry was
+  made. The schema result, empty application counts, and bookmark are not yet
+  independently verified.
+- Queue: `trace-production-jobs` was not created. Bookmark capture and Queue
+  creation remain gated on a successful read-only schema validation pass. No
+  Worker, consumer, message, staging resource, secret, or customer traffic
+  changed.
