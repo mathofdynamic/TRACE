@@ -141,3 +141,45 @@ GitHub App, or expose a customer-facing production callback.
 - `TRACE_CANARY_MODE=closed` blocks production webhook, install,
   reconciliation, and setup mutation routes with a cache-disabled 503. The
   staging environment has no canary variable and remains unchanged.
+
+## CF4.14 provisioning attempt
+
+The authorized provisioning attempt began at `2026-09-22T08:54:41.3979923Z`
+against account `mathofdynamic2`
+(`c5d6cf110905c91fc3eed1abaf8236a`). The preflight inventory contained eight
+D1 databases (about 472.7 MB reported by Wrangler); neither production target
+name existed. The Workers Free plan and exact current-UTC-day account quota
+were not exposed by the available Wrangler surfaces, so quota headroom remains
+an open customer-traffic gate.
+
+The single new D1 creation succeeded:
+
+| Resource | Name                    | ID                                     | State                                         |
+| -------- | ----------------------- | -------------------------------------- | --------------------------------------------- |
+| D1       | `trace-production-db`   | `7a566f2e-da27-46e7-8c3f-271e5566f225` | Created, unbound, empty                       |
+| Queue    | `trace-production-jobs` | Not created                            | No mutation attempted after migration failure |
+
+The production D1 ID is distinct from staging
+`c4df63bc-8270-4500-9dab-c1c6439efa64` and the retained rehearsal
+`5075dc29-954f-4f65-a38a-0d22e7c076ac`. The migration-only Wrangler config was
+ignored and targeted only the new production D1. The first corrected migration
+command (the initial command was rejected locally because Wrangler 4.120.1 has
+no `--yes` flag) reached Cloudflare but failed before any migration was
+confirmed with API error `7003` on the new database query endpoint:
+
+```text
+Could not route to /client/v4/accounts/c5d6cf110905c91fc3eed1abaf8236a/d1/database/7a566f2e-da27-46e7-8c3f-271e5566f225/query
+```
+
+Per the release boundary, no retry, Queue creation, bookmark capture, Worker
+binding, or deployment was attempted after that failure. Migration state is
+therefore unverified; do not treat the database as deployable. The next
+authorized operation must inspect the failed target without recreating it,
+resolve the Cloudflare API/resource state, then apply `0000_cheerful_legion.sql`
+and `0001_goofy_lester.sql` exactly once if the target is still empty. A fresh
+Time Travel bookmark must be captured only after both migrations and schema
+validation succeed.
+
+Staging remained on its existing D1/Queue and Worker. The rehearsal database
+remains unbound and retained. No production Worker, Queue consumer, GitHub
+integration, secret, or customer traffic was changed.

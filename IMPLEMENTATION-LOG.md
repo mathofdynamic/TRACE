@@ -752,3 +752,23 @@
   request-database, and no-fallback tests passed. Production resources remain
   uncreated and customer cutover remains blocked on provisioning and
   operational evidence.
+
+### Phase CF4.14 isolated production D1 and Queue provisioning
+
+- Status: Partial and blocked after one authorized D1 creation. The account
+  identity matched `mathofdynamic2` and the pre-provision inventory contained
+  eight D1 databases; both target names were absent.
+- D1: `trace-production-db` was created as the isolated ID
+  `7a566f2e-da27-46e7-8c3f-271e5566f225`, distinct from staging and the
+  retained restore-rehearsal database. It is unbound and contains no confirmed
+  application schema or data.
+- Migration: The corrected remote migration attempt reached Cloudflare but
+  failed with API error `7003` while routing the new database `/query` endpoint.
+  No migration state is claimed and no retry was made.
+- Queue: `trace-production-jobs` was not created because the migration failure
+  required stopping before further remote mutation. No producer, consumer,
+  message, or deployment was attached.
+- Safety: Staging, rehearsal, GitHub configuration, secrets, legacy runtime,
+  and customer traffic were unchanged. The production Worker remains
+  undeployed. A fresh production bookmark was not captured because schema
+  application did not complete.
