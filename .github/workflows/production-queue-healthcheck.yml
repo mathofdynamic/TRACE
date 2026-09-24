@@ -1,0 +1,57 @@
+name: TRACE production Queue healthcheck
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Exact deployed TRACE runtime source SHA
+        required: true
+        default: 221606dcd57f8191ff2263a68b74d79eb6a45688
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trace-production-queue-healthcheck
+  cancel-in-progress: false
+
+jobs:
+  healthcheck:
+    if: ${{ github.ref == 'refs/heads/feat/cloudflare-native-runtime' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production-canary
+    steps:
+      - name: Check out the workflow's feature-branch revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.16.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate the strict healthcheck contract and local D1 SQL
+        run: pnpm exec tsx scripts/production-queue-healthcheck.ts --validate-contract
+
+      - name: Publish and observe one production healthcheck
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          TRACE_PRODUCTION_D1_ID: ${{ vars.TRACE_PRODUCTION_D1_ID }}
+          TRACE_PRODUCTION_QUEUE_NAME: ${{ vars.TRACE_PRODUCTION_QUEUE_NAME }}
+          TRACE_PRODUCTION_WORKER_NAME: ${{ vars.TRACE_PRODUCTION_WORKER_NAME }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: pnpm exec tsx scripts/production-queue-healthcheck.ts
