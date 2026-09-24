@@ -835,3 +835,36 @@
   version `5930a184-d797-4b70-9aee-d7f0647ab1fa`, health 200, and its existing
   D1/Queue bindings. Production Worker, secrets, GitHub App/OAuth, and public
   intake remain disabled.
+
+### Phase CF4.16 production D1 and Queue canary acceptance
+
+- Production runtime identity: Worker `trace-production` remained at version
+  `ead868f1-0f5d-4e45-939c-3e6349ed8f86` and 100% traffic. Its D1 and Queue
+  bindings resolve to the dedicated production resources. Queue inventory
+  lists this Worker as the only producer and consumer; staging remains
+  isolated on `trace-staging-jobs`.
+- D1 read-only validation: Production database
+  `7a566f2e-da27-46e7-8c3f-271e5566f225` returned `SELECT 1`; migrations 0000
+  and 0001 are recorded; all 22 application tables, expected indexes, and
+  recovery columns exist; `PRAGMA foreign_key_check` returned zero violations.
+  All 22 application tables were empty before and after route checks; remote
+  query metadata showed zero writes. No migration or restore was performed.
+- Closed canary: Health returned 200; webhook, setup, installation, and
+  reconciliation routes returned cache-disabled 503; anonymous recovery
+  returned 401. No business records were created.
+- Queue healthcheck: The strict `system.healthcheck` contract and side-effect-
+  free handler were verified in source. No message was sent: Wrangler has no
+  send command, the Dashboard presented a security-verification interstitial,
+  and no authorized local API token was available. No CI credential was
+  retrieved. Queue invocation, completion, acknowledgment, errors, backlog,
+  and retries remain unverified.
+- Other telemetry: Worker runtime tail emitted no entries but did not confirm
+  a live stream, so runtime error status is unknown. Current UTC-day
+  account-wide D1 usage and CPU distribution were not measured. One staging
+  health request failed and one timed out; staging version and binding
+  identities were read-only verified unchanged, but public health is
+  unverified for this pass.
+- Result: Partial acceptance. D1 integrity/emptiness and closed route guards
+  passed; one authorized healthcheck delivery with independent consumer
+  completion evidence remains outstanding. No code, deployment, binding,
+  migration, or remote data was changed.

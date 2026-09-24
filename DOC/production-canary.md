@@ -277,3 +277,47 @@ verified: Worker version `5930a184-d797-4b70-9aee-d7f0647ab1fa` remains at
 100%, `/api/health` returns 200, staging D1 remains
 `c4df63bc-8270-4500-9dab-c1c6439efa64`, and `trace-staging-jobs` remains bound
 to `trace-test-staging` as its sole producer and consumer.
+
+## CF4.16 closed-canary D1 and Queue acceptance
+
+Read-only checks on 2026-09-24 confirmed the deployed production Worker is
+still version `ead868f1-0f5d-4e45-939c-3e6349ed8f86` at 100%, with fetch and
+Queue handlers, D1 `7a566f2e-da27-46e7-8c3f-271e5566f225`, and producer and
+consumer bindings for `trace-production-jobs`. Queue inventory reports
+`trace-production` as its only producer and consumer. Staging remains a
+separate producer/consumer of `trace-staging-jobs`; no binding was changed.
+
+Production D1 verification used an ignored temporary Wrangler configuration
+and read-only queries. `SELECT 1` succeeded. Migration history contains exactly
+`0000_cheerful_legion.sql` and `0001_goofy_lester.sql`. The 22 TRACE application
+tables, expected indexes, and CF4.4 webhook-recovery columns are present.
+`PRAGMA foreign_key_check` returned zero violations. All 22 application tables
+had zero rows before and after the route checks; query metadata showed zero
+rows written. No migration or restore was run.
+
+The supported internal `system.healthcheck` message contract was inspected in
+`packages/trace-core/src/queue.ts` and `apps/worker/src/cloudflare.ts`. It
+requires `version`, `type`, `idempotencyKey`, `enqueuedAt`, and `probeId`; its
+handler checks the D1 schema and runs `SELECT 1` without writing business
+records. No message was sent. Wrangler exposes no Queue send command, the
+Cloudflare Dashboard was stopped at its security-verification interstitial,
+and no authorized local API token was available. CI credentials were not
+retrieved and no credential workaround was attempted. Therefore consumer
+invocation, handler completion, and Queue acknowledgment remain unverified;
+configured bindings are not execution evidence.
+
+The closed-canary route checks returned health `200`; GitHub webhook, setup,
+installation, and reconciliation routes returned cache-disabled `503`; and
+anonymous recovery returned `401`. Runtime tail produced no entries but did
+not confirm an active stream, so runtime error status is unknown. Queue
+backlog, retry, failure, and operation metrics are unavailable. Account-wide
+UTC-day D1 usage and Worker CPU distribution were not measured in this phase.
+
+Staging deployment history and binding identities remain unchanged. A bounded
+public health check through Node `fetch` failed, and one `curl` attempt timed
+out; staging public health is therefore unverified in this pass. No staging
+resource or data was modified.
+
+Acceptance is partial: production D1 schema/integrity/emptiness and closed
+route guards are verified, but a safe Queue send path and independent consumer
+execution evidence are still required. Customer traffic remains disabled.
