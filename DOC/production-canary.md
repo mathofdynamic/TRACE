@@ -318,6 +318,35 @@ public health check through Node `fetch` failed, and one `curl` attempt timed
 out; staging public health is therefore unverified in this pass. No staging
 resource or data was modified.
 
-Acceptance is partial: production D1 schema/integrity/emptiness and closed
-route guards are verified, but a safe Queue send path and independent consumer
-execution evidence are still required. Customer traffic remains disabled.
+Acceptance remains partial: production D1 schema/integrity/emptiness and
+closed route guards are verified. The initial CF4.16 pass did not have a
+supported Queue send path; the CF4.16B follow-up below added one, but its only
+authorized run stopped before publication.
+
+## CF4.16B one-shot Queue healthcheck attempt
+
+The manual-only GitHub Actions workflow was registered on the default branch
+through workflow-only PR #6. Run
+[35965671051](https://github.com/mathofdynamic/TRACE/actions/runs/35965671051)
+used feature-branch workflow source
+`3744a11dfe1699b3e9372c91355cb9d109542ca1` and pinned the deployed runtime
+source to `221606dcd57f8191ff2263a68b74d79eb6a45688`. Contract and local D1
+validation passed. The run stopped during read-only Worker preflight before
+Queue configuration, metrics, log tail, probe generation, or the HTTP Queue
+push: the verifier rejected staging's existing Hyperdrive rollback binding
+`2d1e4821c1484d6299d88e29f2884310` as if it were a production binding.
+Production remains required to have no Hyperdrive binding; staging is expected
+to retain this legacy binding. No Queue message was sent, so there is no probe
+ID, consumer invocation, handler completion, acknowledgment, or Queue error
+evidence from this run. No Worker, binding, D1 data, or Queue configuration
+was changed.
+
+One bounded production health request returned HTTP 200. One bounded request
+to `https://trace-code.pages.dev/api/health` timed out; this is a transport
+failure from this workstation, not proof that staging is down. The workflow's
+local follow-up corrects the environment-specific Hyperdrive check and tests
+that production rejects the binding while staging requires its exact known
+legacy ID. The single authorized operational workflow run is consumed; do not
+redispatch under this acceptance attempt. Queue processing, acknowledgment,
+backlog, and error metrics remain unverified. Customer traffic and GitHub
+intake remain closed.

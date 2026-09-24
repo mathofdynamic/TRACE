@@ -868,3 +868,34 @@
   passed; one authorized healthcheck delivery with independent consumer
   completion evidence remains outstanding. No code, deployment, binding,
   migration, or remote data was changed.
+
+### Phase CF4.16B one-shot production Queue healthcheck
+
+- Workflow registration: Added the manual-only workflow through workflow-only
+  PR #6; it is registered on the default branch and restricted to the existing
+  `production-canary` environment and feature branch.
+- Run: GitHub Actions run
+  [35965671051](https://github.com/mathofdynamic/TRACE/actions/runs/35965671051)
+  checked out workflow source
+  `3744a11dfe1699b3e9372c91355cb9d109542ca1` and pinned runtime source
+  `221606dcd57f8191ff2263a68b74d79eb6a45688`. Contract and local migration-
+  backed D1 SQL validation passed.
+- First failing gate: Read-only staging Worker metadata contained its expected
+  legacy Hyperdrive binding `2d1e4821c1484d6299d88e29f2884310`. The preflight
+  incorrectly applied production's no-Hyperdrive invariant to staging and
+  stopped before checking the Queue, D1, routes, logs, or issuing a Queue push.
+  No probe ID was generated and no message was submitted.
+- Correction prepared locally: The healthcheck verifier now rejects all
+  Hyperdrive bindings for production and requires the exact known legacy
+  `HYPERDRIVE` ID for staging. Local contract validation covers production
+  rejection, valid staging preservation, wrong staging ID, and duplicate
+  staging bindings. This does not change either deployed Worker.
+- Runtime evidence: A single production health request returned HTTP 200. One
+  bounded staging health request timed out from this workstation; staging
+  outage is not established. The single authorized operational workflow run
+  was consumed, so Queue publication and consumer/acknowledgment evidence are
+  not available in this phase. No Worker deployment, migration, Queue change,
+  or application-data write occurred. Customer traffic and GitHub intake
+  remain disabled.
+- Result: Partial; no Queue message was sent. A future separately authorized
+  one-shot run must use the corrected verifier. Do not retry this run.

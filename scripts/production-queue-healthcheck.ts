@@ -19,6 +19,7 @@ const STAGING_WORKER = 'trace-test-staging';
 const STAGING_WORKER_VERSION = '5930a184-d797-4b70-9aee-d7f0647ab1fa';
 const STAGING_D1_ID = 'c4df63bc-8270-4500-9dab-c1c6439efa64';
 const STAGING_QUEUE = 'trace-staging-jobs';
+const STAGING_HYPERDRIVE_ID = '2d1e4821c1484d6299d88e29f2884310';
 const STAGING_URL = 'https://trace-code.pages.dev';
 const API_ROOT = 'https://api.cloudflare.com/client/v4';
 const APP_TABLES = [
@@ -110,11 +111,40 @@ export function createHealthcheckMessage(probeId: string, enqueuedAt: string) {
   });
 }
 
+function hasExpectedHyperdriveBindings(
+  bindings: WorkerBinding[],
+  environment: 'production' | 'staging',
+) {
+  const hyperdriveBindings = bindings.filter((binding) => binding.type === 'hyperdrive');
+  if (environment === 'production') return hyperdriveBindings.length === 0;
+  return (
+    hyperdriveBindings.length === 1 &&
+    hyperdriveBindings[0]?.name === 'HYPERDRIVE' &&
+    hyperdriveBindings[0]?.id === STAGING_HYPERDRIVE_ID
+  );
+}
+
 function fail(message: string): never {
   throw new Error(message);
 }
 
 function validateLocalContract() {
+  const stagingHyperdrive = [{ type: 'hyperdrive', name: 'HYPERDRIVE', id: STAGING_HYPERDRIVE_ID }];
+  if (
+    !hasExpectedHyperdriveBindings([], 'production') ||
+    hasExpectedHyperdriveBindings(stagingHyperdrive, 'production') ||
+    !hasExpectedHyperdriveBindings(stagingHyperdrive, 'staging') ||
+    hasExpectedHyperdriveBindings(
+      [{ type: 'hyperdrive', name: 'HYPERDRIVE', id: 'unexpected-staging-binding' }],
+      'staging',
+    ) ||
+    hasExpectedHyperdriveBindings([...stagingHyperdrive, ...stagingHyperdrive], 'staging')
+  ) {
+    fail(
+      'Production/staging Hyperdrive isolation checks did not match their expected configurations.',
+    );
+  }
+
   const db = new DatabaseSync(':memory:');
   try {
     const root = process.cwd();
@@ -309,8 +339,12 @@ async function verifyWorker(
       `Worker ${workerName} Queue producer binding is not the expected ${options.environment} Queue.`,
     );
   }
-  if (bindings.some((binding) => binding.type === 'hyperdrive')) {
-    fail(`Worker ${workerName} unexpectedly has a Hyperdrive binding.`);
+  if (!hasExpectedHyperdriveBindings(bindings, options.environment)) {
+    fail(
+      options.environment === 'production'
+        ? `Production Worker ${workerName} must not have a Hyperdrive binding.`
+        : `Staging Worker ${workerName} does not have its expected legacy Hyperdrive binding.`,
+    );
   }
 
   if (options.environment === 'production') {
