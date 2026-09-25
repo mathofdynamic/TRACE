@@ -73,12 +73,12 @@ type WorkerVersion = {
 };
 
 type QueueConsumer = {
-  queue_name?: string;
-  script_name?: string;
   type?: string;
+  script_name?: string;
+  queue_name?: string;
   settings?: {
-    max_batch_size?: number;
-    max_batch_timeout?: number;
+    batch_size?: number;
+    max_wait_time_ms?: number;
     max_retries?: number;
     retry_delay?: number;
   };
@@ -94,6 +94,186 @@ type QueueDetails = {
 };
 
 type QueueMetrics = { backlog_count?: number; backlog_bytes?: number };
+
+function queueValue(value: unknown) {
+  return value === undefined ? 'missing' : JSON.stringify(value);
+}
+
+function assertQueueField(field: string, actual: unknown, expected: unknown) {
+  if (actual !== expected) {
+    fail(
+      `Production Queue ${field} must be ${queueValue(expected)}; received ${queueValue(actual)}.`,
+    );
+  }
+}
+
+function assertOptionalQueueField(field: string, actual: unknown, expected: unknown) {
+  if (actual !== undefined) assertQueueField(field, actual, expected);
+}
+
+function exactlyOne<T>(field: string, values: T[] | undefined) {
+  if (!Array.isArray(values) || values.length !== 1) {
+    fail(
+      `Production Queue ${field} must contain exactly one entry; received ${Array.isArray(values) ? values.length : 'missing'}.`,
+    );
+  }
+  return values[0]!;
+}
+
+function assertProductionQueueConfiguration(queue: QueueDetails) {
+  assertQueueField('queue_id', queue.queue_id, PRODUCTION_QUEUE_ID);
+  assertQueueField('queue_name', queue.queue_name, PRODUCTION_QUEUE);
+  assertOptionalQueueField('producers_total_count', queue.producers_total_count, 1);
+  assertOptionalQueueField('consumers_total_count', queue.consumers_total_count, 1);
+
+  const producer = exactlyOne('producers', queue.producers);
+  assertQueueField('producers[0].type', producer.type, 'worker');
+  assertQueueField('producers[0].script', producer.script, PRODUCTION_WORKER);
+
+  const consumer = exactlyOne('consumers', queue.consumers);
+  assertQueueField('consumers[0].type', consumer.type, 'worker');
+  assertQueueField('consumers[0].script_name', consumer.script_name, PRODUCTION_WORKER);
+  assertOptionalQueueField('consumers[0].queue_name', consumer.queue_name, PRODUCTION_QUEUE);
+  assertQueueField('consumers[0].settings.batch_size', consumer.settings?.batch_size, 10);
+  assertQueueField(
+    'consumers[0].settings.max_wait_time_ms',
+    consumer.settings?.max_wait_time_ms,
+    5000,
+  );
+  assertQueueField('consumers[0].settings.max_retries', consumer.settings?.max_retries, 3);
+  assertQueueField('consumers[0].settings.retry_delay', consumer.settings?.retry_delay, 60);
+  return queue;
+}
+
+function validProductionQueueResponse(): QueueDetails {
+  return {
+    queue_id: PRODUCTION_QUEUE_ID,
+    queue_name: PRODUCTION_QUEUE,
+    producers_total_count: 1,
+    producers: [{ type: 'worker', script: PRODUCTION_WORKER }],
+    consumers_total_count: 1,
+    consumers: [
+      {
+        type: 'worker',
+        script_name: PRODUCTION_WORKER,
+        queue_name: PRODUCTION_QUEUE,
+        settings: {
+          batch_size: 10,
+          max_wait_time_ms: 5000,
+          max_retries: 3,
+          retry_delay: 60,
+        },
+      },
+    ],
+  };
+}
+
+function expectQueueConfigurationFailure(
+  label: string,
+  response: QueueDetails,
+  expectedMessage: string,
+) {
+  try {
+    assertProductionQueueConfiguration(response);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes(expectedMessage)) return;
+    fail(
+      `${label} returned an unexpected error: ${error instanceof Error ? error.message : 'unknown error'}.`,
+    );
+  }
+  fail(`${label} unexpectedly passed Queue configuration validation.`);
+}
+
+function validateQueueResponseContract() {
+  assertProductionQueueConfiguration(validProductionQueueResponse());
+
+  const withoutTotalCounts = validProductionQueueResponse();
+  delete withoutTotalCounts.producers_total_count;
+  delete withoutTotalCounts.consumers_total_count;
+  assertProductionQueueConfiguration(withoutTotalCounts);
+
+  const withoutConsumerQueueName = validProductionQueueResponse();
+  delete withoutConsumerQueueName.consumers![0]!.queue_name;
+  assertProductionQueueConfiguration(withoutConsumerQueueName);
+
+  const wrongProducer = validProductionQueueResponse();
+  wrongProducer.producers![0]!.script = 'another-worker';
+  expectQueueConfigurationFailure(
+    'Invalid producer script',
+    wrongProducer,
+    'producers[0].script must be',
+  );
+
+  const wrongConsumer = validProductionQueueResponse();
+  wrongConsumer.consumers![0]!.script_name = 'another-worker';
+  expectQueueConfigurationFailure(
+    'Invalid consumer script',
+    wrongConsumer,
+    'consumers[0].script_name must be',
+  );
+
+  const wrongBatchSize = validProductionQueueResponse();
+  wrongBatchSize.consumers![0]!.settings!.batch_size = 9;
+  expectQueueConfigurationFailure(
+    'Invalid consumer batch size',
+    wrongBatchSize,
+    'settings.batch_size must be 10',
+  );
+
+  const wrongRetrySetting = validProductionQueueResponse();
+  wrongRetrySetting.consumers![0]!.settings!.max_retries = 4;
+  expectQueueConfigurationFailure(
+    'Invalid consumer retry count',
+    wrongRetrySetting,
+    'settings.max_retries must be 3',
+  );
+
+  const wrongWaitTime = validProductionQueueResponse();
+  wrongWaitTime.consumers![0]!.settings!.max_wait_time_ms = 5;
+  expectQueueConfigurationFailure(
+    'Consumer wait time must be represented in milliseconds',
+    wrongWaitTime,
+    'settings.max_wait_time_ms must be 5000',
+  );
+
+  const wrongProducerCount = validProductionQueueResponse();
+  wrongProducerCount.producers = [
+    ...wrongProducerCount.producers!,
+    { type: 'worker', script: PRODUCTION_WORKER },
+  ];
+  expectQueueConfigurationFailure(
+    'Multiple producers',
+    wrongProducerCount,
+    'producers must contain exactly one entry',
+  );
+
+  const wrongConsumerCount = validProductionQueueResponse();
+  wrongConsumerCount.consumers = [
+    ...wrongConsumerCount.consumers!,
+    wrongConsumerCount.consumers![0]!,
+  ];
+  expectQueueConfigurationFailure(
+    'Multiple consumers',
+    wrongConsumerCount,
+    'consumers must contain exactly one entry',
+  );
+
+  const wrongOptionalCount = validProductionQueueResponse();
+  wrongOptionalCount.producers_total_count = 2;
+  expectQueueConfigurationFailure(
+    'Invalid optional producer count',
+    wrongOptionalCount,
+    'producers_total_count must be 1',
+  );
+
+  const wrongOptionalQueueName = validProductionQueueResponse();
+  wrongOptionalQueueName.consumers![0]!.queue_name = 'another-queue';
+  expectQueueConfigurationFailure(
+    'Invalid optional consumer Queue name',
+    wrongOptionalQueueName,
+    'consumers[0].queue_name must be',
+  );
+}
 
 export function buildApplicationCountsSql() {
   return `SELECT 1 AS ok, ${APP_TABLES.map(
@@ -129,6 +309,8 @@ function fail(message: string): never {
 }
 
 function validateLocalContract() {
+  validateQueueResponseContract();
+
   const stagingHyperdrive = [{ type: 'hyperdrive', name: 'HYPERDRIVE', id: STAGING_HYPERDRIVE_ID }];
   if (
     !hasExpectedHyperdriveBindings([], 'production') ||
@@ -172,7 +354,7 @@ function validateLocalContract() {
     db.close();
   }
   console.log(
-    'Local migrations 0000/0001, application-count SQL, and strict healthcheck parser: PASS',
+    'Local Queue API response contract (documented/optional/negative cases), migrations 0000/0001, application-count SQL, and strict healthcheck parser: PASS',
   );
 }
 
@@ -368,34 +550,7 @@ async function verifyQueueConfiguration() {
   const queue = await cloudflareRequest<QueueDetails>(
     `/accounts/${ACCOUNT_ID}/queues/${PRODUCTION_QUEUE_ID}`,
   );
-  if (queue.queue_id !== PRODUCTION_QUEUE_ID || queue.queue_name !== PRODUCTION_QUEUE) {
-    fail('Production Queue ID/name does not match the requested target.');
-  }
-  const producers = queue.producers ?? [];
-  const consumers = queue.consumers ?? [];
-  if (
-    queue.producers_total_count !== 1 ||
-    producers.length !== 1 ||
-    producers[0]?.type !== 'worker' ||
-    producers[0]?.script !== PRODUCTION_WORKER ||
-    queue.consumers_total_count !== 1 ||
-    consumers.length !== 1 ||
-    consumers[0]?.type !== 'worker' ||
-    consumers[0]?.script_name !== PRODUCTION_WORKER ||
-    consumers[0]?.queue_name !== PRODUCTION_QUEUE
-  ) {
-    fail('Production Queue must have trace-production as its sole producer and consumer.');
-  }
-  const settings = consumers[0].settings;
-  if (
-    settings?.max_batch_size !== 10 ||
-    settings.max_batch_timeout !== 5 ||
-    settings.max_retries !== 3 ||
-    settings.retry_delay !== 60
-  ) {
-    fail('Production Queue consumer retry/batch settings differ from the verified baseline.');
-  }
-  return queue;
+  return assertProductionQueueConfiguration(queue);
 }
 
 async function getQueueMetrics() {

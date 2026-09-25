@@ -899,3 +899,28 @@
   remain disabled.
 - Result: Partial; no Queue message was sent. A future separately authorized
   one-shot run must use the corrected verifier. Do not retry this run.
+
+### Phase CF4.16D Queue API response contract correction
+
+- Baseline: `47a74f3232307b3cf177493a1edd79b2db6ba29f` on the existing
+  feature-branch lineage.
+- Root cause: The one-shot acceptance script validated Wrangler-style
+  `max_batch_size` and `max_batch_timeout` fields, while Cloudflare's Get Queue
+  API returns `batch_size` and `max_wait_time_ms`. It also treated optional
+  redundant producer/consumer counts and `consumer.queue_name` as mandatory.
+- Correction: The control-plane response model now uses the documented
+  settings fields and validates worker identity, queue identity, multiplicity,
+  optional metadata when present, and each setting with field-specific errors.
+  Expected wait time is compared in milliseconds (`5000`). No Worker runtime,
+  Queue configuration, or D1 behavior changed.
+- Local verification: Queue response fixtures cover the complete documented
+  shape, omitted total counts, omitted consumer queue name, invalid producer
+  and consumer scripts, incorrect batch/retry/wait settings, duplicate
+  producers/consumers, and incorrect optional metadata. The strict message
+  parser and migration-backed read-only D1 count query remain part of the
+  contract command. Prettier, ESLint, standalone TypeScript checking, contract
+  validation, and `git diff --check` passed.
+- Remote acceptance: The corrected source must be pushed before the one
+  authorized production Queue healthcheck workflow run. No Queue message was
+  sent during local validation; no Worker deployment, migration, or remote
+  write occurred in this implementation step.
