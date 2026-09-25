@@ -93,6 +93,12 @@ type QueueDetails = {
   consumers?: QueueConsumer[];
 };
 
+type WranglerWorkerConsumer = {
+  type?: unknown;
+  script?: unknown;
+  queue_name?: unknown;
+};
+
 type QueueMetrics = { backlog_count?: number; backlog_bytes?: number };
 
 function queueValue(value: unknown) {
@@ -126,13 +132,15 @@ function assertProductionQueueConfiguration(queue: QueueDetails) {
   assertOptionalQueueField('producers_total_count', queue.producers_total_count, 1);
   assertOptionalQueueField('consumers_total_count', queue.consumers_total_count, 1);
 
-  const producer = exactlyOne('producers', queue.producers);
-  assertQueueField('producers[0].type', producer.type, 'worker');
-  assertQueueField('producers[0].script', producer.script, PRODUCTION_WORKER);
+  if (queue.producers !== undefined) {
+    const producer = exactlyOne('producers', queue.producers);
+    assertOptionalQueueField('producers[0].type', producer.type, 'worker');
+    assertOptionalQueueField('producers[0].script', producer.script, PRODUCTION_WORKER);
+  }
 
   const consumer = exactlyOne('consumers', queue.consumers);
-  assertQueueField('consumers[0].type', consumer.type, 'worker');
-  assertQueueField('consumers[0].script_name', consumer.script_name, PRODUCTION_WORKER);
+  assertOptionalQueueField('consumers[0].type', consumer.type, 'worker');
+  assertOptionalQueueField('consumers[0].script_name', consumer.script_name, PRODUCTION_WORKER);
   assertOptionalQueueField('consumers[0].queue_name', consumer.queue_name, PRODUCTION_QUEUE);
   assertQueueField('consumers[0].settings.batch_size', consumer.settings?.batch_size, 10);
   assertQueueField(
@@ -143,6 +151,43 @@ function assertProductionQueueConfiguration(queue: QueueDetails) {
   assertQueueField('consumers[0].settings.max_retries', consumer.settings?.max_retries, 3);
   assertQueueField('consumers[0].settings.retry_delay', consumer.settings?.retry_delay, 60);
   return queue;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function assertWranglerConsumerIdentity(output: unknown) {
+  if (!Array.isArray(output)) {
+    fail('Wrangler worker consumer JSON root must be an array.');
+  }
+  if (output.length !== 1) {
+    fail(
+      `Wrangler worker consumer list must contain exactly one entry; received ${output.length}.`,
+    );
+  }
+  const consumer = output[0] as WranglerWorkerConsumer;
+  if (!isRecord(consumer)) {
+    fail('Wrangler worker consumers[0] must be a JSON object.');
+  }
+  assertQueueField('Wrangler consumers[0].type', consumer.type, 'worker');
+  assertQueueField('Wrangler consumers[0].script', consumer.script, PRODUCTION_WORKER);
+  assertOptionalQueueField(
+    'Wrangler consumers[0].queue_name',
+    consumer.queue_name,
+    PRODUCTION_QUEUE,
+  );
+  return { script: PRODUCTION_WORKER, queueName: PRODUCTION_QUEUE };
+}
+
+function parseWranglerConsumerJson(stdout: string) {
+  let output: unknown;
+  try {
+    output = JSON.parse(stdout) as unknown;
+  } catch {
+    fail('Wrangler worker consumer output is not valid JSON.');
+  }
+  return assertWranglerConsumerIdentity(output);
 }
 
 function validProductionQueueResponse(): QueueDetails {
@@ -168,6 +213,22 @@ function validProductionQueueResponse(): QueueDetails {
   };
 }
 
+function validWranglerConsumerOutput(): unknown {
+  return [
+    {
+      script: PRODUCTION_WORKER,
+      settings: {
+        batch_size: 10,
+        max_retries: 3,
+        max_wait_time_ms: 5000,
+        retry_delay: 60,
+      },
+      consumer_id: 'local-fixture-only',
+      type: 'worker',
+    },
+  ];
+}
+
 function expectQueueConfigurationFailure(
   label: string,
   response: QueueDetails,
@@ -184,6 +245,18 @@ function expectQueueConfigurationFailure(
   fail(`${label} unexpectedly passed Queue configuration validation.`);
 }
 
+function expectWranglerConsumerFailure(label: string, output: unknown, expectedMessage: string) {
+  try {
+    assertWranglerConsumerIdentity(output);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes(expectedMessage)) return;
+    fail(
+      `${label} returned an unexpected error: ${error instanceof Error ? error.message : 'unknown error'}.`,
+    );
+  }
+  fail(`${label} unexpectedly passed Wrangler consumer validation.`);
+}
+
 function validateQueueResponseContract() {
   assertProductionQueueConfiguration(validProductionQueueResponse());
 
@@ -195,6 +268,19 @@ function validateQueueResponseContract() {
   const withoutConsumerQueueName = validProductionQueueResponse();
   delete withoutConsumerQueueName.consumers![0]!.queue_name;
   assertProductionQueueConfiguration(withoutConsumerQueueName);
+
+  const withoutConsumerScriptName = validProductionQueueResponse();
+  delete withoutConsumerScriptName.consumers![0]!.script_name;
+  assertProductionQueueConfiguration(withoutConsumerScriptName);
+  parseWranglerConsumerJson(JSON.stringify(validWranglerConsumerOutput()));
+
+  const withWranglerAgreed = validProductionQueueResponse();
+  assertProductionQueueConfiguration(withWranglerAgreed);
+  parseWranglerConsumerJson(JSON.stringify(validWranglerConsumerOutput()));
+
+  const withoutConsumerType = validProductionQueueResponse();
+  delete withoutConsumerType.consumers![0]!.type;
+  assertProductionQueueConfiguration(withoutConsumerType);
 
   const wrongProducer = validProductionQueueResponse();
   wrongProducer.producers![0]!.script = 'another-worker';
@@ -210,6 +296,62 @@ function validateQueueResponseContract() {
     'Invalid consumer script',
     wrongConsumer,
     'consumers[0].script_name must be',
+  );
+
+  const wrongWranglerConsumer = validProductionQueueResponse();
+  delete wrongWranglerConsumer.consumers![0]!.script_name;
+  assertProductionQueueConfiguration(wrongWranglerConsumer);
+  const wrongWranglerIdentity = validWranglerConsumerOutput() as Array<Record<string, unknown>>;
+  wrongWranglerIdentity[0]!.script = 'another-worker';
+  expectWranglerConsumerFailure(
+    'Wrangler reports the wrong consumer script',
+    wrongWranglerIdentity,
+    'Wrangler consumers[0].script must be',
+  );
+
+  expectWranglerConsumerFailure(
+    'Wrangler reports multiple Worker consumers',
+    [
+      ...(validWranglerConsumerOutput() as unknown[]),
+      ...(validWranglerConsumerOutput() as unknown[]),
+    ],
+    'exactly one entry',
+  );
+
+  const wrongWranglerQueue = validWranglerConsumerOutput() as Array<Record<string, unknown>>;
+  wrongWranglerQueue[0]!.queue_name = 'another-queue';
+  expectWranglerConsumerFailure(
+    'Wrangler consumer belongs to the wrong Queue',
+    wrongWranglerQueue,
+    'Wrangler consumers[0].queue_name must be',
+  );
+
+  const wrongWranglerType = validWranglerConsumerOutput() as Array<Record<string, unknown>>;
+  wrongWranglerType[0]!.type = 'http_pull';
+  expectWranglerConsumerFailure(
+    'Wrangler consumer is not a Worker',
+    wrongWranglerType,
+    'Wrangler consumers[0].type must be',
+  );
+
+  const wrongQueueId = validProductionQueueResponse();
+  wrongQueueId.queue_id = 'wrong-id';
+  expectQueueConfigurationFailure('Wrong Queue ID', wrongQueueId, 'queue_id must be');
+
+  const wrongQueueName = validProductionQueueResponse();
+  wrongQueueName.queue_name = 'another-queue';
+  expectQueueConfigurationFailure('Wrong Queue name', wrongQueueName, 'queue_name must be');
+
+  const withoutProducerScript = validProductionQueueResponse();
+  delete withoutProducerScript.producers![0]!.script;
+  assertProductionQueueConfiguration(withoutProducerScript);
+
+  const wrongOptionalProducerScript = validProductionQueueResponse();
+  wrongOptionalProducerScript.producers![0]!.script = 'another-worker';
+  expectQueueConfigurationFailure(
+    'Invalid optional producer script',
+    wrongOptionalProducerScript,
+    'producers[0].script must be',
   );
 
   const wrongBatchSize = validProductionQueueResponse();
@@ -354,7 +496,7 @@ function validateLocalContract() {
     db.close();
   }
   console.log(
-    'Local Queue API response contract (documented/optional/negative cases), migrations 0000/0001, application-count SQL, and strict healthcheck parser: PASS',
+    'Local Queue API optional-field/identity contract, Wrangler JSON consumer identity, migrations 0000/0001, application-count SQL, and strict healthcheck parser: PASS',
   );
 }
 
@@ -553,6 +695,30 @@ async function verifyQueueConfiguration() {
   return assertProductionQueueConfiguration(queue);
 }
 
+async function verifyWranglerWorkerConsumer() {
+  let stdout: string;
+  try {
+    stdout = execFileSync(
+      process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm',
+      ['exec', 'wrangler', 'queues', 'consumer', 'worker', 'list', PRODUCTION_QUEUE, '--json'],
+      {
+        cwd: process.cwd(),
+        encoding: 'utf8',
+        env: { ...process.env, CLOUDFLARE_ACCOUNT_ID: ACCOUNT_ID },
+        shell: process.platform === 'win32',
+        stdio: ['ignore', 'pipe', 'ignore'],
+        timeout: 30_000,
+        windowsHide: true,
+      },
+    );
+  } catch {
+    fail(
+      `Wrangler could not read Worker consumers for ${PRODUCTION_QUEUE}; command diagnostics were suppressed.`,
+    );
+  }
+  return parseWranglerConsumerJson(stdout);
+}
+
 async function getQueueMetrics() {
   const result = await cloudflareRequest<QueueMetrics>(
     `/accounts/${ACCOUNT_ID}/queues/${PRODUCTION_QUEUE_ID}/metrics`,
@@ -700,6 +866,7 @@ async function publishOneHealthcheck() {
     environment: 'staging',
   });
   const queue = await verifyQueueConfiguration();
+  const queueConsumer = await verifyWranglerWorkerConsumer();
   const beforeMetrics = await getQueueMetrics();
   if (beforeMetrics.backlog_count !== 0) {
     fail(
@@ -830,7 +997,10 @@ async function publishOneHealthcheck() {
   }
   console.log(`Staging health (one bounded request): ${stagingHealth}`);
   console.log(
-    `Queue producer/consumer: ${queue.producers?.[0]?.script}/${queue.consumers?.[0]?.script_name}; retries=3`,
+    `Production Queue producer binding: ${PRODUCTION_WORKER} TRACE_QUEUE -> ${PRODUCTION_QUEUE}; Queue API producer script metadata: ${queue.producers?.[0]?.script ?? 'omitted'}.`,
+  );
+  console.log(
+    `Production Queue consumer (Wrangler JSON): ${queueConsumer.script} -> ${queueConsumer.queueName}; retries=${queue.consumers?.[0]?.settings?.max_retries}.`,
   );
   console.log(
     'Acknowledgment evidence: individual ack is not exposed by the metrics API; Worker code calls ack() only after successful healthcheck handling.',

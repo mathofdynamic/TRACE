@@ -924,3 +924,23 @@
   authorized production Queue healthcheck workflow run. No Queue message was
   sent during local validation; no Worker deployment, migration, or remote
   write occurred in this implementation step.
+
+### Phase CF4.16E Queue consumer identity evidence
+
+- Baseline: `843706144e435099d4e98ff4357c6832198121a3`. The read-only
+  Wrangler JSON listing returned one array entry with `type: "worker"` and
+  `script: "trace-production"`; `queue_name` was absent. Cloudflare's Queue
+  API marks `script_name` optional, so it cannot be the only consumer identity
+  signal.
+- Correction: The Queue API check still requires the exact Queue ID/name,
+  exactly one consumer, and expected settings, and validates optional identity
+  fields when present. A second read-only Wrangler JSON check now requires
+  exactly one Worker consumer for `trace-production`; the active Worker
+  `TRACE_QUEUE` binding remains the producer identity gate. CLI diagnostics
+  are suppressed to prevent credential disclosure.
+- Local verification: Contract fixtures cover omitted and present API
+  identity, Wrangler agreement and mismatch, multiple consumers, wrong Queue
+  identity, optional producer metadata, and incorrect settings. The focused
+  TypeScript, ESLint, Prettier, contract, and diff checks are run for this
+  acceptance harness. No Worker runtime source or deployment configuration is
+  changed by this correction.
