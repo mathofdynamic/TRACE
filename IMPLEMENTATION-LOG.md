@@ -944,3 +944,23 @@
   TypeScript, ESLint, Prettier, contract, and diff checks are run for this
   acceptance harness. No Worker runtime source or deployment configuration is
   changed by this correction.
+
+### Phase CF4.16H authenticated E2E fixture baseline
+
+- Baseline: `5c19ee72de60a06d7175c956b9c7abcfa1c303ce`. PR #8 added only
+  the read-only Queue drain workflow. The six authenticated E2E failures
+  reproduced against the same application/test sources at that baseline, so
+  the workflow did not cause them.
+- Root cause: E2E fixtures created a signed `trace_session` cookie and user
+  rows but did not persist the corresponding session row. Production auth
+  correctly rejects a signed cookie without a live D1/PostgreSQL session.
+  A differing build/server secret was tested and was not the cause.
+- Correction: The fixture now uses the configured E2E auth secret consistently,
+  signs sessions through `@trace/auth`, and persists the session row. A focused
+  regression checks acceptance with the configured secret, rejection with a
+  different secret, and authenticated navigation to `/app`. No production auth
+  behavior changed.
+- Verification: The six previously failing authenticated tests and the full
+  E2E suite passed locally with retries disabled against an isolated local
+  PostgreSQL database. Final format, lint, typecheck, unit, build, and E2E gates
+  are recorded after the focused branch validation.
