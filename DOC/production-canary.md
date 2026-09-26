@@ -407,15 +407,21 @@ Production-canary environment metadata (names only):
 - Secrets: existing `CLOUDFLARE_API_TOKEN`, `TRACE_AUTH_SECRET`,
   `TRACE_GITHUB_APP_CLIENT_SECRET`, `TRACE_GITHUB_OAUTH_CLIENT_SECRET`,
   `TRACE_GITHUB_WEBHOOK_SECRET`.
-- `TRACE_GITHUB_APP_PRIVATE_KEY` is absent. The key generated during CF4.17
-  was never downloaded or stored. Its private portion cannot be recovered
-  from GitHub; only the public key remains there. Its distinguishing metadata
-  is fingerprint `SHA256:4H6Tw/S7lgAlkT2HjCL5m6tlXfdfVZHrkM5AosB2hqg=`, added
-  Sep 26, 2026 at 9:42 AM GMT+3:30. GitHub showed it as the only key and
-  disabled Delete until another key exists. Its revocation is not verified.
-  After re-authentication, generate one replacement, securely store it as
-  this environment secret, verify the secret metadata, then revoke this exact
-  orphan and verify removal. Delete the temporary PEM after secret storage.
+- `TRACE_GITHUB_APP_PRIVATE_KEY` is absent. The original key generated during
+  CF4.17 was never downloaded or stored, so GitHub's retained public key
+  cannot recover its private portion. Its fingerprint is
+  `SHA256:4H6Tw/S7lgAlkT2HjCL5m6tlXfdfVZHrkM5AosB2hqg=` (added Sep 26, 2026 at
+  9:42 AM GMT+3:30). After GitHub sudo re-authentication, one replacement was
+  generated, but Chrome blocked its one-time download at
+  `ERR_BLOCKED_BY_CLIENT`; no PEM was saved. That key's fingerprint is
+  `SHA256:5mjJInXDVzQWjLOpkoXdNsCMwwgpM5bE8IVkO3o4vfQ=` (added Sep 26, 2026 at
+  1:39 PM GMT+3:30). Neither private key is stored, neither key has been
+  revoked, and no further key was generated. Human action required: generate
+  and download one usable replacement PEM in GitHub App settings and save it
+  to a local path accessible to Codex; do not paste it into chat. After that
+  PEM is securely stored as `TRACE_GITHUB_APP_PRIVATE_KEY` and secret metadata
+  is verified, revoke both unusable key rows by fingerprint and verify their
+  removal. Delete the temporary PEM after secret storage.
 - GitHub rejected `GITHUB_*` environment-variable names. A future workflow
   must map the stored `TRACE_GITHUB_*` names to the Worker runtime names
   without exposing secret values in logs or artifacts.
@@ -429,14 +435,16 @@ not evidence of a staging outage.
 
 ### CF4.18 prerequisites and execution boundary
 
-1. Complete GitHub sudo re-authentication. The never-downloaded orphan is
-   identified by fingerprint
-   `SHA256:4H6Tw/S7lgAlkT2HjCL5m6tlXfdfVZHrkM5AosB2hqg=` and creation time
-   Sep 26, 2026 at 9:42 AM GMT+3:30. GitHub disables deletion of the only key,
-   so generate exactly one replacement, securely store it as
-   `TRACE_GITHUB_APP_PRIVATE_KEY`, verify secret metadata, then revoke the
-   orphan and verify it is no longer active. Delete the temporary PEM. Do not
-   expose the PEM.
+1. Human handoff: generate and download one usable replacement PEM from the
+   GitHub App settings and save it to a local path accessible to Codex. Do not
+   paste it into chat. The prior replacement download was blocked, so do not
+   treat either existing key as usable or generate another key through the
+   blocked browser path. Securely store the human-downloaded PEM as
+   `TRACE_GITHUB_APP_PRIVATE_KEY`, verify secret metadata, then revoke the two
+   unusable key rows by fingerprints
+   `SHA256:4H6Tw/S7lgAlkT2HjCL5m6tlXfdfVZHrkM5AosB2hqg=` and
+   `SHA256:5mjJInXDVzQWjLOpkoXdNsCMwwgpM5bE8IVkO3o4vfQ=` and verify removal.
+   Delete the temporary PEM after storage.
 2. Implement and test a server-side canary gate before any webhook activation,
    App installation, or switch from closed mode. The gate must allow only
    owner `mathofdynamic` and repository ID `1378441300` (`trace-staging-fixture`)
@@ -458,8 +466,8 @@ not evidence of a staging outage.
 6. Keep customer traffic blocked until current-UTC-day D1 usage, aggregate
    Worker CPU, Queue health, monitoring, and rollback gates have evidence.
 
-CF4.18 is not ready to open: the replacement private key is not stored, the
-orphaned key remains active because GitHub will not delete its only key, the
+CF4.18 is not ready to open: neither existing key's private PEM is stored, the
+two unusable public key rows remain active pending a usable replacement, the
 server-side fixture-only gate does not yet exist, and webhook configuration/
 activation is intentionally deferred until that gate passes. No
 customer-facing cutover is authorized.
