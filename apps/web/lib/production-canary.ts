@@ -36,7 +36,13 @@ export type CanaryEligibility =
   | { allowed: true }
   | {
       allowed: false;
-      reason: 'closed' | 'fixture-user' | 'fixture-installation' | 'fixture-webhook';
+      reason:
+        | 'closed'
+        | 'fixture-user'
+        | 'fixture-repository'
+        | 'fixture-recovery'
+        | 'fixture-installation'
+        | 'fixture-webhook';
     };
 
 type GitHubUserIdentity = { githubLogin?: unknown } | null | undefined;
@@ -164,6 +170,83 @@ export function canaryUserEligibility(
   return login === mode.fixture.owner
     ? { allowed: true }
     : { allowed: false, reason: 'fixture-user' };
+}
+
+function repositoryIdMatches(value: unknown, expected: number) {
+  if (typeof value === 'number') return Number.isSafeInteger(value) && value === expected;
+  return typeof value === 'string' && value === String(expected);
+}
+
+function fixtureRepositoryRecordMatches(
+  value: unknown,
+  fixture: typeof AUTHORIZED_FIXTURE_REPOSITORY,
+) {
+  if (!isRecord(value)) return false;
+  return (
+    repositoryIdMatches(value.githubRepositoryId, fixture.repositoryId) &&
+    matchesExact(value.owner, fixture.owner, githubLoginPattern) &&
+    matchesExact(value.name, fixture.repository, repositoryNamePattern) &&
+    matchesExact(value.fullName, fixture.fullName, /^[a-z0-9_.-]+\/[a-z0-9_.-]+$/i)
+  );
+}
+
+export function canaryRepositorySelectionEligibility(
+  env: ProductionCanaryRuntime | null | undefined,
+  value: unknown,
+): CanaryEligibility {
+  const mode = resolveProductionCanaryMode(env);
+  if (mode.kind !== 'fixture') return eligibilityForMode(mode);
+  if (
+    !Array.isArray(value) ||
+    value.length !== 1 ||
+    !fixtureRepositoryRecordMatches(value[0], mode.fixture) ||
+    !isRecord(value[0]) ||
+    !matchesExact(value[0].installationAccountLogin, mode.fixture.owner, githubLoginPattern)
+  ) {
+    return { allowed: false, reason: 'fixture-repository' };
+  }
+  return { allowed: true };
+}
+
+export function canaryWebhookRecoveryEligibility(
+  env: ProductionCanaryRuntime | null | undefined,
+  value: unknown,
+): CanaryEligibility {
+  const mode = resolveProductionCanaryMode(env);
+  if (mode.kind !== 'fixture') return eligibilityForMode(mode);
+  const repository = isRecord(value) ? value.repository : null;
+  const installation = isRecord(value) ? value.installation : null;
+  if (
+    !isRecord(value) ||
+    !isRecord(repository) ||
+    !isRecord(installation) ||
+    ![
+      value.deliveryOrganizationId,
+      value.deliveryRepositoryId,
+      value.deliveryInstallationId,
+      repository.recordId,
+      repository.organizationId,
+      repository.installationId,
+      installation.recordId,
+      installation.organizationId,
+      installation.providerId,
+    ].every((reference) => typeof reference === 'string' && reference.length > 0)
+  ) {
+    return { allowed: false, reason: 'fixture-recovery' };
+  }
+
+  if (
+    value.deliveryRepositoryId !== repository.recordId ||
+    value.deliveryOrganizationId !== repository.organizationId ||
+    value.deliveryOrganizationId !== installation.organizationId ||
+    repository.installationId !== installation.recordId ||
+    value.deliveryInstallationId !== installation.providerId ||
+    !matchesExact(installation.accountLogin, mode.fixture.owner, githubLoginPattern) ||
+    !fixtureRepositoryRecordMatches(repository, mode.fixture)
+  ) {
+    return { allowed: false, reason: 'fixture-recovery' };
+  }
+  return { allowed: true };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

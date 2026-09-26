@@ -3,9 +3,19 @@ import { d1Schema, isD1Database, schema } from '@trace/db';
 import type { TraceD1Database } from '@trace/db';
 import { parseGitHubAppEnv } from '@trace/env';
 import { getGitHubRepositoryHead, type GitHubAppConfig } from '@trace/github';
-import { createRequestDatabase, getRequestTraceSession } from '../../../../lib/request-database';
+import {
+  createRequestDatabase,
+  getRequestCloudflareEnv,
+  getRequestTraceSession,
+} from '../../../../lib/request-database';
 import { getUserOrganizationIds } from '../../../../lib/workspace';
 import { isTrustedBrowserMutation } from '../../../../lib/browser-origin';
+import {
+  canaryRepositorySelectionEligibility,
+  canaryUserEligibility,
+  productionCanaryGateResponse,
+  productionCanaryIntegrationEligibility,
+} from '../../../../lib/production-canary';
 
 function isUuid(value: unknown): value is string {
   return (
@@ -15,10 +25,16 @@ function isUuid(value: unknown): value is string {
 }
 
 export async function POST(request: Request) {
+  const cloudflareEnv = await getRequestCloudflareEnv();
+  const integrationEligibility = productionCanaryIntegrationEligibility(cloudflareEnv);
+  if (!integrationEligibility.allowed) return productionCanaryGateResponse(integrationEligibility);
+
   const session = await getRequestTraceSession(request.headers);
   if (!session?.user) return Response.json({ error: 'Authentication required.' }, { status: 401 });
   if (!isTrustedBrowserMutation(request))
     return Response.json({ error: 'Cross-origin request rejected.' }, { status: 403 });
+  const userEligibility = canaryUserEligibility(cloudflareEnv, session.user);
+  if (!userEligibility.allowed) return productionCanaryGateResponse(userEligibility);
 
   let body: { repositoryIds?: unknown };
   try {
@@ -50,8 +66,10 @@ export async function POST(request: Request) {
             installationId: d1Schema.githubRepositories.installationId,
             githubRepositoryId: d1Schema.githubRepositories.githubRepositoryId,
             githubInstallationId: d1Schema.githubInstallations.githubInstallationId,
+            installationAccountLogin: d1Schema.githubInstallations.accountLogin,
             owner: d1Schema.githubRepositories.owner,
             name: d1Schema.githubRepositories.name,
+            fullName: d1Schema.githubRepositories.fullName,
             defaultBranch: d1Schema.githubRepositories.defaultBranch,
             state: d1Schema.githubRepositories.state,
           })
@@ -67,8 +85,10 @@ export async function POST(request: Request) {
             installationId: schema.githubRepositories.installationId,
             githubRepositoryId: schema.githubRepositories.githubRepositoryId,
             githubInstallationId: schema.githubInstallations.githubInstallationId,
+            installationAccountLogin: schema.githubInstallations.accountLogin,
             owner: schema.githubRepositories.owner,
             name: schema.githubRepositories.name,
+            fullName: schema.githubRepositories.fullName,
             defaultBranch: schema.githubRepositories.defaultBranch,
             state: schema.githubRepositories.state,
           })
@@ -78,6 +98,9 @@ export async function POST(request: Request) {
             eq(schema.githubRepositories.installationId, schema.githubInstallations.id),
           )
           .where(inArray(schema.githubRepositories.organizationId, organizationIds));
+    const repositoryEligibility = canaryRepositorySelectionEligibility(cloudflareEnv, repositories);
+    if (!repositoryEligibility.allowed) return productionCanaryGateResponse(repositoryEligibility);
+
     const allowedIds = new Set(repositories.map((repository) => repository.id));
     if (body.repositoryIds.some((id) => !allowedIds.has(id))) {
       return Response.json({ error: 'A repository is outside your workspace.' }, { status: 403 });

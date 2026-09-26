@@ -1077,3 +1077,40 @@
   `feat/cloudflare-native-runtime`. Fixture mode is not deployed and cannot be
   opened until credentials, webhook setup, deployment, and separate
   authorization prerequisites are satisfied.
+
+### Phase CF4.18A.1 production GitHub mutation-route closure
+
+- Addressed the P1 review on PR #11 by applying the centralized production
+  canary mode and user gates to `POST /api/github/repositories` and
+  `POST /api/github/webhooks/recovery`. Closed, missing, unknown, or malformed
+  production mode is rejected with `503` and `no-store` before the route opens
+  its database or reaches GitHub/Queue mutation paths. Fixture user denial is
+  cache-disabled and occurs before repository selection work.
+- Repository selection now requires the complete workspace repository
+  projection to be exactly the authorized fixture: provider ID `1378441300`,
+  owner `mathofdynamic`, repository `trace-staging-fixture`, matching full name,
+  and installation account. Any additional or mismatched row is rejected
+  before repository updates, audit writes, or GitHub head refresh.
+- Recovery POST retains origin validation and delegates final owner-only replay
+  authorization to the existing D1 recovery function. In fixture mode it first
+  joins the delivery's internal repository and installation references and
+  verifies provider ID/name, organization linkage, installation linkage, and
+  account login. Missing or ambiguous links fail closed before replay state
+  mutation or Queue send. Existing `repository_id` and installation identity
+  fields provide sufficient trusted evidence; no migration or schema change
+  was needed.
+- Recovery GET is unchanged: signed-in owner-scoped listing remains
+  read-only and available in closed mode. This phase closes repository
+  selection and replay/requeue mutations only.
+- Tests cover closed/invalid mode short-circuiting, non-allowlisted users,
+  exact fixture selection, extra/mismatched repositories, no database writes,
+  no GitHub refresh, recovery identity rejection, no replay/Queue send, the
+  preserved owner-only denial, and non-production behavior. Nine focused
+  GitHub/canary test files passed (98 tests). `pnpm check`, `pnpm cf:build`,
+  production validate-only preflight with the dedicated D1/Queue/Worker IDs,
+  Prettier, and `git diff --check` passed. No Worker deployment, database
+  migration/write, Queue send, webhook activation, App installation, OAuth
+  execution, or staging change occurred.
+- The fix updates existing PR #11. It changes no production configuration;
+  `TRACE_CANARY_MODE` remains `closed`, the App private-key blocker remains,
+  and no production code has been deployed.

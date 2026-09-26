@@ -449,7 +449,7 @@ not evidence of a staging outage.
    candidate based on the canonical feature SHA. It allows only owner
    `mathofdynamic` and repository ID `1378441300` (`trace-staging-fixture`),
    and checks OAuth users, installation snapshots, reconciliation, and signed
-   webhook payloads before persistence or queueing. This code is not merged or
+   webhook payloads before persistence or queueing. This code has not been
    deployed. Before webhook activation, App installation, or any switch from
    closed mode, require review, merge, deployment, and live verification of
    the gate. App repository selection and operator procedure alone are not
@@ -470,7 +470,7 @@ not evidence of a staging outage.
 
 CF4.18 is not ready to open: neither existing key's private PEM is stored, the
 two unusable public key rows remain active pending a usable replacement, the
-fixture-only gate is implemented locally but not merged or deployed, and
+fixture-only gate exists in feature-branch code but is not deployed, and
 webhook configuration/activation is intentionally deferred until the gate is
 live and verified. No customer-facing cutover is authorized.
 
@@ -503,9 +503,36 @@ normalization, D1 delivery insertion, and Queue sending. Fixture denials return
 generic `403` with `cache-control: no-store`; closed or invalid production
 modes return `503` with `no-store`.
 
-CF4.18A changes are local and pending normal review/merge. No production or
-staging runtime/configuration was changed; fixture mode has not been deployed
-or exercised remotely. The GitHub App private-key blocker remains separate:
+CF4.18A changes are feature-branch code and have not been deployed or
+exercised remotely. No production or staging runtime/configuration was changed.
+The GitHub App private-key blocker remains separate:
 `TRACE_GITHUB_APP_PRIVATE_KEY` is absent, and the two unusable public-key rows
 remain untouched. Webhook activation, App installation, and production OAuth
 execution remain unauthorized and were not attempted.
+
+### CF4.18A.1 mutation-route review
+
+The closed/invalid production canary gate now also covers the POST repository
+selection/update route and webhook recovery replay route. Closed, missing,
+unknown, and malformed production modes return the existing `503` response
+with `cache-control: no-store` before route-level database creation or
+mutation. Fixture mode requires the authenticated GitHub user to match
+`mathofdynamic`; repository selection additionally requires the workspace's
+complete repository projection to contain only the exact fixture ID,
+owner/name, full name, and installation account. Unexpected repository rows
+are rejected before refresh, selection updates, or audit writes.
+
+Recovery POST retains trusted-browser validation and the existing owner-only
+replay authorization. Before replay it joins the delivery's trusted internal
+repository and installation associations and requires the fixture provider
+repository identity, workspace links, and installation account to match. A
+missing or ambiguous association is denied before replay state mutation or
+Queue send. The recovery ledger already stores an internal `repository_id`
+foreign key plus installation identity; the linked repository and installation
+rows provide the trusted provider ID/name/account evidence, so no schema
+change was needed.
+
+The authenticated, owner-scoped recovery GET remains unchanged. This patch
+closes repository selection and replay/requeue mutations; it does not disable
+the existing read-only owner listing in closed mode. The change is not
+deployed; production remains in `TRACE_CANARY_MODE=closed`.

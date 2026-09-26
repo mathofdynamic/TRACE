@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   AUTHORIZED_FIXTURE_REPOSITORY,
   canaryInstallationSnapshotEligibility,
+  canaryRepositorySelectionEligibility,
   canaryUserEligibility,
+  canaryWebhookRecoveryEligibility,
   canaryWebhookPayloadEligibility,
   productionCanaryClosedResponse,
   productionCanaryGateResponse,
@@ -45,6 +47,34 @@ const snapshot = () => ({
       permissions: { metadata: 'read' },
     },
   ],
+});
+
+const repositoryRecord = (overrides: Record<string, unknown> = {}) => ({
+  githubRepositoryId: '1378441300',
+  owner: 'mathofdynamic',
+  name: 'trace-staging-fixture',
+  fullName: 'mathofdynamic/trace-staging-fixture',
+  installationAccountLogin: 'mathofdynamic',
+  ...overrides,
+});
+
+const recoveryScope = (overrides: Record<string, unknown> = {}) => ({
+  deliveryOrganizationId: 'workspace-1',
+  deliveryRepositoryId: 'repository-record-1',
+  deliveryInstallationId: 'installation-provider-1',
+  repository: {
+    recordId: 'repository-record-1',
+    organizationId: 'workspace-1',
+    installationId: 'installation-record-1',
+    ...repositoryRecord(),
+  },
+  installation: {
+    recordId: 'installation-record-1',
+    organizationId: 'workspace-1',
+    providerId: 'installation-provider-1',
+    accountLogin: 'mathofdynamic',
+  },
+  ...overrides,
 });
 
 describe('production canary mode boundary', () => {
@@ -114,6 +144,65 @@ describe('production fixture user gate', () => {
     { githubLogin: ' mathofdynamic' },
   ])('denies missing or non-allowlisted users: %j', (user) => {
     expect(canaryUserEligibility(production(), user).allowed).toBe(false);
+  });
+});
+
+describe('production fixture repository mutation gate', () => {
+  it('allows only the single repository and installation account in the fixture', () => {
+    expect(canaryRepositorySelectionEligibility(production(), [repositoryRecord()]).allowed).toBe(
+      true,
+    );
+  });
+
+  it.each([
+    ['missing repository rows', []],
+    ['multiple repository rows', [repositoryRecord(), repositoryRecord()]],
+    ['wrong repository ID', [repositoryRecord({ githubRepositoryId: '7' })]],
+    ['wrong owner', [repositoryRecord({ owner: 'other' })]],
+    ['wrong repository name', [repositoryRecord({ name: 'other' })]],
+    ['wrong full name', [repositoryRecord({ fullName: 'mathofdynamic/other' })]],
+    ['wrong installation account', [repositoryRecord({ installationAccountLogin: 'other' })]],
+  ])('denies %s', (_label, repositories) => {
+    expect(canaryRepositorySelectionEligibility(production(), repositories).allowed).toBe(false);
+  });
+});
+
+describe('production fixture recovery replay gate', () => {
+  it('allows a recovery record linked to the exact fixture repository and installation', () => {
+    expect(canaryWebhookRecoveryEligibility(production(), recoveryScope()).allowed).toBe(true);
+  });
+
+  it.each([
+    ['missing repository association', { deliveryRepositoryId: null }],
+    [
+      'cross-workspace repository',
+      { repository: { ...recoveryScope().repository, organizationId: 'workspace-2' } },
+    ],
+    [
+      'different repository installation',
+      { repository: { ...recoveryScope().repository, installationId: 'installation-record-2' } },
+    ],
+    ['different delivery installation', { deliveryInstallationId: 'installation-provider-2' }],
+    [
+      'non-fixture repository identity',
+      {
+        repository: {
+          ...recoveryScope().repository,
+          githubRepositoryId: '7',
+          owner: 'other',
+          name: 'private-repo',
+          fullName: 'other/private-repo',
+        },
+      },
+    ],
+    [
+      'non-fixture installation account',
+      { installation: { ...recoveryScope().installation, accountLogin: 'other' } },
+    ],
+  ])('denies %s', (_label, overrides) => {
+    expect(canaryWebhookRecoveryEligibility(production(), recoveryScope(overrides)).allowed).toBe(
+      false,
+    );
   });
 });
 

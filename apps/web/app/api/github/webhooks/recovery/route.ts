@@ -1,5 +1,7 @@
+import { eq } from 'drizzle-orm';
 import {
   D1WebhookRecoveryError,
+  d1Schema,
   isD1Database,
   listD1WebhookRecoveriesForOwner,
   requestD1WebhookReplay,
@@ -12,6 +14,13 @@ import {
 } from '../../../../../lib/request-database';
 import { isTrustedBrowserMutation } from '../../../../../lib/browser-origin';
 import { readBoundedJson } from '../../../../../lib/bounded-json';
+import {
+  canaryUserEligibility,
+  canaryWebhookRecoveryEligibility,
+  productionCanaryGateResponse,
+  productionCanaryIntegrationEligibility,
+  resolveProductionCanaryMode,
+} from '../../../../../lib/production-canary';
 
 function recoveryErrorResponse(error: D1WebhookRecoveryError) {
   const status =
@@ -52,8 +61,14 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const cloudflareEnv = await getRequestCloudflareEnv();
+  const integrationEligibility = productionCanaryIntegrationEligibility(cloudflareEnv);
+  if (!integrationEligibility.allowed) return productionCanaryGateResponse(integrationEligibility);
+
   const session = await getRequestTraceSession(request.headers);
   if (!session?.user) return Response.json({ error: 'Authentication required.' }, { status: 401 });
+  const userEligibility = canaryUserEligibility(cloudflareEnv, session.user);
+  if (!userEligibility.allowed) return productionCanaryGateResponse(userEligibility);
   if (!isTrustedBrowserMutation(request)) {
     return Response.json({ error: 'Cross-origin request rejected.' }, { status: 403 });
   }
@@ -71,7 +86,60 @@ export async function POST(request: Request) {
         { status: 501 },
       );
     }
-    const cloudflareEnv = await getRequestCloudflareEnv();
+    if (resolveProductionCanaryMode(cloudflareEnv).kind === 'fixture') {
+      const d1 = db as unknown as TraceD1Database;
+      const [scope] = await d1
+        .select({
+          deliveryOrganizationId: d1Schema.githubWebhookDeliveries.organizationId,
+          deliveryRepositoryId: d1Schema.githubWebhookDeliveries.repositoryId,
+          deliveryInstallationId: d1Schema.githubWebhookDeliveries.installationId,
+          repositoryRecordId: d1Schema.githubRepositories.id,
+          repositoryOrganizationId: d1Schema.githubRepositories.organizationId,
+          repositoryInstallationId: d1Schema.githubRepositories.installationId,
+          githubRepositoryId: d1Schema.githubRepositories.githubRepositoryId,
+          repositoryOwner: d1Schema.githubRepositories.owner,
+          repositoryName: d1Schema.githubRepositories.name,
+          repositoryFullName: d1Schema.githubRepositories.fullName,
+          installationRecordId: d1Schema.githubInstallations.id,
+          installationOrganizationId: d1Schema.githubInstallations.organizationId,
+          installationProviderId: d1Schema.githubInstallations.githubInstallationId,
+          installationAccountLogin: d1Schema.githubInstallations.accountLogin,
+        })
+        .from(d1Schema.githubWebhookDeliveries)
+        .leftJoin(
+          d1Schema.githubRepositories,
+          eq(d1Schema.githubWebhookDeliveries.repositoryId, d1Schema.githubRepositories.id),
+        )
+        .leftJoin(
+          d1Schema.githubInstallations,
+          eq(d1Schema.githubRepositories.installationId, d1Schema.githubInstallations.id),
+        )
+        .where(eq(d1Schema.githubWebhookDeliveries.deliveryId, body.deliveryId))
+        .limit(1);
+
+      const recoveryEligibility = canaryWebhookRecoveryEligibility(cloudflareEnv, {
+        deliveryOrganizationId: scope?.deliveryOrganizationId,
+        deliveryRepositoryId: scope?.deliveryRepositoryId,
+        deliveryInstallationId: scope?.deliveryInstallationId,
+        repository: {
+          recordId: scope?.repositoryRecordId,
+          organizationId: scope?.repositoryOrganizationId,
+          installationId: scope?.repositoryInstallationId,
+          githubRepositoryId: scope?.githubRepositoryId,
+          owner: scope?.repositoryOwner,
+          name: scope?.repositoryName,
+          fullName: scope?.repositoryFullName,
+        },
+        installation: {
+          recordId: scope?.installationRecordId,
+          organizationId: scope?.installationOrganizationId,
+          providerId: scope?.installationProviderId,
+          accountLogin: scope?.installationAccountLogin,
+        },
+      });
+      if (!recoveryEligibility.allowed) return productionCanaryGateResponse(recoveryEligibility);
+    }
+
     if (!cloudflareEnv?.TRACE_QUEUE) {
       return Response.json({ error: 'Webhook recovery queue is not configured.' }, { status: 503 });
     }
