@@ -964,3 +964,17 @@
   E2E suite passed locally with retries disabled against an isolated local
   PostgreSQL database. Final format, lint, typecheck, unit, build, and E2E gates
   are recorded after the focused branch validation.
+
+### Phase CF4.16H read-only Queue drain workflow coverage
+
+- Added source-level regression coverage for the manually dispatched drain
+  workflow: feature-ref/environment restrictions, secret-only environment
+  consumption, fixed production resource identities, GET-only requests,
+  bounded 3-observation polling with 30/60-second waits, zero-backlog success,
+  and final nonzero-backlog failure. The test rejects message, pull, ack,
+  retry, purge, consumer-mutation, and deployment paths.
+- No Queue message, Cloudflare mutation, or Worker deployment is part of this
+  workflow. PR #8 remains responsible only for exposing and testing this
+  read-only workflow on the feature ref. The one authorized drain invocation
+  and its measured result will be recorded after merge; no observation is
+  claimed before that run.
