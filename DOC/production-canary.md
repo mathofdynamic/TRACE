@@ -366,7 +366,7 @@ redispatch under this acceptance attempt. Queue processing, acknowledgment,
 backlog, and error metrics remain unverified. Customer traffic and GitHub
 intake remain closed.
 
-## CF4.17 production GitHub registrations — 2026-09-26
+## CF4.17 production GitHub registrations â€” 2026-09-26
 
 Created the production-only GitHub App `TRACE Production Integration` and
 the separate OAuth App `TRACE Production`, both under `@mathofdynamic`. The
@@ -529,7 +529,7 @@ closes repository selection and replay/requeue mutations; it does not disable
 the existing read-only owner listing in closed mode. The change is not
 deployed; production remains in `TRACE_CANARY_MODE=closed`.
 
-### CF4.18B credential recovery closeout — 2026-09-26
+### CF4.18B credential recovery closeout â€” 2026-09-26
 
 The production GitHub App `TRACE Production Integration` (App ID
 `5082884`) has one active private key: fingerprint
@@ -553,4 +553,3 @@ installed, and OAuth was not attempted. This phase made no Worker
 deployment, Queue operation, D1 mutation, or staging change. CF4.18C may
 deploy the reviewed fixture gate while preserving closed mode; opening the
 fixture integration remains a separate, unauthorized action.
-
