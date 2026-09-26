@@ -87,11 +87,18 @@ TRACE_AUTH_SECRET
    handler completes.
 7. Observe a fixed soak window. Record request count, CPU, exceptions, D1
    rows read/written, Queue backlog/retries/failures, and bundle/asset size.
-8. After a separate explicit authorization, finish the production credential
-   handoff, install the production App only into the authorized private
-   `mathofdynamic/trace-staging-fixture`, perform one production OAuth sign-in,
-   and validate one legitimate signed fixture event. Keep customer traffic
-   disabled.
+8. Before changing `TRACE_CANARY_MODE=closed`, activating the App webhook, or
+   installing the production App, implement and review a Worker-enforced
+   controlled-canary gate. Allow only owner `mathofdynamic` and repository
+   `trace-staging-fixture` (repository ID `1378441300`). Fail closed for every
+   other installation, repository, reconciliation request, and webhook event.
+   Also prevent another signed-in user from initiating production setup or an
+   unintended installation. GitHub requires webhook activation before saving
+   its URL and secret; activation may generate delivery traffic, so perform it
+   only after that gate is deployed and verified. Then, after separate explicit
+   authorization, install only into the fixture, perform one production OAuth
+   sign-in, and validate one legitimate signed fixture event. Keep customer
+   traffic disabled.
 9. Stop on D1 error `7500`, CPU/size limit, binding or auth error, unexpected
    retries/backlog, failed tenant isolation, signature failure, or any
    PostgreSQL/Hyperdrive/pg-boss activity.
@@ -384,12 +391,12 @@ Issues, and Pull requests. The four explicitly selected event families are
 or all-repositories permission was requested.
 
 The App webhook Active toggle is off, no installation was created, and the
-OAuth App has not been used. GitHub did not retain the webhook URL when the
-form was saved with Active off; a fresh settings read returned an empty URL.
-The webhook was not activated to force persistence. The environment secret
-`TRACE_GITHUB_WEBHOOK_SECRET` exists, but its pairing with App settings is
-not independently verifiable while GitHub redacts the secret and the URL
-does not persist in the inactive configuration.
+OAuth App has not been used. GitHub requires the Active toggle before its
+webhook URL and secret can be configured. Production webhook URL/secret setup
+is intentionally deferred until CF4.18 has deployed and verified the
+server-side fixture-only gate; activation itself may generate delivery
+traffic. `TRACE_GITHUB_WEBHOOK_SECRET` exists, but is not yet configured on
+the App.
 
 Production-canary environment metadata (names only):
 
@@ -400,9 +407,14 @@ Production-canary environment metadata (names only):
 - Secrets: existing `CLOUDFLARE_API_TOKEN`, `TRACE_AUTH_SECRET`,
   `TRACE_GITHUB_APP_CLIENT_SECRET`, `TRACE_GITHUB_OAUTH_CLIENT_SECRET`,
   `TRACE_GITHUB_WEBHOOK_SECRET`.
-- `TRACE_GITHUB_APP_PRIVATE_KEY` is absent. A key was generated in GitHub,
-  but the authorized browser tool blocked its download route, so the file
-  was not transferred or stored. App authentication remains incomplete.
+- `TRACE_GITHUB_APP_PRIVATE_KEY` is absent. The key generated during CF4.17
+  was never downloaded or stored. Its private portion cannot be recovered
+  from GitHub; only the public key remains there. Its distinguishing metadata
+  and revocation are not yet verified because GitHub requires sudo
+  re-authentication to open the App settings. After re-authentication, revoke
+  only that orphaned key, verify its removal, generate exactly one replacement,
+  and securely store the replacement as this environment secret. Delete the
+  temporary PEM after GitHub confirms secret presence.
 - GitHub rejected `GITHUB_*` environment-variable names. A future workflow
   must map the stored `TRACE_GITHUB_*` names to the Worker runtime names
   without exposing secret values in logs or artifacts.
@@ -416,25 +428,33 @@ not evidence of a staging outage.
 
 ### CF4.18 prerequisites and execution boundary
 
-1. Securely transfer the already-generated App private key to the
-   `production-canary` secret `TRACE_GITHUB_APP_PRIVATE_KEY`. Do not create
-   another key unless the existing key is first accounted for.
-2. Resolve how GitHub can retain the exact production webhook URL and secret
-   while its Active toggle remains off. Do not enable delivery as a workaround.
-3. Add an explicit, reviewed mapping from the `TRACE_GITHUB_*` environment
-   names to the Worker runtime contract. Keep `TRACE_CANARY_MODE=closed` until
-   all identity, credential, and route checks pass.
-4. Only after separate explicit authorization, open the implementation's
-   controlled-canary mode and install the App only on the private
-   `mathofdynamic/trace-staging-fixture`. Perform one production OAuth sign-in
-   and validate one legitimate signed fixture event. Do not install anywhere
-   else.
+1. Complete GitHub sudo re-authentication. Identify the never-downloaded key
+   by its nonsecret creation metadata/fingerprint, revoke only that key, and
+   verify it is no longer active. Generate exactly one replacement, securely
+   store it as `TRACE_GITHUB_APP_PRIVATE_KEY`, verify secret metadata, then
+   delete the temporary PEM. Do not expose the PEM.
+2. Implement and test a server-side canary gate before any webhook activation,
+   App installation, or switch from closed mode. The gate must allow only
+   owner `mathofdynamic` and repository ID `1378441300` (`trace-staging-fixture`)
+   and reject every non-allowlisted installation, repository, reconciliation
+   request, and webhook event. OAuth/setup must prevent another signed-in user
+   from initiating an unintended production installation. App repository
+   selection and operator procedure are not sufficient controls.
+3. Add an explicit, reviewed mapping from `TRACE_GITHUB_*` GitHub environment
+   names to Worker runtime names. Keep `TRACE_CANARY_MODE=closed` while this
+   mapping and all identity/credential checks are validated.
+4. Only after the gate is deployed and verified and separate authorization is
+   given, configure the webhook URL/secret and activate delivery. Treat
+   activation as potentially traffic-generating. Then install the App only on
+   the authorized private fixture, perform one production OAuth sign-in, and
+   validate one legitimate signed fixture event. Do not install elsewhere.
 5. Verify signature validation, D1 workspace association, Queue completion,
-   tenant isolation, and duplicate-delivery idempotency, then close intake
-   and verify the rollback path.
+   tenant isolation, and duplicate-delivery idempotency. Immediately return to
+   closed mode and verify the rollback path.
 6. Keep customer traffic blocked until current-UTC-day D1 usage, aggregate
    Worker CPU, Queue health, monitoring, and rollback gates have evidence.
 
-CF4.18 is not ready to start: the App private key is not securely stored and
-the webhook endpoint configuration did not persist while inactive. No
-customer-facing cutover is authorized.
+CF4.18 is not ready to open: the orphaned key has not been revoked/verified,
+the replacement private key is not stored, the server-side fixture-only gate
+does not yet exist, and webhook configuration/activation is intentionally
+deferred until that gate passes. No customer-facing cutover is authorized.

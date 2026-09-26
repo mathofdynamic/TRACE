@@ -997,16 +997,31 @@
   using metadata only. `GITHUB_*` variable names were rejected by GitHub, so
   nonsecret values use `TRACE_GITHUB_*` names and require a later explicit
   runtime mapping. Secret values are not recorded.
-- Blockers: the App private-key file could not be transferred because the
-  authorized browser tool blocked its download route; no
-  `TRACE_GITHUB_APP_PRIVATE_KEY` secret is present. GitHub also returned an
-  empty webhook URL after saving while Active was off. Delivery was not
-  enabled to force persistence; the URL/secret pairing is unverified.
+- Credential correction: the App private key generated during CF4.17 was
+  never downloaded or stored and cannot be recovered from GitHub. The current
+  App key metadata and revocation state are unverified because GitHub now
+  requires sudo re-authentication. Do not claim revocation or replacement;
+  after re-authentication, revoke only the orphan, verify removal, generate
+  one replacement, store it as `TRACE_GITHUB_APP_PRIVATE_KEY`, verify secret
+  metadata, and securely delete the temporary PEM.
+- Webhook correction: GitHub requires webhook activation before its URL and
+  secret can be configured. Production remains inactive; URL/secret setup is
+  deferred until a server-side fixture-only gate is deployed and verified.
+  Treat activation as potentially traffic-generating. Do not activate to
+  persist configuration before that gate.
+- CF4.18 prerequisite: implement and test a Worker-side allowlist for owner
+  `mathofdynamic` and repository ID `1378441300` (`trace-staging-fixture`).
+  Reject non-allowlisted installations, repositories, reconciliation requests,
+  and webhook events; constrain OAuth/setup so another signed-in user cannot
+  initiate an unintended installation. App repository selection or operator
+  procedure alone is insufficient.
 - Verification: production health `200`; setup/install/reconcile GET routes
   `503` with `no-store`; anonymous recovery `401`. One staging health request
   timed out within five seconds; no staging configuration or runtime was
   changed. No Worker deployment, migration, Queue operation, installation,
   webhook delivery, or OAuth login occurred.
 - Status: CF4.17 is partial. Keep `TRACE_CANARY_MODE=closed` and customer
-  traffic disabled. CF4.18 is blocked on secure private-key transfer, an
-  inactive webhook URL configuration path, and runtime-name mapping.
+  traffic disabled. CF4.18 cannot open intake until the orphaned key is
+  accounted for, a replacement private key is securely stored, the server-side
+  fixture-only gate is implemented and verified, webhook configuration is
+  activated under that gate, and runtime-name mapping is reviewed.
