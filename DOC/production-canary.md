@@ -466,6 +466,11 @@ No production Worker deployment, webhook activation, App installation,
 OAuth attempt, Queue operation, D1 mutation, or staging change occurred
 during CF4.18B. No customer traffic is authorized.
 
+A later authorized fixture-intake phase must verify duplicate-delivery
+idempotency: redelivery of the same signed fixture event must preserve one
+logical business effect. Retain the signature, D1 workspace-association,
+Queue-completion, tenant-isolation, and immediate rollback-to-closed checks.
+
 ### CF4.18A fixture-only production canary gate
 
 Production canary mode is explicit. `closed` blocks GitHub integration routes;
