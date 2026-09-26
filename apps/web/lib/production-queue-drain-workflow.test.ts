@@ -9,8 +9,8 @@ const workflow = readFileSync(
 
 describe('production Queue drain workflow safety contract', () => {
   it('is manual-only, read-only, environment-scoped, and feature-ref restricted', () => {
-    expect(workflow).toMatch(/^on:\s*\n  workflow_dispatch:\s*$/m);
-    expect(workflow).not.toMatch(/^  (push|pull_request|schedule):/m);
+    expect(workflow).toContain('on:\n  workflow_dispatch:');
+    expect(workflow).not.toMatch(/^\x20{2}(push|pull_request|schedule):/m);
     expect(workflow).toContain('permissions:\n  contents: read');
     expect(workflow).toContain('environment: production-canary');
     expect(workflow).toContain("github.ref == 'refs/heads/feat/cloudflare-native-runtime'");
