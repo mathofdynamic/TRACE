@@ -978,3 +978,35 @@
   read-only workflow on the feature ref. The one authorized drain invocation
   and its measured result will be recorded after merge; no observation is
   claimed before that run.
+
+### Phase CF4.17 production GitHub registrations
+
+- Created `TRACE Production Integration` as a separate GitHub App under
+  `@mathofdynamic`; created `TRACE Production` as a separate OAuth App. The
+  existing staging registrations `TRACE GitHub Integration` and `TRACE` were
+  not modified.
+- Rechecked canonical source routes: App setup/callback
+  `/api/github/setup`, webhook `/api/github/webhooks`, OAuth start
+  `/api/auth/github`, OAuth callback `/api/auth/github/callback`, and
+  reconciliation `/api/github/reconcile`.
+- App permissions are read-only Metadata, Contents, Issues, and Pull requests.
+  The four manual event families selected are `issues`, `pull_request`,
+  `push`, and `repository`. Webhook Active remains off; no installation or
+  OAuth authorization was performed.
+- Production-canary environment variable/secret names were added and verified
+  using metadata only. `GITHUB_*` variable names were rejected by GitHub, so
+  nonsecret values use `TRACE_GITHUB_*` names and require a later explicit
+  runtime mapping. Secret values are not recorded.
+- Blockers: the App private-key file could not be transferred because the
+  authorized browser tool blocked its download route; no
+  `TRACE_GITHUB_APP_PRIVATE_KEY` secret is present. GitHub also returned an
+  empty webhook URL after saving while Active was off. Delivery was not
+  enabled to force persistence; the URL/secret pairing is unverified.
+- Verification: production health `200`; setup/install/reconcile GET routes
+  `503` with `no-store`; anonymous recovery `401`. One staging health request
+  timed out within five seconds; no staging configuration or runtime was
+  changed. No Worker deployment, migration, Queue operation, installation,
+  webhook delivery, or OAuth login occurred.
+- Status: CF4.17 is partial. Keep `TRACE_CANARY_MODE=closed` and customer
+  traffic disabled. CF4.18 is blocked on secure private-key transfer, an
+  inactive webhook URL configuration path, and runtime-name mapping.
