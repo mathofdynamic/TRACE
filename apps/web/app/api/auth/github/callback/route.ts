@@ -11,7 +11,16 @@ import {
   sessionCookieName,
   verifyOAuthState,
 } from '@trace/auth';
-import { persistRequestAuthSession, upsertRequestUser } from '../../../../../lib/request-database';
+import {
+  getRequestCloudflareEnv,
+  persistRequestAuthSession,
+  upsertRequestUser,
+} from '../../../../../lib/request-database';
+import {
+  canaryUserEligibility,
+  productionCanaryGateResponse,
+  productionCanaryIntegrationEligibility,
+} from '../../../../../lib/production-canary';
 
 function clearCookie(name: string) {
   return `${name}=; ${cookieAttributes(0, isSecurePublicUrl())}`;
@@ -50,6 +59,10 @@ function getSafeOAuthDiagnostic(error: unknown) {
 }
 
 export async function GET(request: Request) {
+  const cloudflareEnv = await getRequestCloudflareEnv();
+  const integrationEligibility = productionCanaryIntegrationEligibility(cloudflareEnv);
+  if (!integrationEligibility.allowed) return productionCanaryGateResponse(integrationEligibility);
+
   const url = new URL(request.url);
   const publicUrl = getTracePublicUrl();
   const expectedState = readCookie(request.headers, oauthStateCookieName());
@@ -71,6 +84,9 @@ export async function GET(request: Request) {
 
   try {
     const user = await completeGitHubOAuth(code);
+    const userEligibility = canaryUserEligibility(cloudflareEnv, user);
+    if (!userEligibility.allowed) return productionCanaryGateResponse(userEligibility);
+
     const persistedUser = await upsertRequestUser(user);
     let session: string;
     try {

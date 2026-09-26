@@ -445,13 +445,15 @@ not evidence of a staging outage.
    `SHA256:4H6Tw/S7lgAlkT2HjCL5m6tlXfdfVZHrkM5AosB2hqg=` and
    `SHA256:5mjJInXDVzQWjLOpkoXdNsCMwwgpM5bE8IVkO3o4vfQ=` and verify removal.
    Delete the temporary PEM after storage.
-2. Implement and test a server-side canary gate before any webhook activation,
-   App installation, or switch from closed mode. The gate must allow only
-   owner `mathofdynamic` and repository ID `1378441300` (`trace-staging-fixture`)
-   and reject every non-allowlisted installation, repository, reconciliation
-   request, and webhook event. OAuth/setup must prevent another signed-in user
-   from initiating an unintended production installation. App repository
-   selection and operator procedure are not sufficient controls.
+2. CF4.18A implements and tests the server-side fixture gate in a local
+   candidate based on the canonical feature SHA. It allows only owner
+   `mathofdynamic` and repository ID `1378441300` (`trace-staging-fixture`),
+   and checks OAuth users, installation snapshots, reconciliation, and signed
+   webhook payloads before persistence or queueing. This code is not merged or
+   deployed. Before webhook activation, App installation, or any switch from
+   closed mode, require review, merge, deployment, and live verification of
+   the gate. App repository selection and operator procedure alone are not
+   sufficient controls.
 3. Add an explicit, reviewed mapping from `TRACE_GITHUB_*` GitHub environment
    names to Worker runtime names. Keep `TRACE_CANARY_MODE=closed` while this
    mapping and all identity/credential checks are validated.
@@ -468,6 +470,42 @@ not evidence of a staging outage.
 
 CF4.18 is not ready to open: neither existing key's private PEM is stored, the
 two unusable public key rows remain active pending a usable replacement, the
-server-side fixture-only gate does not yet exist, and webhook configuration/
-activation is intentionally deferred until that gate passes. No
-customer-facing cutover is authorized.
+fixture-only gate is implemented locally but not merged or deployed, and
+webhook configuration/activation is intentionally deferred until the gate is
+live and verified. No customer-facing cutover is authorized.
+
+### CF4.18A fixture-only production canary gate
+
+Production canary mode is explicit. `closed` blocks GitHub integration routes;
+`fixture` is recognized only when all three runtime allowlist values exactly
+identify owner `mathofdynamic`, repository `trace-staging-fixture`, and
+repository ID `1378441300`. Missing, unknown, malformed, or mismatched
+production configuration resolves to closed. Non-production behavior remains
+unchanged. The checked-in production manifest remains `canaryMode: closed` and
+does not contain fixture values.
+
+Before OAuth persistence, the callback requires the authenticated GitHub login
+to match the fixture owner. Installation and reconciliation redirects require
+the same signed-in owner. `/api/github/setup` validates normal setup and
+existing-installation reconciliation snapshots before opening D1 or persisting
+anything: the installation account identity must be valid, and the snapshot
+must contain exactly the fixture repository with matching ID, owner, name, and
+full name.
+
+The webhook route retains body-size/content checks, webhook-secret checks,
+signature verification, required headers, and JSON parsing before applying the
+fixture-payload gate. Repository-bound events validate raw repository identity
+and every present repository reference; pull requests also require fixture-only
+head and base repositories. Installation events and
+`installation_repositories` require the fixture account and reject missing,
+mixed, or non-fixture repository identities. Denied signed events stop before
+normalization, D1 delivery insertion, and Queue sending. Fixture denials return
+generic `403` with `cache-control: no-store`; closed or invalid production
+modes return `503` with `no-store`.
+
+CF4.18A changes are local and pending normal review/merge. No production or
+staging runtime/configuration was changed; fixture mode has not been deployed
+or exercised remotely. The GitHub App private-key blocker remains separate:
+`TRACE_GITHUB_APP_PRIVATE_KEY` is absent, and the two unusable public-key rows
+remain untouched. Webhook activation, App installation, and production OAuth
+execution remain unauthorized and were not attempted.

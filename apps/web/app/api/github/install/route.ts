@@ -2,8 +2,9 @@ import { cookieAttributes, getTracePublicUrl, isSecurePublicUrl, safeAuthNext } 
 import { parseGitHubAppInstallEnv } from '@trace/env';
 import { getRequestCloudflareEnv, getRequestTraceSession } from '../../../../lib/request-database';
 import {
-  isClosedProductionCanary,
-  productionCanaryClosedResponse,
+  canaryUserEligibility,
+  productionCanaryGateResponse,
+  productionCanaryIntegrationEligibility,
 } from '../../../../lib/production-canary';
 
 const APP_STATE_COOKIE = 'trace_github_app_state';
@@ -23,14 +24,17 @@ function appInstallUrl(slug: string, configuredUrl?: string) {
 }
 
 export async function GET(request: Request) {
-  if (isClosedProductionCanary(await getRequestCloudflareEnv())) {
-    return productionCanaryClosedResponse();
-  }
+  const cloudflareEnv = await getRequestCloudflareEnv();
+  const integrationEligibility = productionCanaryIntegrationEligibility(cloudflareEnv);
+  if (!integrationEligibility.allowed) return productionCanaryGateResponse(integrationEligibility);
 
   const publicUrl = getTracePublicUrl();
   const session = await getRequestTraceSession(request.headers);
   if (!session?.user)
     return Response.redirect(new URL('/sign-in?next=/app/repositories', publicUrl));
+
+  const userEligibility = canaryUserEligibility(cloudflareEnv, session.user);
+  if (!userEligibility.allowed) return productionCanaryGateResponse(userEligibility);
 
   let env;
   try {

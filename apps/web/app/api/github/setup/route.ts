@@ -20,8 +20,11 @@ import {
   getRequestTraceSession,
 } from '../../../../lib/request-database';
 import {
-  isClosedProductionCanary,
-  productionCanaryClosedResponse,
+  canaryInstallationSnapshotEligibility,
+  canaryUserEligibility,
+  productionCanaryGateResponse,
+  productionCanaryIntegrationEligibility,
+  type ProductionCanaryRuntime,
 } from '../../../../lib/production-canary';
 import {
   chooseGitHubInstallation,
@@ -112,6 +115,7 @@ async function reconcileExistingInstallation(
   request: Request,
   session: NonNullable<Awaited<ReturnType<typeof getRequestTraceSession>>>,
   publicUrl: string,
+  cloudflareEnv: ProductionCanaryRuntime | null,
 ) {
   const expectedState = readCookie(request.headers, RECONCILE_STATE_COOKIE);
   const receivedState = new URL(request.url).searchParams.get('state');
@@ -159,6 +163,9 @@ async function reconcileExistingInstallation(
       throw new Error('GitHub App installation identity mismatch.');
     }
 
+    const snapshotEligibility = canaryInstallationSnapshotEligibility(cloudflareEnv, snapshot);
+    if (!snapshotEligibility.allowed) return productionCanaryGateResponse(snapshotEligibility);
+
     const { db, client } = await createRequestDatabase();
     try {
       await persistGitHubInstallationSnapshot({
@@ -183,17 +190,20 @@ async function reconcileExistingInstallation(
 }
 
 export async function GET(request: Request) {
-  if (isClosedProductionCanary(await getRequestCloudflareEnv())) {
-    return productionCanaryClosedResponse();
-  }
+  const cloudflareEnv = await getRequestCloudflareEnv();
+  const integrationEligibility = productionCanaryIntegrationEligibility(cloudflareEnv);
+  if (!integrationEligibility.allowed) return productionCanaryGateResponse(integrationEligibility);
 
   const publicUrl = getTracePublicUrl();
   const session = await getRequestTraceSession(request.headers);
   if (!session?.user)
     return Response.redirect(new URL('/sign-in?next=/app/repositories', publicUrl));
 
+  const userEligibility = canaryUserEligibility(cloudflareEnv, session.user);
+  if (!userEligibility.allowed) return productionCanaryGateResponse(userEligibility);
+
   if (readCookie(request.headers, RECONCILE_STATE_COOKIE)) {
-    return reconcileExistingInstallation(request, session, publicUrl);
+    return reconcileExistingInstallation(request, session, publicUrl, cloudflareEnv);
   }
 
   const expectedState = readCookie(request.headers, APP_STATE_COOKIE);
@@ -220,6 +230,9 @@ export async function GET(request: Request) {
     });
     await verifyUserInstallationAccess(userAccessToken, id);
     const snapshot = await getGitHubInstallationSnapshot(appConfig(appEnv), id);
+    const snapshotEligibility = canaryInstallationSnapshotEligibility(cloudflareEnv, snapshot);
+    if (!snapshotEligibility.allowed) return productionCanaryGateResponse(snapshotEligibility);
+
     const { db, client } = await createRequestDatabase();
     try {
       await persistGitHubInstallationSnapshot({

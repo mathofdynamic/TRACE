@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildProductionCanaryRuntimeVariables } from '../apps/web/lib/production-canary.js';
 
 type CanaryManifest = {
   schemaVersion: number;
@@ -10,7 +11,12 @@ type CanaryManifest = {
   runtime: {
     deploymentEnv: string;
     databaseDriver: string;
-    canaryMode: string;
+    canaryMode: 'closed' | 'fixture';
+  };
+  fixtureCanaryEnvironment: {
+    owner: string;
+    repository: string;
+    repositoryId: string;
   };
   d1: {
     binding: string;
@@ -57,6 +63,19 @@ export function loadCanaryManifest(): CanaryManifest {
   return manifest;
 }
 
+export function buildProductionCanaryRuntimeVars(
+  manifest: CanaryManifest,
+  environment: Record<string, string | undefined> = process.env,
+) {
+  return buildProductionCanaryRuntimeVariables(
+    {
+      ...manifest.runtime,
+      fixtureCanaryEnvironment: manifest.fixtureCanaryEnvironment,
+    },
+    environment,
+  );
+}
+
 function fail(message: string): never {
   throw new Error(`Production canary preflight failed: ${message}`);
 }
@@ -70,7 +89,16 @@ function validateStaticManifest(manifest: CanaryManifest) {
   if (manifest.runtime.deploymentEnv !== 'production')
     fail('Deployment environment is not production.');
   if (manifest.runtime.databaseDriver !== 'd1') fail('Production database driver is not d1.');
-  if (manifest.runtime.canaryMode !== 'closed') fail('Initial canary mode must be closed.');
+  if (manifest.runtime.canaryMode !== 'closed')
+    fail('The production deployment preflight must remain in closed canary mode.');
+  if (
+    manifest.fixtureCanaryEnvironment.owner !== 'TRACE_CANARY_GITHUB_OWNER' ||
+    manifest.fixtureCanaryEnvironment.repository !== 'TRACE_CANARY_GITHUB_REPOSITORY' ||
+    manifest.fixtureCanaryEnvironment.repositoryId !== 'TRACE_CANARY_GITHUB_REPOSITORY_ID'
+  ) {
+    fail('Fixture canary environment variable names do not match the required allowlist contract.');
+  }
+  buildProductionCanaryRuntimeVars(manifest);
   if (!/^https:\/\/trace-production\.[a-z0-9-]+\.workers\.dev\/$/.test(`${manifest.publicUrl}/`)) {
     fail('Production public URL is not an account-qualified workers.dev URL.');
   }
@@ -170,9 +198,7 @@ export function writeProductionWranglerConfig(
         main: relativeConfigPath(destination, path.join(webDirectory, 'custom-worker.ts')),
         workers_dev: true,
         vars: {
-          TRACE_DEPLOYMENT_ENV: manifest.runtime.deploymentEnv,
-          TRACE_DATABASE_DRIVER: manifest.runtime.databaseDriver,
-          TRACE_CANARY_MODE: manifest.runtime.canaryMode,
+          ...buildProductionCanaryRuntimeVars(manifest),
           TRACE_PUBLIC_URL: manifest.publicUrl,
           NEXT_PRIVATE_MINIMAL_MODE: '1',
           TRACE_FEATURE_SEMANTIC_PR_FINDINGS: 'false',

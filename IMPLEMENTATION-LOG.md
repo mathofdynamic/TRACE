@@ -1018,12 +1018,12 @@
   deferred until a server-side fixture-only gate is deployed and verified.
   Treat activation as potentially traffic-generating. Do not activate to
   persist configuration before that gate.
-- CF4.18 prerequisite: implement and test a Worker-side allowlist for owner
-  `mathofdynamic` and repository ID `1378441300` (`trace-staging-fixture`).
-  Reject non-allowlisted installations, repositories, reconciliation requests,
-  and webhook events; constrain OAuth/setup so another signed-in user cannot
-  initiate an unintended installation. App repository selection or operator
-  procedure alone is insufficient.
+- CF4.18A implements and tests the Worker-side allowlist for owner
+  `mathofdynamic` and repository ID `1378441300` (`trace-staging-fixture`). The
+  implementation is local and pending the focused PR; it is not deployed.
+  Before webhook activation, App installation, or any switch from closed
+  mode, require review, merge, deployment, and live verification of the gate.
+  App repository selection or operator procedure alone is insufficient.
 - Verification: production health `200`; setup/install/reconcile GET routes
   `503` with `no-store`; anonymous recovery `401`. One staging health request
   timed out within five seconds; no staging configuration or runtime was
@@ -1032,5 +1032,48 @@
 - Status: CF4.17 is partial. Keep `TRACE_CANARY_MODE=closed` and customer
   traffic disabled. CF4.18 cannot open intake until a usable replacement key
   is securely stored, both unusable keys are revoked, the server-side
-  fixture-only gate is implemented and verified, webhook configuration is
+  fixture-only gate is merged/deployed and verified, webhook configuration is
   activated under that gate, and runtime-name mapping is reviewed.
+
+### Phase CF4.18A fixture-only production canary gate
+
+- Added explicit production modes. Only `closed` and `fixture` are recognized;
+  missing, unknown, malformed, or non-canonical fixture configuration fails
+  closed. Non-production behavior is unchanged. The production manifest still
+  selects `closed` and contains no fixture values.
+- Centralized the exact fixture allowlist: owner `mathofdynamic`, repository
+  `trace-staging-fixture`, ID `1378441300`. Fixture mode requires all three
+  bounded, strictly parsed values. Runtime variables are emitted only when
+  those values match the exact allowlist. Production preflight continues to
+  require closed mode.
+- Added centralized user, installation-snapshot, and raw webhook eligibility
+  gates. OAuth callback checks GitHub login before user upsert, session
+  persistence, or cookie issuance. Install and reconcile require the signed-in
+  owner before redirect/state-cookie generation. Setup and existing-install
+  reconciliation validate an exact single-repository snapshot before D1
+  creation or persistence. Signed repository, pull-request, push, issue,
+  installation, and installation-repo events are checked before normalization,
+  delivery insertion, or Queue send.
+- Fixture denials return generic `403` with `no-store`; closed/invalid
+  production modes return `503` with `no-store`. The live Worker remains
+  unchanged; this implementation has not been deployed.
+- Tests cover mode/configuration, users, snapshot identity/cardinality,
+  supported webhook payloads, OAuth no-persist behavior, blocked
+  install/reconcile redirects, and signed non-fixture webhook rejection before
+  D1/Queue work. The manifest remains closed; no fixture values are present.
+- Production remained closed. No webhook activation, App installation, OAuth,
+  Queue probe, production D1 mutation, or staging change occurred.
+  `TRACE_GITHUB_APP_PRIVATE_KEY` remains absent; the two unusable public-key
+  rows were not touched.
+- Verification: eight focused canary/route test files passed (76 tests), the
+  full `pnpm check` passed, `pnpm cf:build` passed, isolated D1 GitHub-ingestion
+  and reconciliation tests passed, and production validate-only preflight
+  passed with the dedicated production resource IDs. The local D1 Playwright
+  suite was attempted on port 8789 and timed out waiting for the existing
+  `Authorized Computers` settings heading (`scripts/test-d1-e2e.ts:599`), an
+  untouched UI path. The PostgreSQL-backed `pnpm test:e2e` was not run because
+  no local PostgreSQL listener was present on port 3002; PR CI runs that suite.
+- Status: local implementation pending normal focused PR review/checks against
+  `feat/cloudflare-native-runtime`. Fixture mode is not deployed and cannot be
+  opened until credentials, webhook setup, deployment, and separate
+  authorization prerequisites are satisfied.
