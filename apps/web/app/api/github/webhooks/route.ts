@@ -12,15 +12,17 @@ import {
 } from '../../../../lib/request-database';
 import { enqueueD1Webhook } from '../../../../lib/d1-webhook-queue';
 import {
-  isClosedProductionCanary,
-  productionCanaryClosedResponse,
+  canaryWebhookPayloadEligibility,
+  productionCanaryGateResponse,
+  productionCanaryIntegrationEligibility,
 } from '../../../../lib/production-canary';
 
 const MAX_BODY_BYTES = 1_048_576;
 
 export async function POST(request: Request) {
   const cloudflareEnv = await getRequestCloudflareEnv();
-  if (isClosedProductionCanary(cloudflareEnv)) return productionCanaryClosedResponse();
+  const integrationEligibility = productionCanaryIntegrationEligibility(cloudflareEnv);
+  if (!integrationEligibility.allowed) return productionCanaryGateResponse(integrationEligibility);
 
   if (!request.headers.get('content-type')?.toLowerCase().includes('application/json')) {
     return Response.json({ error: 'application/json is required.' }, { status: 415 });
@@ -64,6 +66,9 @@ export async function POST(request: Request) {
   } catch {
     return Response.json({ error: 'Invalid JSON payload.' }, { status: 400 });
   }
+  const webhookEligibility = canaryWebhookPayloadEligibility(cloudflareEnv, eventName, payload);
+  if (!webhookEligibility.allowed) return productionCanaryGateResponse(webhookEligibility);
+
   const root =
     typeof payload === 'object' && payload !== null ? (payload as Record<string, unknown>) : {};
   const action = typeof root.action === 'string' ? root.action : undefined;

@@ -86,4 +86,23 @@ describe('GitHub installation reconciliation start', () => {
       error: 'GitHub integration is disabled during the closed production canary.',
     });
   });
+
+  it('denies a non-allowlisted user before creating a reconciliation redirect or state cookie', async () => {
+    mocks.getRequestCloudflareEnv.mockResolvedValue({
+      TRACE_DEPLOYMENT_ENV: 'production',
+      TRACE_CANARY_MODE: 'fixture',
+      TRACE_CANARY_GITHUB_OWNER: 'mathofdynamic',
+      TRACE_CANARY_GITHUB_REPOSITORY: 'trace-staging-fixture',
+      TRACE_CANARY_GITHUB_REPOSITORY_ID: '1378441300',
+    });
+
+    const response = await GET(
+      new Request('https://trace-code.pages.dev/api/github/reconcile?installation_id=123'),
+    );
+
+    expect(response.status).toBe(403);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('location')).toBeNull();
+    expect(response.headers.get('set-cookie')).toBeNull();
+  });
 });

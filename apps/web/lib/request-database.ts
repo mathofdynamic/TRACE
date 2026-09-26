@@ -19,6 +19,7 @@ import {
 } from '@trace/db';
 import { eq } from 'drizzle-orm';
 import type { AnyD1Database } from 'drizzle-orm/d1';
+import type { ProductionCanaryRuntime } from './production-canary';
 
 type HyperdriveBinding = {
   connectionString?: string;
@@ -28,14 +29,13 @@ export type TraceQueueBinding = {
   send(message: unknown): Promise<void>;
 };
 
-type TraceCloudflareEnv = CloudflareEnv & {
-  HYPERDRIVE?: HyperdriveBinding;
-  DB?: AnyD1Database;
-  TRACE_QUEUE?: TraceQueueBinding;
-  TRACE_DATABASE_DRIVER?: string;
-  TRACE_DEPLOYMENT_ENV?: string;
-  TRACE_CANARY_MODE?: string;
-};
+type TraceCloudflareEnv = CloudflareEnv &
+  ProductionCanaryRuntime & {
+    HYPERDRIVE?: HyperdriveBinding;
+    DB?: AnyD1Database;
+    TRACE_QUEUE?: TraceQueueBinding;
+    TRACE_DATABASE_DRIVER?: string;
+  };
 
 export type RequestDatabase = Awaited<ReturnType<typeof createDatabaseClient>>['db'];
 

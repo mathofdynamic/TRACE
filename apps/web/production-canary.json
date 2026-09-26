@@ -8,6 +8,11 @@
     "databaseDriver": "d1",
     "canaryMode": "closed"
   },
+  "fixtureCanaryEnvironment": {
+    "owner": "TRACE_CANARY_GITHUB_OWNER",
+    "repository": "TRACE_CANARY_GITHUB_REPOSITORY",
+    "repositoryId": "TRACE_CANARY_GITHUB_REPOSITORY_ID"
+  },
   "d1": {
     "binding": "DB",
     "databaseName": "trace-production-db",
