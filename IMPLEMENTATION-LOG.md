@@ -1140,3 +1140,42 @@
   No Worker deployment, Queue operation, D1 mutation, or staging change
   occurred. Fixture-gate deployment is the next phase; opening intake is not
   authorized.
+
+### Phase CF4.18C — deploy hardened fixture gate, retain closed mode
+
+- Date: 2026-09-26. Dispatched exactly one production-canary workflow run from
+  the environment-allowed feature ref: run `36256013325`, source
+  `a2068a15a8434b0b828651846ef03572f4bdc952`. The run passed exact-SHA input
+  validation, build, Cloudflare bundle/type checks, artifact validation,
+  production preflight/identity, generated-config dry run, and deployment.
+- Cloudflare reports deployment `2f7613dc-8a90-46e1-ac8d-9cab2fc7eb91`,
+  version `066397d4-60c8-4826-b13f-175935cf04a7`, 100% traffic, and a
+  `workers/message` annotation containing the exact SHA. Rollback target:
+  deployment `8d7306ce-a385-49cd-b095-0ebb2c3dc30d`, version
+  `ead868f1-0f5d-4e45-939c-3e6349ed8f86`.
+- Live version metadata confirms production/d1/closed, D1 ID
+  `7a566f2e-da27-46e7-8c3f-271e5566f225`, Queue
+  `trace-production-jobs`, no Hyperdrive, and no fixture allowlist variables.
+  Queue identity is `9ef092975a554ba296a63b162b16522f`; its sole producer and
+  consumer are `trace-production`, with batch 10, max wait 5000 ms, max
+  retries 3, and retry delay 60 seconds.
+- Health returned 200. OAuth start, install, setup, reconcile, repository
+  mutation POST, recovery replay POST, and unsigned webhook POST returned 503
+  with `no-store`; anonymous recovery GET returned 401. A fresh error-filtered
+  tail showed no error entries during the closed-route probe window.
+- Read-only production D1 verification confirmed migrations
+  `0000_cheerful_legion.sql` and `0001_goofy_lester.sql`, no foreign-key
+  violations, and zero rows in all 22 application tables after the route
+  matrix. Read queries reported zero rows written. No D1 mutation or restore
+  occurred.
+- Read-only Queue drain run `36256628318` verified the dedicated Queue and
+  observed `backlog_count=0`, `backlog_bytes=0`, and
+  `oldest_message_timestamp_ms=0`. No Queue message was sent; individual
+  acknowledgment remains unobservable through this path.
+- Staging remains on version `5930a184-d797-4b70-9aee-d7f0647ab1fa` at 100%
+  with its original D1, Queue, and legacy Hyperdrive bindings. The bounded
+  staging health request timed out; this does not establish an outage.
+- No webhook activation, production App installation, OAuth authorization,
+  or GitHub integration setting change occurred. Production remains closed;
+  fixture mode and customer traffic are not enabled. The production webhook
+  and installation state were not changed by the deployment workflow.

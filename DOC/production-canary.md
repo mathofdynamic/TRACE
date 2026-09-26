@@ -558,3 +558,51 @@ installed, and OAuth was not attempted. This phase made no Worker
 deployment, Queue operation, D1 mutation, or staging change. CF4.18C may
 deploy the reviewed fixture gate while preserving closed mode; opening the
 fixture integration remains a separate, unauthorized action.
+
+### CF4.18C hardened fixture-gate deployment in closed mode — 2026-09-26
+
+The reviewed fixture-gate source was deployed through the registered
+`validate-production-canary.yml` workflow from the allowed
+`feat/cloudflare-native-runtime` ref. Workflow run `36256013325` completed
+successfully for source `a2068a15a8434b0b828651846ef03572f4bdc952`. The active
+Cloudflare deployment is `2f7613dc-8a90-46e1-ac8d-9cab2fc7eb91`, Worker version
+`066397d4-60c8-4826-b13f-175935cf04a7`, at 100% traffic. Cloudflare's
+`workers/message` annotation matches the exact source SHA. The prior rollback
+target was deployment `8d7306ce-a385-49cd-b095-0ebb2c3dc30d`, version
+`ead868f1-0f5d-4e45-939c-3e6349ed8f86`.
+
+Read-only version metadata and the deployment output confirmed
+`TRACE_DEPLOYMENT_ENV=production`, `TRACE_DATABASE_DRIVER=d1`, and
+`TRACE_CANARY_MODE=closed`; no `TRACE_CANARY_GITHUB_*` variables are active.
+`DB` points to production D1 ID
+`7a566f2e-da27-46e7-8c3f-271e5566f225`; `TRACE_QUEUE` points to
+`trace-production-jobs`. No Hyperdrive binding is present. The Queue has one
+producer and one consumer, both `trace-production`; consumer settings remain
+batch size 10, max wait 5000 ms, max retries 3, and retry delay 60 seconds.
+
+The bounded route checks returned: health `200`; OAuth start, install, setup,
+reconcile, repository POST, recovery POST, and unsigned webhook POST each
+returned `503` with `cache-control: no-store`; anonymous recovery GET returned
+`401`. An error-filtered Worker tail produced no error entries during a fresh
+health/OAuth-start and closed-route probe window. No valid webhook, OAuth
+authorization, App installation, Queue message, or GitHub settings change was
+performed.
+
+Read-only D1 checks confirmed `SELECT 1`, migrations
+`0000_cheerful_legion.sql` and `0001_goofy_lester.sql`, and an empty
+`PRAGMA foreign_key_check`. All 22 application tables remained at zero rows
+after the route checks; the queries reported zero rows written. No migration
+or restore was run. The existing GET-only Queue drain workflow
+`36256628318` verified Queue identity and observed
+`backlog_count=0`, `backlog_bytes=0`, and
+`oldest_message_timestamp_ms=0`; no message was sent.
+
+Cloudflare deployment metadata confirms staging remains on version
+`5930a184-d797-4b70-9aee-d7f0647ab1fa` at 100%, with its existing staging D1,
+Queue, and legacy Hyperdrive bindings. A bounded staging health request timed
+out from this workstation; the active deployment and bindings remain intact,
+so this is recorded as a network limitation rather than a confirmed outage.
+
+Production remains closed. The deployment did not activate the GitHub
+webhook, install the production App, or exercise production OAuth. Those
+integration settings were not modified; customer traffic remains unauthorized.
