@@ -410,11 +410,12 @@ Production-canary environment metadata (names only):
 - `TRACE_GITHUB_APP_PRIVATE_KEY` is absent. The key generated during CF4.17
   was never downloaded or stored. Its private portion cannot be recovered
   from GitHub; only the public key remains there. Its distinguishing metadata
-  and revocation are not yet verified because GitHub requires sudo
-  re-authentication to open the App settings. After re-authentication, revoke
-  only that orphaned key, verify its removal, generate exactly one replacement,
-  and securely store the replacement as this environment secret. Delete the
-  temporary PEM after GitHub confirms secret presence.
+  is fingerprint `SHA256:4H6Tw/S7lgAlkT2HjCL5m6tlXfdfVZHrkM5AosB2hqg=`, added
+  Sep 26, 2026 at 9:42 AM GMT+3:30. GitHub showed it as the only key and
+  disabled Delete until another key exists. Its revocation is not verified.
+  After re-authentication, generate one replacement, securely store it as
+  this environment secret, verify the secret metadata, then revoke this exact
+  orphan and verify removal. Delete the temporary PEM after secret storage.
 - GitHub rejected `GITHUB_*` environment-variable names. A future workflow
   must map the stored `TRACE_GITHUB_*` names to the Worker runtime names
   without exposing secret values in logs or artifacts.
@@ -428,11 +429,14 @@ not evidence of a staging outage.
 
 ### CF4.18 prerequisites and execution boundary
 
-1. Complete GitHub sudo re-authentication. Identify the never-downloaded key
-   by its nonsecret creation metadata/fingerprint, revoke only that key, and
-   verify it is no longer active. Generate exactly one replacement, securely
-   store it as `TRACE_GITHUB_APP_PRIVATE_KEY`, verify secret metadata, then
-   delete the temporary PEM. Do not expose the PEM.
+1. Complete GitHub sudo re-authentication. The never-downloaded orphan is
+   identified by fingerprint
+   `SHA256:4H6Tw/S7lgAlkT2HjCL5m6tlXfdfVZHrkM5AosB2hqg=` and creation time
+   Sep 26, 2026 at 9:42 AM GMT+3:30. GitHub disables deletion of the only key,
+   so generate exactly one replacement, securely store it as
+   `TRACE_GITHUB_APP_PRIVATE_KEY`, verify secret metadata, then revoke the
+   orphan and verify it is no longer active. Delete the temporary PEM. Do not
+   expose the PEM.
 2. Implement and test a server-side canary gate before any webhook activation,
    App installation, or switch from closed mode. The gate must allow only
    owner `mathofdynamic` and repository ID `1378441300` (`trace-staging-fixture`)
@@ -454,7 +458,8 @@ not evidence of a staging outage.
 6. Keep customer traffic blocked until current-UTC-day D1 usage, aggregate
    Worker CPU, Queue health, monitoring, and rollback gates have evidence.
 
-CF4.18 is not ready to open: the orphaned key has not been revoked/verified,
-the replacement private key is not stored, the server-side fixture-only gate
-does not yet exist, and webhook configuration/activation is intentionally
-deferred until that gate passes. No customer-facing cutover is authorized.
+CF4.18 is not ready to open: the replacement private key is not stored, the
+orphaned key remains active because GitHub will not delete its only key, the
+server-side fixture-only gate does not yet exist, and webhook configuration/
+activation is intentionally deferred until that gate passes. No
+customer-facing cutover is authorized.

@@ -999,11 +999,13 @@
   runtime mapping. Secret values are not recorded.
 - Credential correction: the App private key generated during CF4.17 was
   never downloaded or stored and cannot be recovered from GitHub. The current
-  App key metadata and revocation state are unverified because GitHub now
-  requires sudo re-authentication. Do not claim revocation or replacement;
-  after re-authentication, revoke only the orphan, verify removal, generate
-  one replacement, store it as `TRACE_GITHUB_APP_PRIVATE_KEY`, verify secret
-  metadata, and securely delete the temporary PEM.
+  orphan is identified by fingerprint
+  `SHA256:4H6Tw/S7lgAlkT2HjCL5m6tlXfdfVZHrkM5AosB2hqg=` and creation time
+  Sep 26, 2026 at 9:42 AM GMT+3:30. GitHub disables deletion of the only App
+  key. Its revocation is not verified. After sudo re-authentication, generate
+  exactly one replacement, securely store it as
+  `TRACE_GITHUB_APP_PRIVATE_KEY`, verify secret metadata, then revoke this
+  exact orphan and verify removal; delete the temporary PEM.
 - Webhook correction: GitHub requires webhook activation before its URL and
   secret can be configured. Production remains inactive; URL/secret setup is
   deferred until a server-side fixture-only gate is deployed and verified.
@@ -1021,7 +1023,7 @@
   changed. No Worker deployment, migration, Queue operation, installation,
   webhook delivery, or OAuth login occurred.
 - Status: CF4.17 is partial. Keep `TRACE_CANARY_MODE=closed` and customer
-  traffic disabled. CF4.18 cannot open intake until the orphaned key is
-  accounted for, a replacement private key is securely stored, the server-side
-  fixture-only gate is implemented and verified, webhook configuration is
-  activated under that gate, and runtime-name mapping is reviewed.
+  traffic disabled. CF4.18 cannot open intake until a replacement private key
+  is securely stored, the orphaned key is revoked, the server-side fixture-only
+  gate is implemented and verified, webhook configuration is activated under
+  that gate, and runtime-name mapping is reviewed.
