@@ -99,7 +99,7 @@
 
 ## Phase history
 
-### Phase 00 — Project Rules and Agent Workflow
+### Phase 00 â€” Project Rules and Agent Workflow
 
 - Status: Completed
 - Date: 2026-08-08
@@ -112,7 +112,7 @@
 - Known limitations: Product code and dependency configuration did not exist at the end of this phase.
 - Next prerequisites: Native PostgreSQL installation and Phase 01 monorepo initialization.
 
-### Phase 01 — Foundation and Monorepo
+### Phase 01 â€” Foundation and Monorepo
 
 - Status: Completed
 - Date: 2026-08-08
@@ -125,7 +125,7 @@
 - Known limitations: GitHub OAuth values are local placeholders; no live GitHub OAuth/App integration exists yet. The Windows PostgreSQL service is installed but could not be started without administrator rights, so the project-local cluster is the supported local fallback. The web surface is explicitly a Phase 01 foundation and does not claim product functionality.
 - Next prerequisites: Phase 02 design tokens and shared components.
 
-### Phase 02 — TRACE Design System
+### Phase 02 â€” TRACE Design System
 
 - Status: Completed
 - Date: 2026-08-08
@@ -138,7 +138,7 @@
 - Known limitations: The primitives are foundational and not yet the complete product shell. Marketing, authentication, GitHub, analysis, and dashboard behavior remain intentionally unimplemented.
 - Next prerequisites: Phase 03 public marketing and application shell.
 
-### Phase 03 — Marketing Website and Authentication Shell
+### Phase 03 â€” Marketing Website and Authentication Shell
 
 - Status: Completed
 - Date: 2026-08-08
@@ -149,13 +149,13 @@
 - Known limitations: GitHub OAuth credentials are placeholders, so live provider sign-in has not been claimed or tested. Rate limiting, production callback configuration, and account recovery depend on later operational setup.
 - Next prerequisites: Phase 04 authenticated dashboard shell.
 
-### Phase 04 — Dashboard Application Shell
+### Phase 04 â€” Dashboard Application Shell
 
 - Status: Completed
 - Date: 2026-08-08
 - Scope completed: Protected `/app` route group, persistent desktop sidebar, responsive mobile navigation, workspace context, command-search placeholder, application navigation, overview hierarchy, repository setup state, conflict/report/rules/activity/settings shells, repository route family, explicit fixture labels, empty states, source-data boundaries, and responsive layout adaptations.
 - Files changed: `apps/web/app/(app)/app/`, `apps/web/app/globals.css`, `tests/e2e/home.spec.ts`
-- Fixtures: No connected GitHub or analysis fixtures were added. All application shells identify themselves as `Demo data · not connected` or use explicit empty states.
+- Fixtures: No connected GitHub or analysis fixtures were added. All application shells identify themselves as `Demo data Â· not connected` or use explicit empty states.
 - Results: Full typecheck, lint, production build, and browser suite passed. The authenticated route group is server-protected and ready for later typed data adapters.
 - Known limitations: No GitHub payloads, analysis results, reports, findings, conflicts, or repository rows are represented as real data.
 - Next prerequisites: Phase 05 signed GitHub App webhook and installation integration.
@@ -353,7 +353,7 @@
 - Date: 2026-08-08
 - Scope: Check and create Pages project `trace`, with `trace-code` reserved as the fallback requested by the owner.
 - Results: Wrangler authentication succeeded for `mathofdynamic2` (`c5d6cf110905c91fc3eed1abaf8236a`). Both `wrangler pages project list` and `wrangler pages project create trace --production-branch main` failed before project-name validation with Cloudflare API error `7003`: `Could not route to /client/v4/accounts/c5d6cf110905c91fc3eed1abaf8236a/pages/projects`.
-- Decision: Do not create `trace-code` based on this response. The API did not report that `trace` was unavailable, and TRACE’s full-stack Next.js app should not be represented as a static Pages deployment without a verified Pages-compatible build.
+- Decision: Do not create `trace-code` based on this response. The API did not report that `trace` was unavailable, and TRACEâ€™s full-stack Next.js app should not be represented as a static Pages deployment without a verified Pages-compatible build.
 
 ### Direct GitHub OAuth test boundary
 
@@ -378,7 +378,7 @@
 
 - Status: Completed for the Cloudflare staging test environment
 - Date: 2026-08-10
-- Scope: Provision a separate PostgreSQL database through Vercel’s Neon integration, connect the Cloudflare staging Worker through Hyperdrive, and make authenticated onboarding persistence use the database.
+- Scope: Provision a separate PostgreSQL database through Vercelâ€™s Neon integration, connect the Cloudflare staging Worker through Hyperdrive, and make authenticated onboarding persistence use the database.
 - Results: Created the Vercel database resource `trace-staging-postgres`, created Hyperdrive config `2d1e4821c1484d6299d88e29f2884310`, and applied all repository migrations successfully. The Worker now resolves the request database URL from `env.HYPERDRIVE.connectionString`; no database credential is stored in `wrangler.jsonc`, the repository, or the browser bundle.
 - Code changes: Onboarding, dashboard summary, and webhook database access use the request-scoped Hyperdrive connection. The GitHub OAuth callback upserts the authenticated user before issuing the signed test session, preventing onboarding foreign-key failures. The PostgreSQL pool limit is five for the Worker runtime.
 - Verification: `pnpm check`, `pnpm cf:build`, and the web callback unit test passed. Wrangler uploaded and promoted version `1c69b70e-0f48-4874-85c0-70ec3f43273c` to 100% of `trace-test-staging`. The Worker `/api/health` and home route return HTTP 200. Wrangler confirms the deployed `HYPERDRIVE` binding.
@@ -401,7 +401,7 @@
 - Configuration correction: When GitHub App user authorization during installation is enabled, the callback URL is the return path and the setup URL is left empty. `GITHUB_APP_CALLBACK_URL` is optional because the application derives the canonical callback from `TRACE_PUBLIC_URL` when it is not set.
 - Database boundary: The slice uses the existing Phase 05 GitHub tables and repository-level permissions column. No new remote migration is required.
 - Verification: `pnpm check`, `pnpm cf:build`, and the GitHub integration tests passed. Wrangler promoted version `f286775c-7eb5-4c8a-8670-5e12f386647e` to 100% of `trace-test-staging`. `https://trace-code.pages.dev/api/health` and the Worker origin both return HTTP 200 with `{"service":"web","status":"ok"}`.
-- Browser verification: The signed-in Chrome session opened `https://trace-code.pages.dev/app/repositories`; the page rendered “Step 2 of 2 · GitHub connection,” “Not connected,” and the real **Install GitHub App** action.
+- Browser verification: The signed-in Chrome session opened `https://trace-code.pages.dev/app/repositories`; the page rendered â€œStep 2 of 2 Â· GitHub connection,â€ â€œNot connected,â€ and the real **Install GitHub App** action.
 - Known limitations: The GitHub App has not yet been registered/configured for this staging deployment, its private key and secrets are not present in the Worker, and no live installation or repository sync has been claimed.
 
 ### Dashboard route-state and interaction refinement
@@ -439,7 +439,7 @@
 - Data boundary: Synced analysis projections create local-origin analysis runs and findings. Reports, conflicts, decisions, and risks remain immutable artifact projections from the latest completed repository snapshot. The repository artifact is durable; dashboard surfaces are read projections and do not silently edit `.trace`.
 - Failure behavior: Rejected artifacts and stale-device divergence never replace the last verified snapshot. Failed sync is visible as deterministic dashboard attention and activity with a recovery path.
 - Pilot evidence: The CLI analyzed this repository locally: 223 supported files, 721 file-level-only files, 7,974 symbols, four deterministic findings, and zero source sent to a model. The generated analysis artifact validated successfully. The dry run selected one 4,786-byte source-free artifact and excluded no eligible artifact.
-- Workflow: `trace login` → `trace connect` → `trace analyze` → `trace sync --dry-run` → `trace sync` → `trace sync status`. See `DOC/local-dashboard-workflow.md`.
+- Workflow: `trace login` â†’ `trace connect` â†’ `trace analyze` â†’ `trace sync --dry-run` â†’ `trace sync` â†’ `trace sync status`. See `DOC/local-dashboard-workflow.md`.
 - Verification: Fresh and existing PostgreSQL migrations passed. `pnpm check` passed all formatting, lint, type-check, unit, package-build, and optimized Next.js build gates. Web tests passed 17/17, including six PostgreSQL bridge integration tests. CLI tests passed 8/8, including Windows DPAPI storage and staging-target safety. Playwright passed 17/17 browser contracts. `pnpm cf:build` produced the complete OpenNext Worker bundle. `git diff --check` passed.
 - Deployment at this implementation checkpoint: not authorized and not attempted; see the subsequent `Staging acceptance and deployment` entry.
 
@@ -447,18 +447,18 @@
 
 - Status: Staging Worker deployed and smoke-tested; real CLI-to-dashboard acceptance blocked by staging database migration access.
 - Date: 2026-08-13
-- Migration review: `0004`–`0006` were inspected. `0006` previously added `cli_device_authorizations.request_key_hash` as `NOT NULL` without a backfill, which was unsafe for an existing database. It now adds the column nullable, backfills existing rows from the already-hashed `device_code_hash`, then enforces `NOT NULL` before creating the index.
+- Migration review: `0004`â€“`0006` were inspected. `0006` previously added `cli_device_authorizations.request_key_hash` as `NOT NULL` without a backfill, which was unsafe for an existing database. It now adds the column nullable, backfills existing rows from the already-hashed `device_code_hash`, then enforces `NOT NULL` before creating the index.
 - Migration verification: Fresh and populated upgrade tests passed on temporary local PostgreSQL databases. The populated upgrade preserved one legacy authorization row, backfilled `request_key_hash`, and reported `is_nullable = NO`; both temporary databases were removed. Local `trace_dev` migrations are current.
 - Local gates: `pnpm check` passed (format, lint, 26/26 typechecks, unit tests, 15/15 package builds); `pnpm test:e2e` passed 17/17; explicit bridge integration tests passed 6/6; `pnpm --filter @trace/web test:unit` passed 17/17 with the bridge database configured; `pnpm --filter @trace/cli test:unit` passed 8/8; `pnpm cf:build` passed; `git diff --check` passed.
 - Post-fix rerun: the first E2E attempt found local PostgreSQL stopped (`ECONNREFUSED 127.0.0.1:3002`); `scripts/postgres/bootstrap-local.ps1` and `scripts/postgres/health.ps1` restored the documented native service, and the subsequent full run passed 17/17.
 - Deployment: `pnpm cf:deploy:test` uploaded version `2a87b573-fb0b-4938-9419-de74dc273a7e`; the initial deploy request did not return after asset upload, so `wrangler versions list` and `wrangler deployments list` were used to verify the immutable version before promotion. The documented `wrangler versions deploy 2a87b573-fb0b-4938-9419-de74dc273a7e@100% --env staging --config apps/web/wrangler.jsonc --message "TRACE staging acceptance bridge" --yes` then promoted it to 100% of `trace-test-staging`.
 - Staging smoke: `GET /api/health` returned `200 {"service":"web","status":"ok"}`; `/sign-in` returned `200`; unauthenticated `/app` returned `307` to `/sign-in?next=/app`.
 - CLI targeting: added explicit `TRACE_ENVIRONMENT` labeling and fail-closed staging resolution. With `TRACE_CLOUD_URL` set to the staging Worker and `TRACE_ENVIRONMENT=staging`, `trace status --json` returned `environment: Staging` and the staging server URL; staging mode without a URL refused the production default. CLI tests passed 8/8.
-- Live bridge result: `POST /api/cli/device/start` returned `500 {"error":"The request could not be completed."}`. No credential was issued. The repository has no staging PostgreSQL connection credential, and no safe migration endpoint exists, so `0004`–`0006` could not be applied or inspected remotely. The live `login → connect → sync` path, dashboard projection, revocation, idempotency, freshness, divergence, checksum, and recovery tests remain pending.
+- Live bridge result: `POST /api/cli/device/start` returned `500 {"error":"The request could not be completed."}`. No credential was issued. The repository has no staging PostgreSQL connection credential, and no safe migration endpoint exists, so `0004`â€“`0006` could not be applied or inspected remotely. The live `login â†’ connect â†’ sync` path, dashboard projection, revocation, idempotency, freshness, divergence, checksum, and recovery tests remain pending.
 - Provider handoff: Vercel CLI identifies team `nebulas-projects-74786240` Neon resource `trace-staging-postgres` (`store_Gu6KtHgqull4KOWU`), surfaced through Hyperdrive `2d1e4821c1484d6299d88e29f2884310`; the resource has no connected Vercel project. The provider guide directs operators from Vercel Storage to **Open in Neon Console** and the SQL Editor. The repository-supported operator path is `scripts/postgres/migrate.ps1` with a temporary `DATABASE_URL`, which lets Drizzle inspect `drizzle.__drizzle_migrations` and apply only pending migrations. No credential was available here. Wrangler tail created a staging tail but returned no exception before the stream disconnected, so the exact 500 cause remains unverified.
 - Local pilot evidence: `trace analyze` on `mathofdynamic/TRACE` at the current `main` HEAD produced a valid local artifact with 233 supported files, 742 unsupported/file-level files, 7,986 symbols, four deterministic findings, and `sourceCodeSentToProvider: false`. `trace validate` passed. `trace sync --dry-run --json` selected one 4,786-byte artifact, excluded none, and reported `sourceCodeIncluded: false` and `codeSnippetsIncluded: false`.
 - Security scan: no tracked private-key or real token pattern was found. The only `trc_` match is the intentional credential-storage test fixture; the only PEM marker is parser code. `.trace` runtime output and the local private-key file remain ignored/untracked.
-- Remaining owner action: Apply and verify migrations `0004`–`0006` on the designated staging PostgreSQL database, then rerun the real CLI authorization and sync acceptance. Production was not touched.
+- Remaining owner action: Apply and verify migrations `0004`â€“`0006` on the designated staging PostgreSQL database, then rerun the real CLI authorization and sync acceptance. Production was not touched.
 
 ### Final redesign integration (local review)
 
@@ -558,7 +558,7 @@
   unbounded scan.
 - Limits: the legacy PostgreSQL Playwright suite and reference Node/pg-boss
   worker remain intentionally separate. The current D1 sync path does not emit
-  Queue work, so sync → Queue is not applicable. Remote D1/Queue provisioning
+  Queue work, so sync â†’ Queue is not applicable. Remote D1/Queue provisioning
   and cutover remain deferred to CF3.
 
 ### Phase CF3 remote D1 and Queue staging
@@ -1114,3 +1114,29 @@
 - The fix updates existing PR #11. It changes no production configuration;
   `TRACE_CANARY_MODE` remains `closed`, the App private-key blocker remains,
   and no production code has been deployed.
+
+### Phase CF4.18B credential recovery closeout
+
+- Date: 2026-09-26
+- The replacement private key for production GitHub App
+  `TRACE Production Integration` (App ID `5082884`) was validated with a
+  short-lived local JWT and read-only `GET /app`. GitHub identified the
+  intended App. Active key fingerprint:
+  `SHA256:V5aDpLGus8aqiio09O3D1Ostwqr7pE7MnK8+7altAII=`.
+- The two unusable key fingerprints
+  `SHA256:4H6Tw/S7lgAlkT2HjCL5m6tlXfdfVZHrkM5AosB2hqg=` and
+  `SHA256:5mjJInXDVzQWjLOpkoXdNsCMwwgpM5bE8IVkO3o4vfQ=` are no longer
+  active. Only the validated key remains active. The PEM is stored as the
+  `production-canary / TRACE_GITHUB_APP_PRIVATE_KEY` environment secret;
+  the temporary local PEM path is absent.
+- Metadata confirms all required production environment secret names are
+  present: `CLOUDFLARE_API_TOKEN`, `TRACE_AUTH_SECRET`,
+  `TRACE_GITHUB_APP_CLIENT_SECRET`, `TRACE_GITHUB_APP_PRIVATE_KEY`,
+  `TRACE_GITHUB_OAUTH_CLIENT_SECRET`, and `TRACE_GITHUB_WEBHOOK_SECRET`.
+  None of those names exists as an environment variable. Secret values were
+  not read.
+- Production remained in closed canary mode. The webhook remained inactive,
+  the App remained uninstalled, and production OAuth was not attempted.
+  No Worker deployment, Queue operation, D1 mutation, or staging change
+  occurred. Fixture-gate deployment is the next phase; opening intake is not
+  authorized.
