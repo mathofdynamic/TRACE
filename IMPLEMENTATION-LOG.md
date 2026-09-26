@@ -978,3 +978,59 @@
   read-only workflow on the feature ref. The one authorized drain invocation
   and its measured result will be recorded after merge; no observation is
   claimed before that run.
+
+### Phase CF4.17 production GitHub registrations
+
+- Created `TRACE Production Integration` as a separate GitHub App under
+  `@mathofdynamic`; created `TRACE Production` as a separate OAuth App. The
+  existing staging registrations `TRACE GitHub Integration` and `TRACE` were
+  not modified.
+- Rechecked canonical source routes: App setup/callback
+  `/api/github/setup`, webhook `/api/github/webhooks`, OAuth start
+  `/api/auth/github`, OAuth callback `/api/auth/github/callback`, and
+  reconciliation `/api/github/reconcile`.
+- App permissions are read-only Metadata, Contents, Issues, and Pull requests.
+  The four manual event families selected are `issues`, `pull_request`,
+  `push`, and `repository`. Webhook Active remains off; no installation or
+  OAuth authorization was performed.
+- Production-canary environment variable/secret names were added and verified
+  using metadata only. `GITHUB_*` variable names were rejected by GitHub, so
+  nonsecret values use `TRACE_GITHUB_*` names and require a later explicit
+  runtime mapping. Secret values are not recorded.
+- Credential correction: the App private key generated during CF4.17 was
+  never downloaded or stored and cannot be recovered from GitHub. After
+  GitHub sudo re-authentication, one replacement row was generated, but Chrome
+  blocked its one-time PEM download at `ERR_BLOCKED_BY_CLIENT`; the downloaded
+  file was not present in the standard Downloads directory. The original key
+  fingerprint is
+  `SHA256:4H6Tw/S7lgAlkT2HjCL5m6tlXfdfVZHrkM5AosB2hqg=` and creation time
+  Sep 26, 2026 at 9:42 AM GMT+3:30. The failed replacement fingerprint is
+  `SHA256:5mjJInXDVzQWjLOpkoXdNsCMwwgpM5bE8IVkO3o4vfQ=` and creation time
+  Sep 26, 2026 at 1:39 PM GMT+3:30. Neither private key is stored and neither
+  row has been revoked. No additional key was generated. Human action required:
+  generate/download one usable replacement PEM in GitHub App settings and
+  save it to a local path accessible to Codex; do not paste it into chat.
+  After securely storing and verifying `TRACE_GITHUB_APP_PRIVATE_KEY`, revoke
+  both unusable rows by fingerprint, verify their removal, and delete the
+  temporary PEM.
+- Webhook correction: GitHub requires webhook activation before its URL and
+  secret can be configured. Production remains inactive; URL/secret setup is
+  deferred until a server-side fixture-only gate is deployed and verified.
+  Treat activation as potentially traffic-generating. Do not activate to
+  persist configuration before that gate.
+- CF4.18 prerequisite: implement and test a Worker-side allowlist for owner
+  `mathofdynamic` and repository ID `1378441300` (`trace-staging-fixture`).
+  Reject non-allowlisted installations, repositories, reconciliation requests,
+  and webhook events; constrain OAuth/setup so another signed-in user cannot
+  initiate an unintended installation. App repository selection or operator
+  procedure alone is insufficient.
+- Verification: production health `200`; setup/install/reconcile GET routes
+  `503` with `no-store`; anonymous recovery `401`. One staging health request
+  timed out within five seconds; no staging configuration or runtime was
+  changed. No Worker deployment, migration, Queue operation, installation,
+  webhook delivery, or OAuth login occurred.
+- Status: CF4.17 is partial. Keep `TRACE_CANARY_MODE=closed` and customer
+  traffic disabled. CF4.18 cannot open intake until a usable replacement key
+  is securely stored, both unusable keys are revoked, the server-side
+  fixture-only gate is implemented and verified, webhook configuration is
+  activated under that gate, and runtime-name mapping is reviewed.

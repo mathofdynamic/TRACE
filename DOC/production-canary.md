@@ -1,10 +1,12 @@
 # TRACE production canary runbook
 
-This runbook is the controlled production-canary plan produced by CF4.12 and
-implemented in CF4.13. The validate-only path is the only path exercised so
-far; no Cloudflare resources or GitHub configuration have been changed.
+This runbook records the staged production-canary plan and its actual outcomes.
+As of CF4.17, the dedicated production D1, Queue, and closed Worker exist, and
+separate production GitHub App and OAuth registrations have been created. No
+production GitHub installation, OAuth authorization, webhook delivery, or
+customer traffic is enabled. The latest execution status is recorded below.
 
-## Proposed resources
+## Initial resource proposal (CF4.12)
 
 | Resource | Name                                                  | CF4.12 status          |
 | -------- | ----------------------------------------------------- | ---------------------- |
@@ -22,10 +24,10 @@ PostgreSQL, pg-boss, or external Node-worker fallback.
 
 ## GitHub integration
 
-Staging remains on `https://trace-code.pages.dev` and is not changed by this
-plan. Create a separate production GitHub App and a separate production OAuth
-App after the isolated Worker/D1 canary passes. Use these exact production
-routes:
+The CF4.12 proposal kept staging on `https://trace-code.pages.dev` and called
+for separate production registrations after the isolated Worker/D1 canary.
+CF4.17 created those registrations without changing staging. Use these exact
+production routes:
 
 - App homepage: `/`
 - App setup/user authorization callback: `/api/github/setup`
@@ -44,7 +46,12 @@ and event configuration separately from user authorization callback behavior:
 [webhooks](https://docs.github.com/en/apps/creating-github-apps/registering-github-app/using-webhooks-with-github-apps),
 [user authorization callback](https://docs.github.com/en/apps/creating-github-apps/registering-github-app/about-the-user-authorization-callback-url).
 
-Production secret names, without values, are:
+The names below are the Worker runtime contract, not GitHub Environment names.
+GitHub reserves the `GITHUB_` prefix for environment variables, so the
+production-canary environment stores approved nonsecret values under the
+corresponding `TRACE_GITHUB_*` names. CF4.18 must map those values and secrets
+into Worker runtime bindings without exposing them in logs or artifacts.
+Runtime secret names, without values, are:
 
 ```text
 GITHUB_APP_ID
@@ -73,17 +80,25 @@ TRACE_AUTH_SECRET
 4. Set production-only variables and secrets. Do not copy staging sessions,
    OAuth credentials, webhook payloads, or real repository records.
 5. Deploy the exact reviewed release SHA with the bundled Worker artifact.
-   Keep the production App uncreated/uninstalled and webhook intake disabled
-   for this first canary.
+   Keep the production App uninstalled and webhook delivery inactive.
 6. Run synthetic health, authenticated configuration, D1 read/write, Queue
    producer/consumer, no-fallback, tenant-isolation, and owner-recovery
    checks. Confirm the Queue consumer acknowledges only after the business
    handler completes.
 7. Observe a fixed soak window. Record request count, CPU, exceptions, D1
    rows read/written, Queue backlog/retries/failures, and bundle/asset size.
-8. If clean, create/configure the production Apps, install only into one
-   explicitly authorized test workspace, and exercise one signed webhook with
-   duplicate delivery. Do not enable customer traffic yet.
+8. Before changing `TRACE_CANARY_MODE=closed`, activating the App webhook, or
+   installing the production App, implement and review a Worker-enforced
+   controlled-canary gate. Allow only owner `mathofdynamic` and repository
+   `trace-staging-fixture` (repository ID `1378441300`). Fail closed for every
+   other installation, repository, reconciliation request, and webhook event.
+   Also prevent another signed-in user from initiating production setup or an
+   unintended installation. GitHub requires webhook activation before saving
+   its URL and secret; activation may generate delivery traffic, so perform it
+   only after that gate is deployed and verified. Then, after separate explicit
+   authorization, install only into the fixture, perform one production OAuth
+   sign-in, and validate one legitimate signed fixture event. Keep customer
+   traffic disabled.
 9. Stop on D1 error `7500`, CPU/size limit, binding or auth error, unexpected
    retries/backlog, failed tenant isolation, signature failure, or any
    PostgreSQL/Hyperdrive/pg-boss activity.
@@ -350,3 +365,109 @@ legacy ID. The single authorized operational workflow run is consumed; do not
 redispatch under this acceptance attempt. Queue processing, acknowledgment,
 backlog, and error metrics remain unverified. Customer traffic and GitHub
 intake remain closed.
+
+## CF4.17 production GitHub registrations — 2026-09-26
+
+Created the production-only GitHub App `TRACE Production Integration` and
+the separate OAuth App `TRACE Production`, both under `@mathofdynamic`. The
+staging registrations `TRACE GitHub Integration` and `TRACE` were not changed.
+
+Canonical production routes rechecked in the feature-branch source:
+
+- App homepage: `https://trace-production.mathofdynamic2.workers.dev`
+- App authorization/setup callback: `/api/github/setup`
+- App webhook route: `/api/github/webhooks`
+- TRACE sign-in start: `/api/auth/github`
+- TRACE sign-in callback: `/api/auth/github/callback`
+- Existing-installation reconciliation: `/api/github/reconcile`
+
+With user authorization during installation enabled, GitHub disables a
+separate optional Setup URL and uses the configured authorization callback
+for setup. The App callback is `/api/github/setup`.
+
+Permissions are read-only: mandatory Metadata and read access to Contents,
+Issues, and Pull requests. The four explicitly selected event families are
+`issues`, `pull_request`, `push`, and `repository`. No write, organization,
+or all-repositories permission was requested.
+
+The App webhook Active toggle is off, no installation was created, and the
+OAuth App has not been used. GitHub requires the Active toggle before its
+webhook URL and secret can be configured. Production webhook URL/secret setup
+is intentionally deferred until CF4.18 has deployed and verified the
+server-side fixture-only gate; activation itself may generate delivery
+traffic. `TRACE_GITHUB_WEBHOOK_SECRET` exists, but is not yet configured on
+the App.
+
+Production-canary environment metadata (names only):
+
+- Variables: four existing Cloudflare resource variables, plus
+  `TRACE_GITHUB_APP_ID`, `TRACE_GITHUB_APP_CLIENT_ID`,
+  `TRACE_GITHUB_APP_SLUG`, `TRACE_GITHUB_APP_CALLBACK_URL`,
+  `TRACE_GITHUB_APP_INSTALL_URL`, `TRACE_GITHUB_OAUTH_CLIENT_ID`.
+- Secrets: existing `CLOUDFLARE_API_TOKEN`, `TRACE_AUTH_SECRET`,
+  `TRACE_GITHUB_APP_CLIENT_SECRET`, `TRACE_GITHUB_OAUTH_CLIENT_SECRET`,
+  `TRACE_GITHUB_WEBHOOK_SECRET`.
+- `TRACE_GITHUB_APP_PRIVATE_KEY` is absent. The original key generated during
+  CF4.17 was never downloaded or stored, so GitHub's retained public key
+  cannot recover its private portion. Its fingerprint is
+  `SHA256:4H6Tw/S7lgAlkT2HjCL5m6tlXfdfVZHrkM5AosB2hqg=` (added Sep 26, 2026 at
+  9:42 AM GMT+3:30). After GitHub sudo re-authentication, one replacement was
+  generated, but Chrome blocked its one-time download at
+  `ERR_BLOCKED_BY_CLIENT`; no PEM was saved. That key's fingerprint is
+  `SHA256:5mjJInXDVzQWjLOpkoXdNsCMwwgpM5bE8IVkO3o4vfQ=` (added Sep 26, 2026 at
+  1:39 PM GMT+3:30). Neither private key is stored, neither key has been
+  revoked, and no further key was generated. Human action required: generate
+  and download one usable replacement PEM in GitHub App settings and save it
+  to a local path accessible to Codex; do not paste it into chat. After that
+  PEM is securely stored as `TRACE_GITHUB_APP_PRIVATE_KEY` and secret metadata
+  is verified, revoke both unusable key rows by fingerprint and verify their
+  removal. Delete the temporary PEM after secret storage.
+- GitHub rejected `GITHUB_*` environment-variable names. A future workflow
+  must map the stored `TRACE_GITHUB_*` names to the Worker runtime names
+  without exposing secret values in logs or artifacts.
+
+No secret values or App numeric identifiers are tracked. Production health
+returned 200; setup, install, and reconcile GETs returned `503` with
+`no-store`; anonymous recovery returned `401`. The webhook POST route was not
+freshly exercised. No Worker, D1, Queue, or staging configuration changed.
+One bounded staging health request timed out from this workstation; this is
+not evidence of a staging outage.
+
+### CF4.18 prerequisites and execution boundary
+
+1. Human handoff: generate and download one usable replacement PEM from the
+   GitHub App settings and save it to a local path accessible to Codex. Do not
+   paste it into chat. The prior replacement download was blocked, so do not
+   treat either existing key as usable or generate another key through the
+   blocked browser path. Securely store the human-downloaded PEM as
+   `TRACE_GITHUB_APP_PRIVATE_KEY`, verify secret metadata, then revoke the two
+   unusable key rows by fingerprints
+   `SHA256:4H6Tw/S7lgAlkT2HjCL5m6tlXfdfVZHrkM5AosB2hqg=` and
+   `SHA256:5mjJInXDVzQWjLOpkoXdNsCMwwgpM5bE8IVkO3o4vfQ=` and verify removal.
+   Delete the temporary PEM after storage.
+2. Implement and test a server-side canary gate before any webhook activation,
+   App installation, or switch from closed mode. The gate must allow only
+   owner `mathofdynamic` and repository ID `1378441300` (`trace-staging-fixture`)
+   and reject every non-allowlisted installation, repository, reconciliation
+   request, and webhook event. OAuth/setup must prevent another signed-in user
+   from initiating an unintended production installation. App repository
+   selection and operator procedure are not sufficient controls.
+3. Add an explicit, reviewed mapping from `TRACE_GITHUB_*` GitHub environment
+   names to Worker runtime names. Keep `TRACE_CANARY_MODE=closed` while this
+   mapping and all identity/credential checks are validated.
+4. Only after the gate is deployed and verified and separate authorization is
+   given, configure the webhook URL/secret and activate delivery. Treat
+   activation as potentially traffic-generating. Then install the App only on
+   the authorized private fixture, perform one production OAuth sign-in, and
+   validate one legitimate signed fixture event. Do not install elsewhere.
+5. Verify signature validation, D1 workspace association, Queue completion,
+   tenant isolation, and duplicate-delivery idempotency. Immediately return to
+   closed mode and verify the rollback path.
+6. Keep customer traffic blocked until current-UTC-day D1 usage, aggregate
+   Worker CPU, Queue health, monitoring, and rollback gates have evidence.
+
+CF4.18 is not ready to open: neither existing key's private PEM is stored, the
+two unusable public key rows remain active pending a usable replacement, the
+server-side fixture-only gate does not yet exist, and webhook configuration/
+activation is intentionally deferred until that gate passes. No
+customer-facing cutover is authorized.
