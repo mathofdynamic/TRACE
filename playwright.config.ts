@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { e2eAuthSecret } from './tests/e2e/auth-secret';
 
 const e2eBaseUrl = process.env.TRACE_E2E_BASE_URL ?? 'http://127.0.0.1:3001';
 const e2ePort = new URL(e2eBaseUrl).port || '3001';
@@ -20,7 +21,7 @@ export default defineConfig({
     env: {
       NODE_ENV: 'production',
       DATABASE_URL: 'postgresql://trace:change-me@127.0.0.1:3002/trace_dev',
-      TRACE_AUTH_SECRET: 'trace-playwright-secret-change-this-32-chars',
+      TRACE_AUTH_SECRET: e2eAuthSecret,
       TRACE_PUBLIC_URL: e2eBaseUrl,
       GITHUB_OAUTH_CLIENT_ID: 'playwright-client',
       GITHUB_OAUTH_CLIENT_SECRET: 'playwright-secret',
