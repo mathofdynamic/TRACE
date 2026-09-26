@@ -1114,3 +1114,30 @@
 - The fix updates existing PR #11. It changes no production configuration;
   `TRACE_CANARY_MODE` remains `closed`, the App private-key blocker remains,
   and no production code has been deployed.
+
+### Phase CF4.18B credential recovery closeout
+
+- Date: 2026-09-26
+- The replacement private key for production GitHub App
+  `TRACE Production Integration` (App ID `5082884`) was validated with a
+  short-lived local JWT and read-only `GET /app`. GitHub identified the
+  intended App. Active key fingerprint:
+  `SHA256:V5aDpLGus8aqiio09O3D1Ostwqr7pE7MnK8+7altAII=`.
+- The two unusable key fingerprints
+  `SHA256:4H6Tw/S7lgAlkT2HjCL5m6tlXfdfVZHrkM5AosB2hqg=` and
+  `SHA256:5mjJInXDVzQWjLOpkoXdNsCMwwgpM5bE8IVkO3o4vfQ=` are no longer
+  active. Only the validated key remains active. The PEM is stored as the
+  `production-canary / TRACE_GITHUB_APP_PRIVATE_KEY` environment secret;
+  the temporary local PEM path is absent.
+- Metadata confirms all required production environment secret names are
+  present: `CLOUDFLARE_API_TOKEN`, `TRACE_AUTH_SECRET`,
+  `TRACE_GITHUB_APP_CLIENT_SECRET`, `TRACE_GITHUB_APP_PRIVATE_KEY`,
+  `TRACE_GITHUB_OAUTH_CLIENT_SECRET`, and `TRACE_GITHUB_WEBHOOK_SECRET`.
+  None of those names exists as an environment variable. Secret values were
+  not read.
+- Production remained in closed canary mode. The webhook remained inactive,
+  the App remained uninstalled, and production OAuth was not attempted.
+  No Worker deployment, Queue operation, D1 mutation, or staging change
+  occurred. Fixture-gate deployment is the next phase; opening intake is not
+  authorized.
+
