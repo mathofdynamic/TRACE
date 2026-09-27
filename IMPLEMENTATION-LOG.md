@@ -1250,7 +1250,18 @@
   runs focused contract tests, then executes the GET-only check. It has no
   Cloudflare credential, deployment step, artifact upload, or GitHub mutation
   path.
-- The focused checker tests pass locally. PR merge, default-branch workflow
-  registration, and the protected live state-check run remain pending; no
-  GitHub App setting, installation, webhook, OAuth, Cloudflare resource,
-  production Worker, D1, Queue, or staging state was changed.
+- Local `pnpm check` passed, including the focused 14-test state-check suite.
+  Feature implementation PR #16 merged as
+  `d4856eb9012c4128460dbacdd012639eb5833d8f`; CI run `36305753465` passed.
+  Workflow-only registration PR #17 merged to `main` as
+  `6d089cbbf7f3b86a5ba1a1b298e75d57aee4cfc4`; CI run `36315758164` passed.
+  GitHub recognizes the workflow, and its workflow-file blob is identical on
+  `main` and `feat/cloudflare-native-runtime`.
+- The one manual run, `36316016589`, checked out feature SHA
+  `d4856eb9012c4128460dbacdd012639eb5833d8f`; exact-SHA validation and focused
+  contract tests passed. App identity checks completed, but
+  `GET /app/hook/config` returned HTTP 404. The run failed closed before
+  emitting its summary, so installation-count/list acceptance and webhook URL
+  state remain unverified. No retry was dispatched and no GitHub mutation,
+  installation, webhook, OAuth, Cloudflare resource, production Worker, D1,
+  Queue, or staging state was changed.
