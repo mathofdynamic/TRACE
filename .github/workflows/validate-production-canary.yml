@@ -15,8 +15,16 @@ on:
         options:
           - validate-only
           - deploy
+      runtime_mode:
+        description: Effective production Worker runtime mode; fixture requires its distinct deploy confirmation
+        required: true
+        default: closed
+        type: choice
+        options:
+          - closed
+          - fixture
       confirmation:
-        description: Type DEPLOY_TRACE_PRODUCTION_CANARY only for an approved deploy
+        description: Type the confirmation required for the selected deploy runtime mode
         required: false
         type: string
 
@@ -29,15 +37,17 @@ concurrency:
 
 jobs:
   canary:
+    if: ${{ github.ref == 'refs/heads/feat/cloudflare-native-runtime' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     environment: production-canary
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       TRACE_PRODUCTION_D1_ID: ${{ vars.TRACE_PRODUCTION_D1_ID }}
       TRACE_PRODUCTION_QUEUE_NAME: ${{ vars.TRACE_PRODUCTION_QUEUE_NAME }}
       TRACE_PRODUCTION_WORKER_NAME: ${{ vars.TRACE_PRODUCTION_WORKER_NAME }}
-      CANARY_MODE: ${{ inputs.mode }}
+      DEPLOYMENT_ACTION: ${{ inputs.mode }}
+      RUNTIME_MODE: ${{ inputs.runtime_mode }}
       EXPECTED_SHA: ${{ inputs.sha }}
       DEPLOY_CONFIRMATION: ${{ inputs.confirmation }}
     steps:
@@ -49,10 +59,17 @@ jobs:
             echo "The requested source must be a full 40-character hexadecimal commit SHA." >&2
             exit 1
           fi
-          case "$CANARY_MODE" in
+          case "$DEPLOYMENT_ACTION" in
             validate-only|deploy) ;;
             *)
               echo "Unsupported canary mode." >&2
+              exit 1
+              ;;
+          esac
+          case "$RUNTIME_MODE" in
+            closed|fixture) ;;
+            *)
+              echo "Unsupported production runtime mode." >&2
               exit 1
               ;;
           esac
@@ -87,12 +104,10 @@ jobs:
             echo "Checked-out SHA does not match the requested source." >&2
             exit 1
           fi
-          if [[ "$CANARY_MODE" == "deploy" && "$DEPLOY_CONFIRMATION" != "DEPLOY_TRACE_PRODUCTION_CANARY" ]]; then
-            echo "Deploy mode requires the exact explicit confirmation string." >&2
-            exit 1
-          fi
+          pnpm exec tsx scripts/production-canary-deploy-contract.ts
           echo "Source SHA: $actual_sha"
-          echo "Canary mode: $CANARY_MODE"
+          echo "Deployment action: $DEPLOYMENT_ACTION"
+          echo "Runtime mode: $RUNTIME_MODE"
 
       - name: Build workspace packages
         run: pnpm build
@@ -139,6 +154,7 @@ jobs:
           set -euo pipefail
           pnpm exec tsx scripts/production-canary-preflight.ts \
             --mode validate-only \
+            --runtime-mode "$RUNTIME_MODE" \
             --bundle-entry "$BUNDLE_DIR/custom-worker.js" \
             --assets-dir apps/web/.open-next/assets
         env:
@@ -147,6 +163,8 @@ jobs:
       - name: Validate provisioned production identity
         if: ${{ inputs.mode == 'deploy' }}
         shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           set -euo pipefail
           if [[ -z "${CLOUDFLARE_API_TOKEN:-}" || -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]]; then
@@ -165,6 +183,7 @@ jobs:
           set -euo pipefail
           pnpm exec tsx scripts/production-canary-preflight.ts \
             --mode deploy \
+            --runtime-mode "$RUNTIME_MODE" \
             --production-d1-id "$TRACE_PRODUCTION_D1_ID" \
             --production-queue-name "$TRACE_PRODUCTION_QUEUE_NAME" \
             --production-worker-name "$TRACE_PRODUCTION_WORKER_NAME" \
@@ -175,22 +194,232 @@ jobs:
           test -s apps/web/.trace-cache/production-canary/wrangler.json
         env:
           BUNDLE_DIR: ${{ runner.temp }}/trace-production-canary-bundle
+          TRACE_GITHUB_APP_ID: ${{ vars.TRACE_GITHUB_APP_ID }}
+          TRACE_GITHUB_APP_CLIENT_ID: ${{ vars.TRACE_GITHUB_APP_CLIENT_ID }}
+          TRACE_GITHUB_APP_SLUG: ${{ vars.TRACE_GITHUB_APP_SLUG }}
+          TRACE_GITHUB_APP_CALLBACK_URL: ${{ vars.TRACE_GITHUB_APP_CALLBACK_URL }}
+          TRACE_GITHUB_APP_INSTALL_URL: ${{ vars.TRACE_GITHUB_APP_INSTALL_URL }}
+          TRACE_GITHUB_OAUTH_CLIENT_ID: ${{ vars.TRACE_GITHUB_OAUTH_CLIENT_ID }}
+
+      - name: Verify production GitHub App identity
+        if: ${{ inputs.mode == 'deploy' }}
+        shell: bash
+        run: pnpm exec tsx scripts/verify-production-github-app.ts
+        env:
+          TRACE_GITHUB_APP_ID: ${{ vars.TRACE_GITHUB_APP_ID }}
+          TRACE_GITHUB_APP_CLIENT_ID: ${{ vars.TRACE_GITHUB_APP_CLIENT_ID }}
+          TRACE_GITHUB_APP_PRIVATE_KEY: ${{ secrets.TRACE_GITHUB_APP_PRIVATE_KEY }}
+
+      - name: Verify GitHub App is uninstalled and webhook configuration is absent
+        if: ${{ inputs.mode == 'deploy' && inputs.runtime_mode == 'fixture' }}
+        shell: bash
+        run: pnpm exec tsx scripts/verify-production-github-app-state.ts
+        env:
+          TRACE_GITHUB_APP_ID: ${{ vars.TRACE_GITHUB_APP_ID }}
+          TRACE_GITHUB_APP_CLIENT_ID: ${{ vars.TRACE_GITHUB_APP_CLIENT_ID }}
+          TRACE_GITHUB_APP_PRIVATE_KEY: ${{ secrets.TRACE_GITHUB_APP_PRIVATE_KEY }}
+
+      - name: Verify exact closed production state before fixture transition
+        if: ${{ inputs.mode == 'deploy' && inputs.runtime_mode == 'fixture' }}
+        shell: bash
+        run: pnpm exec tsx scripts/verify-production-fixture-transition.ts before
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TRACE_GITHUB_APP_ID: ${{ vars.TRACE_GITHUB_APP_ID }}
+          TRACE_GITHUB_APP_CLIENT_ID: ${{ vars.TRACE_GITHUB_APP_CLIENT_ID }}
+          TRACE_GITHUB_APP_SLUG: ${{ vars.TRACE_GITHUB_APP_SLUG }}
+          TRACE_GITHUB_APP_CALLBACK_URL: ${{ vars.TRACE_GITHUB_APP_CALLBACK_URL }}
+          TRACE_GITHUB_APP_INSTALL_URL: ${{ vars.TRACE_GITHUB_APP_INSTALL_URL }}
+          TRACE_GITHUB_OAUTH_CLIENT_ID: ${{ vars.TRACE_GITHUB_OAUTH_CLIENT_ID }}
+
+      - name: Inspect existing production Worker secret names
+        if: ${{ inputs.mode == 'deploy' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          metadata_file="$RUNNER_TEMP/trace-production-worker-secrets-before-$$.json"
+          trap 'rm -f -- "$metadata_file"' EXIT
+          pnpm exec wrangler secret list \
+            --config apps/web/.trace-cache/production-canary/wrangler.json \
+            --env production > "$metadata_file"
+          pnpm exec tsx scripts/verify-production-worker-secrets.ts \
+            --phase before \
+            --input "$metadata_file"
+          rm -f -- "$metadata_file"
+          test ! -e "$metadata_file"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Production Wrangler dry run
         if: ${{ inputs.mode == 'deploy' }}
-        run: >-
-          pnpm exec wrangler deploy
-          --config apps/web/.trace-cache/production-canary/wrangler.json
-          --env production
-          --dry-run
-          --outdir ${{ runner.temp }}/trace-production-canary-production-bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          secret_dir="$(mktemp -d "$RUNNER_TEMP/trace-production-secrets.XXXXXX")"
+          secrets_file="$secret_dir/secrets.json"
+          cleanup() {
+            local status=$?
+            trap - EXIT
+            rm -f -- "$secrets_file"
+            rmdir -- "$secret_dir" 2>/dev/null || true
+            if [[ -e "$secrets_file" ]]; then
+              echo "Temporary Worker secrets file cleanup failed." >&2
+              status=1
+            else
+              echo "Temporary Worker secrets file cleaned."
+            fi
+            exit "$status"
+          }
+          trap cleanup EXIT
+          pnpm exec tsx scripts/production-canary-secrets.ts --output "$secrets_file"
+          pnpm exec wrangler deploy \
+            --config apps/web/.trace-cache/production-canary/wrangler.json \
+            --env production \
+            --dry-run \
+            --secrets-file "$secrets_file" \
+            --outdir "$RUNNER_TEMP/trace-production-canary-production-bundle"
+        env:
+          TRACE_GITHUB_APP_CLIENT_SECRET: ${{ secrets.TRACE_GITHUB_APP_CLIENT_SECRET }}
+          TRACE_GITHUB_APP_PRIVATE_KEY: ${{ secrets.TRACE_GITHUB_APP_PRIVATE_KEY }}
+          TRACE_GITHUB_WEBHOOK_SECRET: ${{ secrets.TRACE_GITHUB_WEBHOOK_SECRET }}
+          TRACE_GITHUB_OAUTH_CLIENT_SECRET: ${{ secrets.TRACE_GITHUB_OAUTH_CLIENT_SECRET }}
+          TRACE_AUTH_SECRET: ${{ secrets.TRACE_AUTH_SECRET }}
 
       - name: Deploy production canary
         if: ${{ inputs.mode == 'deploy' }}
+        id: deploy_worker
+        shell: bash
         env:
           DEPLOY_SHA: ${{ inputs.sha }}
-        run: >-
-          pnpm exec wrangler deploy
-          --config apps/web/.trace-cache/production-canary/wrangler.json
-          --env production
-          --message "TRACE production canary $DEPLOY_SHA"
+          RUNTIME_MODE: ${{ inputs.runtime_mode }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TRACE_GITHUB_APP_CLIENT_SECRET: ${{ secrets.TRACE_GITHUB_APP_CLIENT_SECRET }}
+          TRACE_GITHUB_APP_PRIVATE_KEY: ${{ secrets.TRACE_GITHUB_APP_PRIVATE_KEY }}
+          TRACE_GITHUB_WEBHOOK_SECRET: ${{ secrets.TRACE_GITHUB_WEBHOOK_SECRET }}
+          TRACE_GITHUB_OAUTH_CLIENT_SECRET: ${{ secrets.TRACE_GITHUB_OAUTH_CLIENT_SECRET }}
+          TRACE_AUTH_SECRET: ${{ secrets.TRACE_AUTH_SECRET }}
+        run: |
+          set -euo pipefail
+          secret_dir="$(mktemp -d "$RUNNER_TEMP/trace-production-secrets.XXXXXX")"
+          secrets_file="$secret_dir/secrets.json"
+          cleanup() {
+            local status=$?
+            trap - EXIT
+            rm -f -- "$secrets_file"
+            rmdir -- "$secret_dir" 2>/dev/null || true
+            if [[ -e "$secrets_file" ]]; then
+              echo "Temporary Worker secrets file cleanup failed." >&2
+              status=1
+            else
+              echo "Temporary Worker secrets file cleaned."
+            fi
+            exit "$status"
+          }
+          trap cleanup EXIT
+          pnpm exec tsx scripts/production-canary-secrets.ts --output "$secrets_file"
+          test -f "$secrets_file"
+          pnpm exec wrangler deploy \
+            --config apps/web/.trace-cache/production-canary/wrangler.json \
+            --env production \
+            --secrets-file "$secrets_file" \
+            --message "TRACE production canary $DEPLOY_SHA"
+
+      - name: Verify deployed production Worker secret names
+        if: ${{ inputs.mode == 'deploy' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          metadata_file="$RUNNER_TEMP/trace-production-worker-secrets-after-$$.json"
+          trap 'rm -f -- "$metadata_file"' EXIT
+          pnpm exec wrangler secret list \
+            --config apps/web/.trace-cache/production-canary/wrangler.json \
+            --env production > "$metadata_file"
+          pnpm exec tsx scripts/verify-production-worker-secrets.ts \
+            --phase after \
+            --input "$metadata_file"
+          rm -f -- "$metadata_file"
+          test ! -e "$metadata_file"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Verify fixture routes and bounded production error tail
+        if: ${{ inputs.mode == 'deploy' && inputs.runtime_mode == 'fixture' }}
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TRACE_GITHUB_OAUTH_CLIENT_ID: ${{ vars.TRACE_GITHUB_OAUTH_CLIENT_ID }}
+        run: |
+          set -euo pipefail
+          tail_file="$RUNNER_TEMP/trace-production-fixture-errors-$$.jsonl"
+          tail_stderr="$RUNNER_TEMP/trace-production-fixture-tail-$$.stderr"
+          cleanup() {
+            local status=$?
+            trap - EXIT
+            rm -f -- "$tail_file" "$tail_stderr"
+            exit "$status"
+          }
+          trap cleanup EXIT
+          timeout --signal=INT --kill-after=5s 30s pnpm exec wrangler tail trace-production \
+            --config apps/web/.trace-cache/production-canary/wrangler.json \
+            --env production --format json --status error \
+            >"$tail_file" 2>"$tail_stderr" &
+          tail_pid=$!
+          sleep 5
+          if ! kill -0 "$tail_pid" 2>/dev/null; then
+            echo "Bounded production error tail did not start." >&2
+            exit 1
+          fi
+          pnpm exec tsx scripts/verify-production-fixture-routes.ts
+          sleep 5
+          tail_status=0
+          wait "$tail_pid" || tail_status=$?
+          if [[ "$tail_status" -ne 0 && "$tail_status" -ne 124 && "$tail_status" -ne 130 ]]; then
+            echo "Bounded production error tail ended unexpectedly." >&2
+            exit 1
+          fi
+          node --input-type=module - "$tail_file" <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const file = process.argv[2];
+          const text = readFileSync(file, 'utf8').trim();
+          if (!text) {
+            console.log('PRODUCTION_ERROR_TAIL_EVENTS=0');
+            process.exit(0);
+          }
+          const lines = text.split(/\r?\n/);
+          for (const line of lines) {
+            try { JSON.parse(line); }
+            catch { throw new Error('Production error tail returned an unparseable event.'); }
+          }
+          console.error(`Production error tail observed ${lines.length} error event(s).`);
+          process.exit(1);
+          NODE
+
+      - name: Verify fixture transition bindings, empty D1, and zero Queue backlog
+        if: ${{ inputs.mode == 'deploy' && inputs.runtime_mode == 'fixture' }}
+        shell: bash
+        run: pnpm exec tsx scripts/verify-production-fixture-transition.ts after
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          DEPLOY_SHA: ${{ inputs.sha }}
+          TRACE_GITHUB_APP_ID: ${{ vars.TRACE_GITHUB_APP_ID }}
+          TRACE_GITHUB_APP_CLIENT_ID: ${{ vars.TRACE_GITHUB_APP_CLIENT_ID }}
+          TRACE_GITHUB_APP_SLUG: ${{ vars.TRACE_GITHUB_APP_SLUG }}
+          TRACE_GITHUB_APP_CALLBACK_URL: ${{ vars.TRACE_GITHUB_APP_CALLBACK_URL }}
+          TRACE_GITHUB_APP_INSTALL_URL: ${{ vars.TRACE_GITHUB_APP_INSTALL_URL }}
+          TRACE_GITHUB_OAUTH_CLIENT_ID: ${{ vars.TRACE_GITHUB_OAUTH_CLIENT_ID }}
+
+      - name: Inspect and safely roll back a failed fixture transition
+        if: ${{ failure() && inputs.mode == 'deploy' && inputs.runtime_mode == 'fixture' }}
+        shell: bash
+        run: pnpm exec tsx scripts/verify-production-fixture-transition.ts rollback-if-needed
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          DEPLOY_SHA: ${{ inputs.sha }}
+          TRACE_GITHUB_APP_ID: ${{ vars.TRACE_GITHUB_APP_ID }}
+          TRACE_GITHUB_APP_CLIENT_ID: ${{ vars.TRACE_GITHUB_APP_CLIENT_ID }}
+          TRACE_GITHUB_APP_SLUG: ${{ vars.TRACE_GITHUB_APP_SLUG }}
+          TRACE_GITHUB_APP_CALLBACK_URL: ${{ vars.TRACE_GITHUB_APP_CALLBACK_URL }}
+          TRACE_GITHUB_APP_INSTALL_URL: ${{ vars.TRACE_GITHUB_APP_INSTALL_URL }}
+          TRACE_GITHUB_OAUTH_CLIENT_ID: ${{ vars.TRACE_GITHUB_OAUTH_CLIENT_ID }}
