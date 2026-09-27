@@ -1282,6 +1282,15 @@
 - Focused tests: 22 passed. The new exact-404 case reproduced the prior
   `GET /app/hook/config failed (HTTP 404)` behavior with the exception enabled,
   then passed with scoped handling. `pnpm check` passed (format, lint,
-  typecheck, unit tests, and build); `git diff --check` passed. The protected
-  live state workflow will run once against the merged feature SHA; no new
-  installation or webhook-config state is claimed before that result.
+  typecheck, unit tests, and build); `git diff --check` passed. PR #19 merged
+  to `feat/cloudflare-native-runtime` at
+  `e1c3f4cecb7b62d9f4a754c439361987bd192238`; its quality check passed in run
+  `36320782395`.
+- The one protected read-only state run `36321027640` passed on that merged
+  SHA. App ID/name/client ID matched; `/app` reported zero installations and
+  `/app/installations` returned an empty list. `/app/hook/config` returned
+  HTTP `404`, reported as `ABSENT_NOT_FOUND`, with no configured URL. This does
+  not verify the GitHub UI Active toggle. The workflow used GET requests only
+  and made no integration or infrastructure mutation. CF4.18E precheck passes;
+  fixture-mode deployment, GitHub activation, and customer traffic remain
+  outside this phase.

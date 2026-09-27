@@ -689,7 +689,16 @@ UI state explicitly marked `NOT_INDEPENDENTLY_VERIFIED`. A `200` with an empty
 URL is `PRESENT_EMPTY`; a configured URL and all other error statuses remain
 failures. No GitHub settings are changed by this check.
 
-The corrected checker and focused contract tests are prepared on a feature
-branch. One protected workflow run against the merged feature SHA is required
-to establish the current installation and webhook-config state; no new live
-state is claimed here.
+Protected read-only workflow run `36321027640` passed against merged feature
+SHA `e1c3f4cecb7b62d9f4a754c439361987bd192238`:
+<https://github.com/mathofdynamic/TRACE/actions/runs/36321027640>. It verified
+App ID `5082884`, name `TRACE Production Integration`, and the configured
+client ID; `/app` reported `installations_count=0`, and the paginated
+`/app/installations` result contained zero entries. `GET /app/hook/config`
+returned HTTP `404`, represented as `ABSENT_NOT_FOUND`; no webhook URL was
+configured or retrievable. Content type, SSL, and secret-presence metadata
+were unavailable for the absent config. The GitHub UI Active toggle was not
+independently verified. The checker made GET requests only; no GitHub setting,
+installation, OAuth, Cloudflare, Queue, D1, production Worker, or staging state
+was changed. CF4.18E precheck passes; this does not deploy fixture mode or
+authorize GitHub activation or customer traffic.
