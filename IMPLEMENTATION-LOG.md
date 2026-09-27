@@ -1231,3 +1231,26 @@
 - Status: credential binding is deployed in closed mode. Fixture mode,
   webhook activation, App installation, OAuth, and customer cutover remain
   disabled and require a separate approved phase.
+
+### Phase CF4.18E.0 - protected read-only GitHub App state check
+
+- Date: 2026-09-27. Added a bounded state checker for the production GitHub
+  App. It reuses the existing short-lived JWT signer and permits only GET
+  requests to `/app`, `/app/installations` (validated pagination), and
+  `/app/hook/config`. It validates App ID/name/client ID, installation count
+  parity, and the unconfigured webhook requirement.
+- The structured report contains only nonsecret identity/count/configuration
+  metadata. Installation records, JWTs, private keys, authorization headers,
+  webhook secrets, response bodies, and credential-bearing error details are
+  not returned or printed. Pagination is bounded to 100 pages; redirects are
+  rejected.
+- Added a manual-only, exact-SHA GitHub Actions workflow restricted to the
+  `feat/cloudflare-native-runtime` ref and `production-canary` environment.
+  It receives only the App ID/client ID variables and App private-key secret,
+  runs focused contract tests, then executes the GET-only check. It has no
+  Cloudflare credential, deployment step, artifact upload, or GitHub mutation
+  path.
+- The focused checker tests pass locally. PR merge, default-branch workflow
+  registration, and the protected live state-check run remain pending; no
+  GitHub App setting, installation, webhook, OAuth, Cloudflare resource,
+  production Worker, D1, Queue, or staging state was changed.
