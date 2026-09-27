@@ -733,3 +733,30 @@ This is deployment tooling only. It has not switched the Worker from closed
 mode, changed GitHub App settings, installed the App, or completed OAuth.
 Webhook configuration/activation, App installation, OAuth, Queue messages,
 D1 writes, and customer traffic remain disabled.
+
+### CF4.18E deployment attempt — failed and rolled back
+
+Implementation SHA `f344f4b141363442a8627fabbdbc3ac97851b77a` passed the
+predeployment build and identity gates. Protected App-state run
+`36327140893` reported zero installations and `hook/config` HTTP `404`
+(`ABSENT_NOT_FOUND`, no configured URL). GET-only Queue drain run
+`36327204043` verified `trace-production-jobs` with `backlog_count=0`.
+
+Deploy run `36327248428` uploaded Worker version
+`fc4be1e1-699b-4a3b-bd18-8c1757aab277` with the fixed fixture allowlist. It
+failed before running the fixture route matrix because the bounded Wrangler
+error-tail process was no longer alive after the five-second startup check:
+`Bounded production error tail did not start.` The workflow removed its
+temporary tail stderr file during cleanup, so the underlying tail startup
+error and transient deployment ID were not captured. No fixture route probe
+was issued by the workflow.
+
+The failure handler automatically rolled back to the captured closed Worker
+version `b64aec75-81c4-4146-964d-8ff456bbe726`, creating rollback deployment
+`473864fd-83b8-42ac-800d-2ea173c9649e`. Its read-only verifier passed the
+closed-mode, production binding, empty 22-table D1, and zero-backlog gates.
+After rollback, `/api/health` returned `200` and `/api/auth/github` returned
+`503` with `Cache-Control: no-store`. The fixture route matrix, postdeployment
+App-state check, and runtime-error observation did not complete. No Queue
+message, D1 write, webhook/App/OAuth mutation, or staging operation was
+performed. CF4.18E did not pass; no second deployment was dispatched.

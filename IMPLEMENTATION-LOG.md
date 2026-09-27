@@ -1324,3 +1324,25 @@
 - Review follow-up: full hexadecimal source SHAs are canonicalized to
   lowercase for post-deployment evidence and rollback classification;
   regression coverage includes uppercase SHA inputs.
+
+### Phase CF4.18E - fixture deploy attempt rolled back
+
+- Date: 2026-09-27. Implementation SHA `f344f4b141363442a8627fabbdbc3ac97851b77a`
+  merged through PR #21; workflow registration PR #22 merged as
+  `b15a0e336e214fc83fbab038c101d5eb5b0232f6`. Predeploy App-state run
+  `36327140893` passed with zero installations and no retrievable webhook
+  config. Queue drain run `36327204043` verified backlog zero.
+- Deploy run `36327248428` uploaded version
+  `fc4be1e1-699b-4a3b-bd18-8c1757aab277` in fixture mode. The route/error-tail
+  step failed at `Bounded production error tail did not start.` before route
+  probes. The underlying tail stderr and transient deployment ID were not
+  retained. The failure handler completed rollback to version
+  `b64aec75-81c4-4146-964d-8ff456bbe726` via deployment
+  `473864fd-83b8-42ac-800d-2ea173c9649e`.
+- Rollback verification passed closed mode, production D1/Queue identity,
+  empty application tables, and zero Queue backlog. Postrollback health was
+  HTTP 200; OAuth-start route was HTTP 503 with `no-store`. The fixture route
+  matrix and postdeploy App-state check did not run. No Queue message, D1
+  write, external GitHub mutation, or staging operation occurred. The
+  fixture transition acceptance is FAIL; no retry or second deployment was
+  dispatched.
