@@ -189,6 +189,7 @@ jobs:
         run: pnpm exec tsx scripts/verify-production-github-app.ts
         env:
           TRACE_GITHUB_APP_ID: ${{ vars.TRACE_GITHUB_APP_ID }}
+          TRACE_GITHUB_APP_CLIENT_ID: ${{ vars.TRACE_GITHUB_APP_CLIENT_ID }}
           TRACE_GITHUB_APP_PRIVATE_KEY: ${{ secrets.TRACE_GITHUB_APP_PRIVATE_KEY }}
 
       - name: Inspect existing production Worker secret names
@@ -250,6 +251,7 @@ jobs:
         shell: bash
         env:
           DEPLOY_SHA: ${{ inputs.sha }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           TRACE_GITHUB_APP_CLIENT_SECRET: ${{ secrets.TRACE_GITHUB_APP_CLIENT_SECRET }}
           TRACE_GITHUB_APP_PRIVATE_KEY: ${{ secrets.TRACE_GITHUB_APP_PRIVATE_KEY }}
           TRACE_GITHUB_WEBHOOK_SECRET: ${{ secrets.TRACE_GITHUB_WEBHOOK_SECRET }}

@@ -285,14 +285,26 @@ describe('production GitHub App identity proof', () => {
           Buffer.from(signature, 'base64url'),
         ),
       ).toBe(true);
-      return new Response(JSON.stringify({ id: 5082884, name: 'TRACE Production Integration' }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({
+          id: 5082884,
+          name: 'TRACE Production Integration',
+          client_id: 'fake-production-app-client-id',
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      );
     };
 
     await expect(
-      verifyProductionGitHubAppIdentity('5082884', pem, fetchImplementation),
+      verifyProductionGitHubAppIdentity(
+        '5082884',
+        'fake-production-app-client-id',
+        pem,
+        fetchImplementation,
+      ),
     ).resolves.toEqual({ id: '5082884', name: 'TRACE Production Integration' });
   });
 
@@ -304,12 +316,40 @@ describe('production GitHub App identity proof', () => {
       });
     let message = '';
     try {
-      await verifyProductionGitHubAppIdentity('5082884', pem, fetchImplementation);
+      await verifyProductionGitHubAppIdentity(
+        '5082884',
+        'fake-production-app-client-id',
+        pem,
+        fetchImplementation,
+      );
     } catch (error) {
       message = error instanceof Error ? error.message : String(error);
     }
     expect(message).toContain('does not match the registered production App');
     expect(message).not.toContain(pem);
+  });
+
+  it('rejects a client ID that differs from the authenticated App response', async () => {
+    const fetchImplementation: typeof fetch = async () =>
+      new Response(
+        JSON.stringify({
+          id: 5082884,
+          name: 'TRACE Production Integration',
+          client_id: 'actual-production-client-id',
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      );
+    await expect(
+      verifyProductionGitHubAppIdentity(
+        '5082884',
+        'different-production-client-id',
+        pem,
+        fetchImplementation,
+      ),
+    ).rejects.toThrow('does not match the registered production App');
   });
 });
 
@@ -332,12 +372,19 @@ describe('production canary deployment workflow', () => {
       'TRACE_GITHUB_APP_PRIVATE_KEY: ${{ secrets.TRACE_GITHUB_APP_PRIVATE_KEY }}',
     );
     expect(workflow).toContain(
+      'TRACE_GITHUB_APP_CLIENT_ID: ${{ vars.TRACE_GITHUB_APP_CLIENT_ID }}',
+    );
+    expect(workflow).toContain(
       'TRACE_GITHUB_OAUTH_CLIENT_SECRET: ${{ secrets.TRACE_GITHUB_OAUTH_CLIENT_SECRET }}',
     );
     expect(workflow).toContain('CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}');
     expect(workflow).toContain(
       "- name: Validate provisioned production identity\n        if: ${{ inputs.mode == 'deploy' }}\n        shell: bash\n        env:\n          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}",
     );
+    const deployStep = workflow
+      .split('- name: Deploy production canary\n')[1]
+      ?.split('\n      - name: ')[0];
+    expect(deployStep).toContain('CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}');
     expect(productionManifest.runtime.canaryMode).toBe('closed');
   });
 });

@@ -6,6 +6,7 @@ import { productionGitHubApp } from './production-canary-runtime-config.js';
 type GitHubAppIdentity = {
   id?: unknown;
   name?: unknown;
+  client_id?: unknown;
 };
 
 function encodeBase64Url(value: string) {
@@ -14,11 +15,15 @@ function encodeBase64Url(value: string) {
 
 export async function verifyProductionGitHubAppIdentity(
   appId: string | undefined,
+  appClientId: string | undefined,
   privateKeyPem: string | undefined,
   fetchImplementation: typeof fetch = fetch,
 ) {
   if (appId !== productionGitHubApp.id) {
     throw new Error('Production GitHub App ID does not match the expected App.');
+  }
+  if (!appClientId || appClientId.trim().length === 0) {
+    throw new Error('Production GitHub App client ID is missing.');
   }
   if (!privateKeyPem || privateKeyPem.trim().length === 0) {
     throw new Error('Production GitHub App private key is missing.');
@@ -72,7 +77,8 @@ export async function verifyProductionGitHubAppIdentity(
   }
   if (
     identity.id !== Number(productionGitHubApp.id) ||
-    identity.name !== productionGitHubApp.name
+    identity.name !== productionGitHubApp.name ||
+    identity.client_id !== appClientId
   ) {
     throw new Error('GitHub App identity response does not match the registered production App.');
   }
@@ -84,6 +90,7 @@ async function main() {
   try {
     await verifyProductionGitHubAppIdentity(
       process.env.TRACE_GITHUB_APP_ID,
+      process.env.TRACE_GITHUB_APP_CLIENT_ID,
       process.env.TRACE_GITHUB_APP_PRIVATE_KEY,
     );
     console.log(
