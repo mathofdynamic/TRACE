@@ -13,6 +13,13 @@
     "repository": "TRACE_CANARY_GITHUB_REPOSITORY",
     "repositoryId": "TRACE_CANARY_GITHUB_REPOSITORY_ID"
   },
+  "githubRuntime": {
+    "expectedAppId": "5082884",
+    "expectedAppName": "TRACE Production Integration",
+    "expectedAppSlug": "trace-production-integration",
+    "appCallbackPath": "/api/github/setup",
+    "oauthCallbackPath": "/api/auth/github/callback"
+  },
   "d1": {
     "binding": "DB",
     "databaseName": "trace-production-db",
@@ -33,15 +40,9 @@
   },
   "migrations": ["0000_cheerful_legion.sql", "0001_goofy_lester.sql"],
   "requiredSecretNames": [
-    "GITHUB_APP_ID",
-    "GITHUB_APP_CLIENT_ID",
     "GITHUB_APP_CLIENT_SECRET",
     "GITHUB_APP_PRIVATE_KEY",
     "GITHUB_WEBHOOK_SECRET",
-    "GITHUB_APP_SLUG",
-    "GITHUB_APP_CALLBACK_URL",
-    "GITHUB_APP_INSTALL_URL",
-    "GITHUB_OAUTH_CLIENT_ID",
     "GITHUB_OAUTH_CLIENT_SECRET",
     "TRACE_AUTH_SECRET"
   ]

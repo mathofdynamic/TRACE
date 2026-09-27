@@ -1,9 +1,15 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildProductionCanaryRuntimeVariables } from '../apps/web/lib/production-canary.js';
+import { buildProductionCanaryRuntimeVariables as buildCanaryModeVariables } from '../apps/web/lib/production-canary.js';
+import {
+  buildProductionGitHubRuntimeVariables,
+  productionGitHubApp,
+  productionWorkerSecretNames,
+  type ProductionGitHubRuntimeContract,
+} from './production-canary-runtime-config.js';
 
-type CanaryManifest = {
+export type CanaryManifest = {
   schemaVersion: number;
   accountId: string;
   workerName: string;
@@ -18,6 +24,7 @@ type CanaryManifest = {
     repository: string;
     repositoryId: string;
   };
+  githubRuntime: ProductionGitHubRuntimeContract;
   d1: {
     binding: string;
     databaseName: string;
@@ -67,13 +74,19 @@ export function buildProductionCanaryRuntimeVars(
   manifest: CanaryManifest,
   environment: Record<string, string | undefined> = process.env,
 ) {
-  return buildProductionCanaryRuntimeVariables(
+  const canaryModeVars = buildCanaryModeVariables(
     {
       ...manifest.runtime,
       fixtureCanaryEnvironment: manifest.fixtureCanaryEnvironment,
     },
     environment,
   );
+  const githubRuntimeVars = buildProductionGitHubRuntimeVariables(
+    manifest.githubRuntime,
+    manifest.publicUrl,
+    environment,
+  );
+  return { ...canaryModeVars, ...githubRuntimeVars };
 }
 
 function fail(message: string): never {
@@ -98,7 +111,20 @@ function validateStaticManifest(manifest: CanaryManifest) {
   ) {
     fail('Fixture canary environment variable names do not match the required allowlist contract.');
   }
-  buildProductionCanaryRuntimeVars(manifest);
+  if (
+    manifest.githubRuntime.expectedAppId !== productionGitHubApp.id ||
+    manifest.githubRuntime.expectedAppName !== productionGitHubApp.name ||
+    manifest.githubRuntime.expectedAppSlug !== productionGitHubApp.slug ||
+    manifest.githubRuntime.appCallbackPath !== '/api/github/setup' ||
+    manifest.githubRuntime.oauthCallbackPath !== '/api/auth/github/callback'
+  ) {
+    fail('Production GitHub App identity or callback route contract is invalid.');
+  }
+  if (
+    JSON.stringify(manifest.requiredSecretNames) !== JSON.stringify(productionWorkerSecretNames)
+  ) {
+    fail('Worker required-secret names must exactly match the production runtime secret contract.');
+  }
   if (!/^https:\/\/trace-production\.[a-z0-9-]+\.workers\.dev\/$/.test(`${manifest.publicUrl}/`)) {
     fail('Production public URL is not an account-qualified workers.dev URL.');
   }
@@ -183,6 +209,7 @@ export function writeProductionWranglerConfig(
   destination: string,
   d1Id: string,
   queueName: string,
+  environment: Record<string, string | undefined> = process.env,
 ) {
   const webDirectory = path.join(root, 'apps', 'web');
   const config = {
@@ -198,7 +225,7 @@ export function writeProductionWranglerConfig(
         main: relativeConfigPath(destination, path.join(webDirectory, 'custom-worker.ts')),
         workers_dev: true,
         vars: {
-          ...buildProductionCanaryRuntimeVars(manifest),
+          ...buildProductionCanaryRuntimeVars(manifest, environment),
           TRACE_PUBLIC_URL: manifest.publicUrl,
           NEXT_PRIVATE_MINIMAL_MODE: '1',
           TRACE_FEATURE_SEMANTIC_PR_FINDINGS: 'false',
@@ -206,6 +233,7 @@ export function writeProductionWranglerConfig(
           TRACE_FEATURE_GITHUB_COMMENTS: 'false',
           TRACE_FEATURE_HYBRID_SYNC: 'false',
         },
+        secrets: { required: manifest.requiredSecretNames },
         assets: {
           directory: relativeConfigPath(
             destination,
@@ -248,7 +276,7 @@ function parseArgs(argv: string[]): PreflightOptions {
   const values = new Map<string, string>();
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
-    if (!argument.startsWith('--')) continue;
+    if (!argument?.startsWith('--')) continue;
     const key = argument.slice(2);
     const value = argv[index + 1];
     if (!value || value.startsWith('--')) fail(`Missing value for --${key}.`);
