@@ -5,6 +5,10 @@ import { DatabaseSync } from 'node:sqlite';
 import os from 'node:os';
 import path from 'node:path';
 import { parseCloudflareQueueMessage } from '../packages/trace-core/src/queue.js';
+import {
+  buildProductionApplicationCountsSql as buildApplicationCountsSql,
+  productionApplicationTables as APP_TABLES,
+} from './production-canary-d1.js';
 
 const EXPECTED_SOURCE_SHA = '221606dcd57f8191ff2263a68b74d79eb6a45688';
 const ACCOUNT_ID = 'c5d6cf110905c91fc3eed1abaf8236a2';
@@ -22,31 +26,6 @@ const STAGING_QUEUE = 'trace-staging-jobs';
 const STAGING_HYPERDRIVE_ID = '2d1e4821c1484d6299d88e29f2884310';
 const STAGING_URL = 'https://trace-code.pages.dev';
 const API_ROOT = 'https://api.cloudflare.com/client/v4';
-const APP_TABLES = [
-  'accounts',
-  'analysis_findings',
-  'analysis_runs',
-  'audit_events',
-  'cli_connections',
-  'cli_device_authorizations',
-  'github_installation_repositories',
-  'github_installations',
-  'github_issues',
-  'github_pull_requests',
-  'github_repositories',
-  'github_webhook_deliveries',
-  'memberships',
-  'onboarding_profiles',
-  'organizations',
-  'sessions',
-  'sync_operations',
-  'sync_uploads',
-  'synced_artifacts',
-  'system_jobs',
-  'users',
-  'verifications',
-] as const;
-
 type ApiEnvelope<T> = {
   success?: boolean;
   result?: T;
@@ -415,12 +394,6 @@ function validateQueueResponseContract() {
     wrongOptionalQueueName,
     'consumers[0].queue_name must be',
   );
-}
-
-export function buildApplicationCountsSql() {
-  return `SELECT 1 AS ok, ${APP_TABLES.map(
-    (table) => `(SELECT COUNT(*) FROM "${table}") AS "${table}"`,
-  ).join(', ')}`;
 }
 
 export function createHealthcheckMessage(probeId: string, enqueuedAt: string) {

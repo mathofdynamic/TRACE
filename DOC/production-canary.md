@@ -702,3 +702,30 @@ independently verified. The checker made GET requests only; no GitHub setting,
 installation, OAuth, Cloudflare, Queue, D1, production Worker, or staging state
 was changed. CF4.18E precheck passes; this does not deploy fixture mode or
 authorize GitHub activation or customer traffic.
+
+### CF4.18E fixture runtime deployment contract — not deployed
+
+The production deployment workflow now has an independent `runtime_mode`
+choice, defaulting to `closed`. The checked-in manifest remains closed. A
+fixture deployment requires the separate
+`DEPLOY_TRACE_PRODUCTION_FIXTURE_CANARY` confirmation; the ordinary closed
+confirmation cannot authorize it. Fixture identity is sourced only from the
+central `AUTHORIZED_FIXTURE_REPOSITORY` contract, never from caller-provided
+owner, repository, or repository-ID values. Closed materialization emits no
+fixture variables.
+
+Before a fixture upload, the protected job must revalidate the exact closed
+Worker deployment, production D1 and Queue bindings, absent Hyperdrive and
+fixture bindings, empty application tables, and zero Queue backlog. It also
+requires a fresh read-only GitHub App state check proving zero installations
+and no configured webhook URL. After upload, bounded route checks do not
+follow GitHub redirects or submit a valid webhook. Read-only D1 counts, Queue
+metrics, bindings, and a bounded error tail gate acceptance. On a failed or
+ambiguous upload, automatic rollback is permitted only when Cloudflare
+identifies the active version as the exact reviewed fixture source; an
+unrecognized concurrent deployment is left untouched and reported.
+
+This is deployment tooling only. It has not switched the Worker from closed
+mode, changed GitHub App settings, installed the App, or completed OAuth.
+Webhook configuration/activation, App installation, OAuth, Queue messages,
+D1 writes, and customer traffic remain disabled.

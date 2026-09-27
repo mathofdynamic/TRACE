@@ -1294,3 +1294,30 @@
   and made no integration or infrastructure mutation. CF4.18E precheck passes;
   fixture-mode deployment, GitHub activation, and customer traffic remain
   outside this phase.
+
+### Phase CF4.18E - explicit fixture runtime deployment path (not deployed)
+
+- Date: 2026-09-27. Added a separate `runtime_mode` workflow choice with a
+  closed default and distinct deploy confirmations. The checked-in production
+  manifest remains closed. Fixture materialization is pinned to
+  `AUTHORIZED_FIXTURE_REPOSITORY`; caller-supplied identities are ignored.
+- Fixture deployment now requires a fresh read-only App identity/installations/
+  webhook-config check, the captured closed Worker deployment, exact D1 and
+  Queue bindings, absent Hyperdrive/fixture bindings, 22 empty application
+  tables, and zero Queue backlog before Wrangler deployment. Post-deploy route
+  checks use manual redirects, an unsigned webhook only, read-only D1/Queue
+  verification, and a bounded error-filtered Worker tail. Failure recovery
+  inspects Cloudflare's active source annotation and rolls back only the exact
+  attempted fixture SHA to the captured closed Worker version; an unrecognized
+  concurrent deployment is not mutated.
+- Focused canary/preflight/transition/route/workflow tests: 115 passed. A standalone
+  strict TypeScript check for the new scripts and tests passed; Prettier,
+  ESLint, and workspace typecheck passed. Local `pnpm check` stopped in the
+  unit-test startup because a workspace Vitest process could not resolve
+  `vite-node/client`. Separate local workspace/Cloudflare builds reached Next
+  prerendering but failed in the incomplete local Next package tree
+  (`useContext` null on `/404`; missing
+  `next/dist/compiled/@vercel/og/index.node.js` on `/opengraph-image`). These
+  are unresolved local validation failures; clean Linux PR CI must pass before
+  merge. No production or staging resource was queried or changed by this
+  implementation, and fixture mode has not been deployed.
