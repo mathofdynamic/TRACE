@@ -32,7 +32,7 @@ beforeAll(() => {
   }));
 });
 
-function makeFetch(responses: Array<{ body: unknown; link?: string }>) {
+function makeFetch(responses: Array<{ body?: unknown; link?: string; status?: number }>) {
   const requests: Array<{ url: string; method?: string; redirect?: RequestRedirect }> = [];
   const fetchImplementation: typeof fetch = async (input, init) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
@@ -40,7 +40,8 @@ function makeFetch(responses: Array<{ body: unknown; link?: string }>) {
     const next = responses.shift();
     if (!next) throw new Error('Unexpected test request.');
     const headers = next.link ? { link: next.link } : undefined;
-    return new Response(JSON.stringify(next.body), { status: 200, headers });
+    if (next.status === 404) return new Response(null, { status: 404, headers });
+    return new Response(JSON.stringify(next.body), { status: next.status ?? 200, headers });
   };
   return { fetchImplementation, requests };
 }
@@ -68,21 +69,25 @@ describe('production GitHub App state check', () => {
       appName: state.appName,
       installationsCount: state.installationsCount,
       installationListCount: state.installationListCount,
+      webhookConfigState: state.webhookConfigState,
       webhookUrlConfigured: state.webhookUrlConfigured,
       webhookUrl: state.webhookUrl,
       webhookContentType: state.webhookContentType,
       webhookInsecureSsl: state.webhookInsecureSsl,
       webhookSecretPresent: state.webhookSecretPresent,
+      webhookActiveUiState: state.webhookActiveUiState,
     }).toEqual({
       appId: '5082884',
       appName: 'TRACE Production Integration',
       installationsCount: 0,
       installationListCount: 0,
+      webhookConfigState: 'PRESENT_EMPTY',
       webhookUrlConfigured: false,
-      webhookUrl: '',
+      webhookUrl: '<empty>',
       webhookContentType: 'json',
       webhookInsecureSsl: '0',
-      webhookSecretPresent: true,
+      webhookSecretPresent: 'YES',
+      webhookActiveUiState: 'NOT_INDEPENDENTLY_VERIFIED',
     });
     expect(JSON.stringify(state).includes(privateKeyPem)).toBe(false);
     expect(() => assertProductionGitHubAppStateSafe(state)).not.toThrow();
@@ -106,31 +111,40 @@ describe('production GitHub App state check', () => {
     expect(fake.requests).toHaveLength(1);
   });
 
-  it('rejects an installations_count/list mismatch', async () => {
+  it('rejects an installations_count/list mismatch before reading webhook config', async () => {
     const fake = stateFetch({ ...expectedApp, installations_count: 1 }, []);
-    const state = await readState(fake.fetchImplementation);
 
-    expect(() => assertProductionGitHubAppStateSafe(state)).toThrow(
+    await expect(readState(fake.fetchImplementation)).rejects.toThrow(
       'GitHub App installation count does not match the installation list.',
     );
+    expect(fake.requests).toHaveLength(2);
   });
 
-  it('rejects a nonzero installations_count even when the list agrees', async () => {
-    const fake = stateFetch({ ...expectedApp, installations_count: 1 }, [{ id: 45 }]);
-    const state = await readState(fake.fetchImplementation);
+  it('rejects a nonempty installation list that conflicts with zero count before webhook config', async () => {
+    const fake = stateFetch(expectedApp, [{ id: 45 }]);
 
-    expect(() => assertProductionGitHubAppStateSafe(state)).toThrow(
+    await expect(readState(fake.fetchImplementation)).rejects.toThrow(
+      'GitHub App installation count does not match the installation list.',
+    );
+    expect(fake.requests).toHaveLength(2);
+  });
+
+  it('rejects a nonzero installations_count even when the list agrees before webhook config', async () => {
+    const fake = stateFetch({ ...expectedApp, installations_count: 1 }, [{ id: 45 }]);
+
+    await expect(readState(fake.fetchImplementation)).rejects.toThrow(
       'GitHub App has existing installations; expected none.',
     );
+    expect(fake.requests).toHaveLength(2);
   });
 
   it('rejects a nonempty installation list', async () => {
     const fake = stateFetch({ ...expectedApp, installations_count: 1 }, [{ id: 45 }]);
-    const state = await readState(fake.fetchImplementation);
 
-    expect(() => assertProductionGitHubAppStateSafe(state)).toThrow(
+    await expect(readState(fake.fetchImplementation)).rejects.toThrow(
       'GitHub App has existing installations; expected none.',
     );
+    expect(fake.requests).toHaveLength(2);
   });
 
   it('follows only the GitHub installations next-page URL', async () => {
@@ -143,15 +157,13 @@ describe('production GitHub App state check', () => {
       { body: [{ id: 101 }] },
       { body: { ...unconfiguredWebhook, secret: '' } },
     ]);
-    const state = await readState(fake.fetchImplementation);
-
-    expect(state.installationsCount).toBe(101);
-    expect(state.installationListCount).toBe(101);
+    await expect(readState(fake.fetchImplementation)).rejects.toThrow(
+      'GitHub App has existing installations; expected none.',
+    );
     expect(fake.requests.map((request) => request.url)).toEqual([
       'https://api.github.com/app',
       'https://api.github.com/app/installations?per_page=100',
       'https://api.github.com/app/installations?per_page=100&page=2',
-      'https://api.github.com/app/hook/config',
     ]);
   });
 
@@ -178,10 +190,90 @@ describe('production GitHub App state check', () => {
     ]);
     const state = await readState(fake.fetchImplementation);
 
+    expect(state.webhookConfigState).toBe('CONFIGURED');
     expect(state.webhookUrlConfigured).toBe(true);
+    expect(formatProductionGitHubAppState(state)).toContain(
+      'WEBHOOK_URL=[configured; URL redacted]',
+    );
     expect(() => assertProductionGitHubAppStateSafe(state)).toThrow(
       'GitHub App webhook URL is configured; expected none.',
     );
+  });
+
+  it('accepts hook-config 404 as absent after proving zero installations', async () => {
+    const fake = makeFetch([{ body: expectedApp }, { body: emptyInstallations }, { status: 404 }]);
+    const state = await readState(fake.fetchImplementation);
+    const report = formatProductionGitHubAppState(state);
+
+    expect(report).toContain('APP_ID=5082884');
+    expect(report).toContain('APP_NAME=TRACE Production Integration');
+    expect(report).toContain('INSTALLATIONS_COUNT=0');
+    expect(report).toContain('INSTALLATION_LIST_COUNT=0');
+    expect(report).toContain('WEBHOOK_CONFIG_STATE=ABSENT_NOT_FOUND');
+    expect(report).toContain('WEBHOOK_URL_CONFIGURED=NO');
+    expect(report).toContain('WEBHOOK_URL=<absent>');
+    expect(report).toContain('WEBHOOK_CONTENT_TYPE=NOT_AVAILABLE');
+    expect(report).toContain('WEBHOOK_INSECURE_SSL=NOT_AVAILABLE');
+    expect(report).toContain('WEBHOOK_SECRET_PRESENT=NOT_AVAILABLE');
+    expect(report).toContain('WEBHOOK_ACTIVE_UI_STATE=NOT_INDEPENDENTLY_VERIFIED');
+    expect(report).not.toContain('WEBHOOK_ACTIVE=NO');
+    expect(() => assertProductionGitHubAppStateSafe(state)).not.toThrow();
+    expect(fake.requests.map((request) => request.url)).toEqual([
+      'https://api.github.com/app',
+      'https://api.github.com/app/installations?per_page=100',
+      'https://api.github.com/app/hook/config',
+    ]);
+    expect(fake.requests.every((request) => request.method === 'GET')).toBe(true);
+  });
+
+  it.each([401, 403, 500])('rejects hook-config HTTP %i', async (status) => {
+    const fake = makeFetch([
+      { body: expectedApp },
+      { body: emptyInstallations },
+      { status, body: { secret: 'must-not-leak' } },
+    ]);
+
+    await expect(readState(fake.fetchImplementation)).rejects.toThrow(
+      `GET /app/hook/config failed (HTTP ${status}).`,
+    );
+    expect(fake.requests).toHaveLength(3);
+  });
+
+  it('does not expose hook-config response data in errors', async () => {
+    const privateResponseValue = 'private-hook-config-response-value';
+    const fake = makeFetch([
+      { body: expectedApp },
+      { body: emptyInstallations },
+      { status: 500, body: { secret: privateResponseValue } },
+    ]);
+
+    let message = '';
+    try {
+      await readState(fake.fetchImplementation);
+    } catch (error) {
+      message = error instanceof Error ? error.message : '';
+    }
+
+    expect(message).toBe('GET /app/hook/config failed (HTTP 500).');
+    expect(message.includes(privateResponseValue)).toBe(false);
+  });
+
+  it('does not interpret a 404 from GET /app as an absent webhook config', async () => {
+    const fake = makeFetch([{ status: 404 }]);
+
+    await expect(readState(fake.fetchImplementation)).rejects.toThrow(
+      'GET /app failed (HTTP 404).',
+    );
+    expect(fake.requests).toHaveLength(1);
+  });
+
+  it('does not interpret a 404 from GET /app/installations as an absent webhook config', async () => {
+    const fake = makeFetch([{ body: expectedApp }, { status: 404 }]);
+
+    await expect(readState(fake.fetchImplementation)).rejects.toThrow(
+      'GET /app/installations failed (HTTP 404).',
+    );
+    expect(fake.requests).toHaveLength(2);
   });
 
   it('never prints a webhook secret, JWT, or private key', async () => {

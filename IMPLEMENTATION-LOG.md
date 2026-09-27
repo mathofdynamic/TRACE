@@ -1265,3 +1265,23 @@
   state remain unverified. No retry was dispatched and no GitHub mutation,
   installation, webhook, OAuth, Cloudflare resource, production Worker, D1,
   Queue, or staging state was changed.
+
+### Phase CF4.18E.0A - scoped absent webhook-config handling
+
+- Date: 2026-09-27. Updated the protected checker to accept HTTP `404` only
+  from `GET /app/hook/config`, and only after strict App identity validation
+  and a complete installation read proving `installations_count` equals the
+  list size and both are zero. A `200` empty URL is reported as
+  `PRESENT_EMPTY`; a nonempty URL is reported as `CONFIGURED` and fails the
+  safety assertion. Other statuses, including 401/403/5xx, and 404 responses
+  from `/app` or `/app/installations` still fail.
+- The safe report distinguishes `ABSENT_NOT_FOUND`, `PRESENT_EMPTY`, and
+  `CONFIGURED`; includes installation count/list independently; omits URL
+  details when configured; and labels the GitHub UI Active state
+  `NOT_INDEPENDENTLY_VERIFIED`. No mutation method or endpoint was added.
+- Focused tests: 22 passed. The new exact-404 case reproduced the prior
+  `GET /app/hook/config failed (HTTP 404)` behavior with the exception enabled,
+  then passed with scoped handling. `pnpm check` passed (format, lint,
+  typecheck, unit tests, and build); `git diff --check` passed. The protected
+  live state workflow will run once against the merged feature SHA; no new
+  installation or webhook-config state is claimed before that result.
