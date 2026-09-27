@@ -1179,3 +1179,55 @@
   or GitHub integration setting change occurred. Production remains closed;
   fixture mode and customer traffic are not enabled. The production webhook
   and installation state were not changed by the deployment workflow.
+
+### Phase CF4.18D production GitHub credential binding, closed mode retained
+
+- Date: 2026-09-27. PR #14 merged into `feat/cloudflare-native-runtime` as
+  `12c0ea321d235e621bccddde4cf575bab62aba06`. Production-canary workflow run
+  `36300492010` deployed that exact SHA successfully. Cloudflare reports
+  deployment `868cc8d4-ce0f-42d3-b1e2-a9f9c30dc05f`, Worker version
+  `b64aec75-81c4-4146-964d-8ff456bbe726`, at 100% traffic. Immediate rollback
+  target: deployment `2f7613dc-8a90-46e1-ac8d-9cab2fc7eb91`, version
+  `066397d4-60c8-4826-b13f-175935cf04a7`.
+- The reviewed mapper converts six `TRACE_GITHUB_*`/OAuth source variable
+  names to the six runtime `GITHUB_*` names required by TRACE. Deployment
+  supplied exactly five Worker secret names: `GITHUB_APP_CLIENT_SECRET`,
+  `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET`,
+  `GITHUB_OAUTH_CLIENT_SECRET`, and `TRACE_AUTH_SECRET`. The Cloudflare
+  deployment token was not included as a Worker secret. Workflow logs confirm
+  the temporary secrets file cleanup check passed. No secret values are
+  recorded.
+- Before upload, read-only GitHub `GET /app` identity verification matched App
+  ID `5082884`, name `TRACE Production Integration`, and the configured client
+  ID. Live Worker metadata confirms production/D1/closed mode, all six
+  nonsecret GitHub runtime binding names, all five secret names, the dedicated
+  production D1 and Queue, no Hyperdrive, and no fixture allowlist variables.
+- Live health returned `200`. OAuth start, install, setup, reconcile,
+  repository mutation POST, recovery replay POST, and unsigned webhook POST
+  returned `503` with `no-store`; anonymous recovery GET returned `401`. A
+  bounded error-filtered tail around a health request contained no error
+  entries.
+- Read-only D1 checks before and after deployment confirmed migrations
+  `0000_cheerful_legion.sql` and `0001_goofy_lester.sql`, 25 schema table
+  entries, 67 indexes, no foreign-key violations, and zero rows in all 22
+  application tables. Query metadata reported zero rows written. The GET-only
+  Queue drain workflow `36300904973` verified identity and observed backlog,
+  bytes, and oldest-message timestamp all zero. No Queue message was sent.
+- Staging remained on deployment `cfa6e971-7406-4c34-a629-f3f202ca6564`,
+  version `5930a184-d797-4b70-9aee-d7f0647ab1fa` at 100%, with its original D1,
+  Queue, and expected legacy Hyperdrive binding; staging health returned
+  `200`.
+- No GitHub webhook activation, App installation, OAuth authorization,
+  production D1 mutation/restore, Queue message, staging change, or customer
+  traffic occurred. The authenticated installation-list API was unavailable,
+  so GitHub installation and webhook-active state were not independently
+  refreshed; settings were not changed. Production remains closed.
+- Validation: PR CI run `36299698102` passed the full quality/E2E job before
+  merge. Production workflow build, Cloudflare bundle, generated types,
+  typecheck, artifact validation, closed production preflight, App identity
+  check, secret-name checks, Wrangler dry run, deployment, and post-deploy
+  secret-name check all passed. Live route, binding, D1, Queue, and staging
+  read-only checks passed.
+- Status: credential binding is deployed in closed mode. Fixture mode,
+  webhook activation, App installation, OAuth, and customer cutover remain
+  disabled and require a separate approved phase.

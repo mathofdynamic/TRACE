@@ -606,3 +606,68 @@ so this is recorded as a network limitation rather than a confirmed outage.
 Production remains closed. The deployment did not activate the GitHub
 webhook, install the production App, or exercise production OAuth. Those
 integration settings were not modified; customer traffic remains unauthorized.
+
+## CF4.18D production credential binding, closed mode retained
+
+PR #14 merged into `feat/cloudflare-native-runtime` as
+`12c0ea321d235e621bccddde4cf575bab62aba06`. The exact merged source was
+deployed by production-canary workflow run
+`36300492010`:
+<https://github.com/mathofdynamic/TRACE/actions/runs/36300492010>. Cloudflare
+reports deployment `868cc8d4-ce0f-42d3-b1e2-a9f9c30dc05f`, Worker version
+`b64aec75-81c4-4146-964d-8ff456bbe726`, and 100% traffic. The previous
+deployment `2f7613dc-8a90-46e1-ac8d-9cab2fc7eb91` / version
+`066397d4-60c8-4826-b13f-175935cf04a7` remains the rollback target.
+
+The reviewed deployment-time mapper converts the six nonsecret GitHub
+Environment source variables (`TRACE_GITHUB_APP_ID`,
+`TRACE_GITHUB_APP_CLIENT_ID`, `TRACE_GITHUB_APP_SLUG`,
+`TRACE_GITHUB_APP_CALLBACK_URL`, `TRACE_GITHUB_APP_INSTALL_URL`, and
+`TRACE_GITHUB_OAUTH_CLIENT_ID`) to the runtime names `GITHUB_APP_ID`,
+`GITHUB_APP_CLIENT_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CALLBACK_URL`,
+`GITHUB_APP_INSTALL_URL`, and `GITHUB_OAUTH_CLIENT_ID`. The five runtime
+secret names are `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY`,
+`GITHUB_WEBHOOK_SECRET`, `GITHUB_OAUTH_CLIENT_SECRET`, and
+`TRACE_AUTH_SECRET`. `CLOUDFLARE_API_TOKEN` is deployment-only and was not
+included in Worker bindings. The temporary secrets JSON file was removed by
+the workflow's cleanup trap; the run log confirmed the post-cleanup absence
+check. The pre-deploy read-only GitHub `GET /app` check matched App ID
+`5082884`, name `TRACE Production Integration`, and the configured client ID.
+No credential values are recorded here.
+
+Live version metadata confirms `TRACE_DEPLOYMENT_ENV=production`,
+`TRACE_DATABASE_DRIVER=d1`, and `TRACE_CANARY_MODE=closed`. The six expected
+runtime variable names and five secret names are present. The D1 binding is
+`DB` -> `7a566f2e-da27-46e7-8c3f-271e5566f225`; the Queue producer binding is
+`TRACE_QUEUE` -> `trace-production-jobs`. The sole Queue consumer remains
+`trace-production` with batch size 10, max wait 5000 ms, max retries 3, and
+retry delay 60 seconds. No Hyperdrive binding or `TRACE_CANARY_GITHUB_*`
+fixture variable is active.
+
+The closed-route matrix returned health `200`; OAuth start, install, setup,
+reconcile, repository POST, recovery replay POST, and unsigned webhook POST
+each returned `503` with `cache-control: no-store`; anonymous recovery GET
+returned `401`. The unsigned webhook request did not reach signature-backed
+intake. A bounded error-filtered Worker tail around a fresh health request
+produced no error entries.
+
+Read-only D1 checks immediately before and after deployment found exactly
+`0000_cheerful_legion.sql` and `0001_goofy_lester.sql`, 25 schema table entries,
+67 indexes, and zero foreign-key violations. All 22 TRACE application tables
+remained empty; the queries reported zero rows written. No migration or
+restore occurred. GET-only Queue drain run `36300904973` verified the Queue
+identity and returned `backlog_count=0`, `backlog_bytes=0`, and
+`oldest_message_timestamp_ms=0`. No Queue message was sent.
+
+Staging was not modified: deployment `cfa6e971-7406-4c34-a629-f3f202ca6564`,
+version `5930a184-d797-4b70-9aee-d7f0647ab1fa` at 100%, D1
+`c4df63bc-8270-4500-9dab-c1c6439efa64`, Queue `trace-staging-jobs`, and the
+expected legacy Hyperdrive binding remain. The bounded staging health request
+returned `200`.
+
+No webhook activation, App installation, OAuth authorization, D1 mutation,
+Queue message, or customer traffic occurred. The authenticated GitHub
+installation-list API was unavailable, so App installation and webhook-active
+status were not independently refreshed during CF4.18D; no GitHub settings
+were changed. Production remains closed. The next fixture-mode transition and
+any GitHub activation require their own reviewed phase and authorization.
