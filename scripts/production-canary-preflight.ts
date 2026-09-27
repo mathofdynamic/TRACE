@@ -9,7 +9,7 @@ import {
   type ProductionGitHubRuntimeContract,
 } from './production-canary-runtime-config.js';
 
-type CanaryManifest = {
+export type CanaryManifest = {
   schemaVersion: number;
   accountId: string;
   workerName: string;
@@ -276,7 +276,7 @@ function parseArgs(argv: string[]): PreflightOptions {
   const values = new Map<string, string>();
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
-    if (!argument.startsWith('--')) continue;
+    if (!argument?.startsWith('--')) continue;
     const key = argument.slice(2);
     const value = argv[index + 1];
     if (!value || value.startsWith('--')) fail(`Missing value for --${key}.`);

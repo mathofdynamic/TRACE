@@ -3,9 +3,12 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import productionManifest from '../production-canary.json';
+import productionManifestJson from '../production-canary.json';
 import { afterEach, describe, expect, it } from 'vitest';
-import { writeProductionWranglerConfig } from '../../../scripts/production-canary-preflight.js';
+import {
+  writeProductionWranglerConfig,
+  type CanaryManifest,
+} from '../../../scripts/production-canary-preflight.js';
 import {
   buildProductionGitHubRuntimeVariables,
   productionGitHubRuntimeVariableSources,
@@ -18,6 +21,8 @@ import {
 } from '../../../scripts/production-canary-secrets.js';
 import { assertProductionWorkerSecretNames } from '../../../scripts/verify-production-worker-secrets.js';
 import { verifyProductionGitHubAppIdentity } from '../../../scripts/verify-production-github-app.js';
+
+const productionManifest = productionManifestJson as unknown as CanaryManifest;
 
 const productionVariableEnvironment = {
   TRACE_GITHUB_APP_ID: '5082884',
@@ -260,6 +265,7 @@ describe('production GitHub App identity proof', () => {
       expect(authorization?.startsWith('Bearer ')).toBe(true);
       const token = authorization!.slice('Bearer '.length);
       const [header, payload, signature] = token.split('.');
+      if (!header || !payload || !signature) throw new Error('App JWT did not have three parts.');
       expect(JSON.parse(Buffer.from(header, 'base64url').toString('utf8'))).toEqual({
         alg: 'RS256',
         typ: 'JWT',
@@ -317,10 +323,10 @@ describe('production canary deployment workflow', () => {
     expect(workflow).toMatch(/^\s*workflow_dispatch:/m);
     expect(workflow).not.toMatch(/^\s*(push|pull_request):/m);
     expect(workflow).toContain('environment: production-canary');
-    expect(workflow).not.toMatch(/^      CLOUDFLARE_API_TOKEN:/m);
+    expect(workflow).not.toMatch(/^ {6}CLOUDFLARE_API_TOKEN:/m);
     expect(workflow).toContain('scripts/verify-production-github-app.ts');
     expect(workflow).toContain('scripts/production-canary-secrets.ts --output "$secrets_file"');
-    expect(workflow.match(/--secrets-file \"\$secrets_file\"/g)).toHaveLength(2);
+    expect(workflow.match(/--secrets-file "\$secrets_file"/g)).toHaveLength(2);
     expect(workflow).not.toMatch(/wrangler\s+secret\s+(put|bulk)/);
     expect(workflow).toContain(
       'TRACE_GITHUB_APP_PRIVATE_KEY: ${{ secrets.TRACE_GITHUB_APP_PRIVATE_KEY }}',
