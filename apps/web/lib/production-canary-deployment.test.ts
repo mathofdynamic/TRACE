@@ -354,7 +354,7 @@ describe('production GitHub App identity proof', () => {
 });
 
 describe('production canary deployment workflow', () => {
-  it('keeps deployment manual and binds secrets only through the approved atomic upload path', () => {
+  it('keeps deployment manual, exact-SHA, closed-by-default, and binds secrets atomically', () => {
     const workflowPath = fileURLToPath(
       new URL('../../../.github/workflows/validate-production-canary.yml', import.meta.url),
     );
@@ -363,6 +363,35 @@ describe('production canary deployment workflow', () => {
     expect(workflow).toMatch(/^\s*workflow_dispatch:/m);
     expect(workflow).not.toMatch(/^\s*(push|pull_request):/m);
     expect(workflow).toContain('environment: production-canary');
+    expect(workflow).toMatch(
+      /runtime_mode:[\s\S]*?default: closed[\s\S]*?- closed[\s\S]*?- fixture/,
+    );
+    expect(workflow).toContain('scripts/production-canary-deploy-contract.ts');
+    const deploymentContract = readFileSync(
+      fileURLToPath(
+        new URL('../../../scripts/production-canary-deploy-contract.ts', import.meta.url),
+      ),
+      'utf8',
+    );
+    expect(deploymentContract).toContain('DEPLOY_TRACE_PRODUCTION_CANARY');
+    expect(deploymentContract).toContain('DEPLOY_TRACE_PRODUCTION_FIXTURE_CANARY');
+    expect(workflow).toContain('--runtime-mode "$RUNTIME_MODE"');
+    expect(workflow).toContain('scripts/verify-production-fixture-transition.ts before');
+    expect(workflow).toContain('scripts/verify-production-fixture-transition.ts after');
+    expect(workflow).toContain('scripts/verify-production-fixture-routes.ts');
+    expect(workflow).toContain('scripts/verify-production-github-app-state.ts');
+    expect(workflow).toContain('scripts/verify-production-fixture-transition.ts rollback');
+    expect(workflow).toContain(
+      'scripts/verify-production-fixture-transition.ts rollback-if-needed',
+    );
+    const transitionScript = readFileSync(
+      fileURLToPath(
+        new URL('../../../scripts/verify-production-fixture-transition.ts', import.meta.url),
+      ),
+      'utf8',
+    );
+    expect(transitionScript).toContain("'wrangler'");
+    expect(transitionScript).toContain('productionFixtureTransitionBaseline.workerVersionId');
     expect(workflow).not.toMatch(/^ {6}CLOUDFLARE_API_TOKEN:/m);
     expect(workflow).toContain('scripts/verify-production-github-app.ts');
     expect(workflow).toContain('scripts/production-canary-secrets.ts --output "$secrets_file"');

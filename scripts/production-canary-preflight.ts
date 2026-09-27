@@ -1,7 +1,14 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildProductionCanaryRuntimeVariables as buildCanaryModeVariables } from '../apps/web/lib/production-canary.js';
+import {
+  AUTHORIZED_FIXTURE_REPOSITORY,
+  buildProductionCanaryRuntimeVariables as buildCanaryModeVariables,
+} from '../apps/web/lib/production-canary.js';
+import {
+  resolveProductionCanaryRuntimeMode,
+  type ProductionCanaryRuntimeMode,
+} from './production-canary-deploy-contract.js';
 import {
   buildProductionGitHubRuntimeVariables,
   productionGitHubApp,
@@ -49,6 +56,7 @@ export type CanaryManifest = {
 
 type PreflightOptions = {
   mode: 'validate-only' | 'deploy';
+  runtimeMode?: string;
   d1Id?: string;
   queueName?: string;
   workerName?: string;
@@ -73,13 +81,26 @@ export function loadCanaryManifest(): CanaryManifest {
 export function buildProductionCanaryRuntimeVars(
   manifest: CanaryManifest,
   environment: Record<string, string | undefined> = process.env,
+  runtimeModeValue: unknown = 'closed',
 ) {
+  const runtimeMode = resolveProductionCanaryRuntimeMode(runtimeModeValue);
+  const fixtureEnvironment =
+    runtimeMode === 'fixture'
+      ? {
+          [manifest.fixtureCanaryEnvironment.owner]: AUTHORIZED_FIXTURE_REPOSITORY.owner,
+          [manifest.fixtureCanaryEnvironment.repository]: AUTHORIZED_FIXTURE_REPOSITORY.repository,
+          [manifest.fixtureCanaryEnvironment.repositoryId]: String(
+            AUTHORIZED_FIXTURE_REPOSITORY.repositoryId,
+          ),
+        }
+      : {};
   const canaryModeVars = buildCanaryModeVariables(
     {
       ...manifest.runtime,
+      canaryMode: runtimeMode,
       fixtureCanaryEnvironment: manifest.fixtureCanaryEnvironment,
     },
-    environment,
+    fixtureEnvironment,
   );
   const githubRuntimeVars = buildProductionGitHubRuntimeVariables(
     manifest.githubRuntime,
@@ -225,7 +246,7 @@ export function writeProductionWranglerConfig(
         main: relativeConfigPath(destination, path.join(webDirectory, 'custom-worker.ts')),
         workers_dev: true,
         vars: {
-          ...buildProductionCanaryRuntimeVars(manifest, environment),
+          ...buildProductionCanaryRuntimeVars(manifest, environment, options.runtimeMode),
           TRACE_PUBLIC_URL: manifest.publicUrl,
           NEXT_PRIVATE_MINIMAL_MODE: '1',
           TRACE_FEATURE_SEMANTIC_PR_FINDINGS: 'false',
@@ -287,6 +308,7 @@ function parseArgs(argv: string[]): PreflightOptions {
   if (mode !== 'validate-only' && mode !== 'deploy') fail('Mode must be validate-only or deploy.');
   return {
     mode,
+    runtimeMode: values.get('runtime-mode'),
     d1Id: values.get('production-d1-id'),
     queueName: values.get('production-queue-name'),
     workerName: values.get('production-worker-name'),
@@ -298,6 +320,9 @@ function parseArgs(argv: string[]): PreflightOptions {
 }
 
 export function runProductionCanaryPreflight(options: PreflightOptions) {
+  const runtimeMode: ProductionCanaryRuntimeMode = resolveProductionCanaryRuntimeMode(
+    options.runtimeMode,
+  );
   const manifest = loadCanaryManifest();
   validateStaticManifest(manifest);
   const resources = validateResourceIdentity(manifest, options);
@@ -325,9 +350,9 @@ export function runProductionCanaryPreflight(options: PreflightOptions) {
     `D1: ${manifest.d1.databaseName}${resources.resourceIdsPresent ? ` (${resources.d1Id})` : ' (ID not provisioned)'}`,
   );
   console.log(`Queue: ${resources.queueName}`);
-  console.log(`Canary mode: ${manifest.runtime.canaryMode}`);
+  console.log(`Canary mode: ${runtimeMode}`);
   console.log(`Required secrets: ${manifest.requiredSecretNames.join(', ')}`);
-  return { manifest, resources };
+  return { manifest, resources, runtimeMode };
 }
 
 function main() {
