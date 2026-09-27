@@ -671,3 +671,25 @@ installation-list API was unavailable, so App installation and webhook-active
 status were not independently refreshed during CF4.18D; no GitHub settings
 were changed. Production remains closed. The next fixture-mode transition and
 any GitHub activation require their own reviewed phase and authorization.
+
+### CF4.18E.0A protected GitHub App state precheck
+
+The earlier protected read-only run `36316016589` authenticated the production
+App JWT and verified the App identity, then received HTTP `404` from
+`GET /app/hook/config`. That endpoint result did not establish the GitHub UI
+Active toggle, and the prior checker stopped before surfacing installation
+state.
+
+The checker now accepts HTTP `404` only from the exact authenticated
+`GET /app/hook/config` request, after App ID/name/client ID validation and a
+complete installation-list read. It requires `installations_count` to match
+the list count and both to be zero before reading webhook configuration. The
+404 is reported as `ABSENT_NOT_FOUND` / no configured URL, with webhook Active
+UI state explicitly marked `NOT_INDEPENDENTLY_VERIFIED`. A `200` with an empty
+URL is `PRESENT_EMPTY`; a configured URL and all other error statuses remain
+failures. No GitHub settings are changed by this check.
+
+The corrected checker and focused contract tests are prepared on a feature
+branch. One protected workflow run against the merged feature SHA is required
+to establish the current installation and webhook-config state; no new live
+state is claimed here.

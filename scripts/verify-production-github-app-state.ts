@@ -27,11 +27,13 @@ export type ProductionGitHubAppState = {
   appName: string;
   installationsCount: number;
   installationListCount: number;
+  webhookConfigState: 'ABSENT_NOT_FOUND' | 'PRESENT_EMPTY' | 'CONFIGURED';
   webhookUrlConfigured: boolean;
   webhookUrl: string;
   webhookContentType: string;
   webhookInsecureSsl: string;
-  webhookSecretPresent: boolean;
+  webhookSecretPresent: 'YES' | 'NO' | 'NOT_AVAILABLE';
+  webhookActiveUiState: 'NOT_INDEPENDENTLY_VERIFIED';
 };
 
 type GitHubResponse = {
@@ -100,6 +102,7 @@ async function getJson(
   url: URL,
   appJwt: string,
   fetchImplementation: typeof fetch,
+  allowAbsentHookConfig = false,
 ): Promise<GitHubResponse> {
   assertAllowedRequestUrl(url);
   const method = 'GET';
@@ -118,6 +121,10 @@ async function getJson(
     });
   } catch {
     throw new Error(`${safeEndpointName(url)} request failed before receiving a response.`);
+  }
+
+  if (allowAbsentHookConfig && url.pathname === '/app/hook/config' && response.status === 404) {
+    return { response, body: undefined };
   }
 
   if (!response.ok) {
@@ -144,14 +151,7 @@ function safeMetadataString(value: unknown, fallback = 'UNKNOWN') {
 
 function safeWebhookUrl(value: string) {
   if (value.length === 0) return '';
-  try {
-    const url = new URL(value);
-    const query = url.search.length > 0 ? '?[redacted]' : '';
-    const fragment = url.hash.length > 0 ? '#[redacted]' : '';
-    return `${url.protocol}//${url.host}${url.pathname}${query}${fragment}`;
-  } catch {
-    return '[configured; value omitted]';
-  }
+  return '[configured; URL redacted]';
 }
 
 function nextInstallationPage(linkHeader: string | null, currentPage: number) {
@@ -176,6 +176,15 @@ function parseSafeWebhookUrl(value: unknown) {
     throw new Error('GET /app/hook/config response omitted the webhook URL field.');
   }
   return value;
+}
+
+function assertNoInstallations(installationsCount: number, installationListCount: number) {
+  if (installationsCount !== installationListCount) {
+    throw new Error('GitHub App installation count does not match the installation list.');
+  }
+  if (installationsCount !== 0) {
+    throw new Error('GitHub App has existing installations; expected none.');
+  }
 }
 
 export async function readProductionGitHubAppState(
@@ -237,11 +246,30 @@ export async function readProductionGitHubAppState(
     installationsUrl = next;
   }
 
+  const installationsCount = app.installations_count as number;
+  assertNoInstallations(installationsCount, installationListCount);
+
   const webhookResponse = await getJson(
     new URL(`${apiOrigin}/app/hook/config`),
     appJwt,
     fetchImplementation,
+    true,
   );
+  if (webhookResponse.response.status === 404) {
+    return {
+      appId: productionGitHubApp.id,
+      appName: productionGitHubApp.name,
+      installationsCount,
+      installationListCount,
+      webhookConfigState: 'ABSENT_NOT_FOUND',
+      webhookUrlConfigured: false,
+      webhookUrl: '<absent>',
+      webhookContentType: 'NOT_AVAILABLE',
+      webhookInsecureSsl: 'NOT_AVAILABLE',
+      webhookSecretPresent: 'NOT_AVAILABLE',
+      webhookActiveUiState: 'NOT_INDEPENDENTLY_VERIFIED',
+    };
+  }
   if (!isRecord(webhookResponse.body)) {
     throw new Error('GET /app/hook/config response was not a webhook configuration.');
   }
@@ -252,23 +280,21 @@ export async function readProductionGitHubAppState(
   return {
     appId: productionGitHubApp.id,
     appName: productionGitHubApp.name,
-    installationsCount: app.installations_count as number,
+    installationsCount,
     installationListCount,
+    webhookConfigState: webhookUrlConfigured ? 'CONFIGURED' : 'PRESENT_EMPTY',
     webhookUrlConfigured,
-    webhookUrl: safeWebhookUrl(rawWebhookUrl),
+    webhookUrl: rawWebhookUrl.length === 0 ? '<empty>' : safeWebhookUrl(rawWebhookUrl),
     webhookContentType: safeMetadataString(webhook.content_type),
     webhookInsecureSsl: safeMetadataString(webhook.insecure_ssl),
-    webhookSecretPresent: typeof webhook.secret === 'string' && webhook.secret.length > 0,
+    webhookSecretPresent:
+      typeof webhook.secret === 'string' && webhook.secret.length > 0 ? 'YES' : 'NO',
+    webhookActiveUiState: 'NOT_INDEPENDENTLY_VERIFIED',
   };
 }
 
 export function assertProductionGitHubAppStateSafe(state: ProductionGitHubAppState) {
-  if (state.installationsCount !== state.installationListCount) {
-    throw new Error('GitHub App installation count does not match the installation list.');
-  }
-  if (state.installationsCount !== 0) {
-    throw new Error('GitHub App has existing installations; expected none.');
-  }
+  assertNoInstallations(state.installationsCount, state.installationListCount);
   if (state.webhookUrlConfigured) {
     throw new Error('GitHub App webhook URL is configured; expected none.');
   }
@@ -280,11 +306,13 @@ export function formatProductionGitHubAppState(state: ProductionGitHubAppState) 
     `APP_NAME=${state.appName}`,
     `INSTALLATIONS_COUNT=${state.installationsCount}`,
     `INSTALLATION_LIST_COUNT=${state.installationListCount}`,
+    `WEBHOOK_CONFIG_STATE=${state.webhookConfigState}`,
     `WEBHOOK_URL_CONFIGURED=${state.webhookUrlConfigured ? 'YES' : 'NO'}`,
-    `WEBHOOK_URL=${state.webhookUrl || '<empty>'}`,
+    `WEBHOOK_URL=${state.webhookUrl}`,
     `WEBHOOK_CONTENT_TYPE=${state.webhookContentType}`,
     `WEBHOOK_INSECURE_SSL=${state.webhookInsecureSsl}`,
-    `WEBHOOK_SECRET_PRESENT=${state.webhookSecretPresent ? 'YES' : 'NO'}`,
+    `WEBHOOK_SECRET_PRESENT=${state.webhookSecretPresent}`,
+    `WEBHOOK_ACTIVE_UI_STATE=${state.webhookActiveUiState}`,
   ].join('\n');
 }
 
