@@ -83,6 +83,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function normalizeReviewedSourceSha(value: unknown, label: string) {
+  if (typeof value !== 'string' || !/^[0-9a-f]{40}$/i.test(value)) {
+    fail(`${label} must be an exact 40-character hexadecimal SHA.`);
+  }
+  return value.toLowerCase();
+}
+
+function sourceAnnotationMatches(value: unknown, expectedSourceSha: string) {
+  if (typeof value !== 'string') return false;
+  const match = /^TRACE production canary ([0-9a-f]{40})$/i.exec(value);
+  return match?.[1]?.toLowerCase() === expectedSourceSha.toLowerCase();
+}
+
 function assertIdentityEnvironment(environment: Record<string, string | undefined>) {
   if (environment.CLOUDFLARE_ACCOUNT_ID !== productionFixtureTransitionBaseline.accountId) {
     fail('Cloudflare account ID does not match the approved production account.');
@@ -187,7 +200,7 @@ function assertExpectedDeployment(
     }
     if (
       !expectedSourceSha ||
-      deployment.annotations?.['workers/message'] !== `TRACE production canary ${expectedSourceSha}`
+      !sourceAnnotationMatches(deployment.annotations?.['workers/message'], expectedSourceSha)
     ) {
       fail('The active production deployment source annotation does not match the reviewed SHA.');
     }
@@ -409,7 +422,7 @@ export function classifyFixtureDeploymentForRollback(
   }
   if (
     deployment?.id !== productionFixtureTransitionBaseline.deploymentId &&
-    deployment?.annotations?.['workers/message'] === `TRACE production canary ${expectedSourceSha}`
+    sourceAnnotationMatches(deployment?.annotations?.['workers/message'], expectedSourceSha)
   ) {
     return 'fixture-deployment-active' as const;
   }
@@ -423,9 +436,10 @@ export async function rollbackFixtureDeploymentIfNeeded(options: {
   runRollback?: (versionId: string) => void;
   consumerOutput?: unknown;
 }) {
-  if (!/^[0-9a-f]{40}$/.test(options.expectedSourceSha)) {
-    fail('Rollback inspection requires the exact lowercase reviewed source SHA.');
-  }
+  const expectedSourceSha = normalizeReviewedSourceSha(
+    options.expectedSourceSha,
+    'Rollback inspection source SHA',
+  );
   const token = assertIdentityEnvironment(options.environment);
   const fetchImplementation = options.fetchImplementation ?? fetch;
   const envelope = await cloudflareRequest<{ deployments?: WorkerDeployment[] }>(
@@ -434,10 +448,7 @@ export async function rollbackFixtureDeploymentIfNeeded(options: {
     fetchImplementation,
   );
   const activeDeployment = envelope.deployments?.[0];
-  const disposition = classifyFixtureDeploymentForRollback(
-    activeDeployment,
-    options.expectedSourceSha,
-  );
+  const disposition = classifyFixtureDeploymentForRollback(activeDeployment, expectedSourceSha);
 
   if (disposition === 'baseline-active' || disposition === 'baseline-restored') {
     console.log(
@@ -567,9 +578,10 @@ export async function verifyProductionFixtureTransitionState(options: {
 }) {
   const token = assertIdentityEnvironment(options.environment);
   const fetchImplementation = options.fetchImplementation ?? fetch;
-  if (options.phase === 'after' && !/^[0-9a-f]{40}$/.test(options.expectedSourceSha ?? '')) {
-    fail('Post-deployment source SHA must be an exact 40-character lowercase SHA.');
-  }
+  const expectedSourceSha =
+    options.phase === 'after'
+      ? normalizeReviewedSourceSha(options.expectedSourceSha, 'Post-deployment source SHA')
+      : options.expectedSourceSha;
 
   const deploymentEnvelope = await cloudflareRequest<{ deployments?: WorkerDeployment[] }>(
     `/accounts/${productionFixtureTransitionBaseline.accountId}/workers/scripts/${productionFixtureTransitionBaseline.workerName}/deployments?per_page=100`,
@@ -579,7 +591,7 @@ export async function verifyProductionFixtureTransitionState(options: {
   const deployment = assertExpectedDeployment(
     deploymentEnvelope.deployments,
     options.phase,
-    options.expectedSourceSha,
+    expectedSourceSha,
   );
   const version = await cloudflareRequest<WorkerVersion>(
     `/accounts/${productionFixtureTransitionBaseline.accountId}/workers/scripts/${productionFixtureTransitionBaseline.workerName}/versions/${deployment.versionId}`,
@@ -611,9 +623,7 @@ export async function verifyProductionFixtureTransitionState(options: {
     versionId: deployment.versionId,
     trafficPercentage: deployment.trafficPercentage,
     sourceSha:
-      options.phase === 'after'
-        ? options.expectedSourceSha
-        : productionFixtureTransitionBaseline.sourceSha,
+      options.phase === 'after' ? expectedSourceSha : productionFixtureTransitionBaseline.sourceSha,
     d1Id: productionFixtureTransitionBaseline.d1Id,
     applicationTableCount: productionApplicationTables.length,
     emptyApplicationTableCount: Object.values(counts).filter((count) => count === 0).length,

@@ -714,6 +714,10 @@ central `AUTHORIZED_FIXTURE_REPOSITORY` contract, never from caller-provided
 owner, repository, or repository-ID values. Closed materialization emits no
 fixture variables.
 
+Full hexadecimal source SHAs are canonicalized to lowercase for checkout
+evidence, deployment annotation comparison, and rollback classification, so
+case differences cannot strand post-deployment verification or rollback.
+
 Before a fixture upload, the protected job must revalidate the exact closed
 Worker deployment, production D1 and Queue bindings, absent Hyperdrive and
 fixture bindings, empty application tables, and zero Queue backlog. It also

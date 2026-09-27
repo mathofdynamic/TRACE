@@ -1321,3 +1321,6 @@
   are unresolved local validation failures; clean Linux PR CI must pass before
   merge. No production or staging resource was queried or changed by this
   implementation, and fixture mode has not been deployed.
+- Review follow-up: full hexadecimal source SHAs are canonicalized to
+  lowercase for post-deployment evidence and rollback classification;
+  regression coverage includes uppercase SHA inputs.

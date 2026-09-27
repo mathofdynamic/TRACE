@@ -205,6 +205,15 @@ describe('production fixture transition state gate', () => {
     expect(
       classifyFixtureDeploymentForRollback(
         {
+          ...deployment('after', expectedSourceSha),
+          id: 'failed-fixture-deployment',
+        },
+        expectedSourceSha.toUpperCase(),
+      ),
+    ).toBe('fixture-deployment-active');
+    expect(
+      classifyFixtureDeploymentForRollback(
+        {
           ...deployment('after', 'd'.repeat(40)),
           id: 'unrelated-deployment',
         },
@@ -242,6 +251,20 @@ describe('production fixture transition state gate', () => {
     expect(queryBody.sql).toMatch(/^SELECT 1 AS ok,/);
     expect(queryBody.sql).not.toMatch(/\b(INSERT|UPDATE|DELETE|DROP|ALTER|REPLACE)\b/i);
     expect(queryBody.params).toEqual([]);
+  });
+
+  it('normalizes uppercase reviewed SHAs for post-deployment evidence', async () => {
+    const sourceSha = 'abcdef0123456789abcdef0123456789abcdef01';
+    const fake = fakeCloudflare('after', sourceSha);
+    const result = await verifyProductionFixtureTransitionState({
+      phase: 'after',
+      environment: commonEnvironment,
+      expectedSourceSha: sourceSha.toUpperCase(),
+      fetchImplementation: fake.fetchImplementation,
+      consumerOutput: consumerList,
+    });
+    expect(result.sourceSha).toBe(sourceSha);
+    expect(result.canaryMode).toBe('fixture');
   });
 
   it('accepts the exact fixture deployment annotation and fixed allowlist', async () => {
