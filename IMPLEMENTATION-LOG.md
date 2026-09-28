@@ -1399,3 +1399,39 @@
   GitHub mutation, or staging operation occurred in this phase. Follow-up PR
   changes implement only the retry harness; CF4.18E remains failed pending a
   separate controlled retry, and this phase does not authorize it.
+
+### Phase CF4.18E.2 - single authorized fixture-mode retry failed and rolled back
+
+- Date: 2026-09-28. The only authorized retry deployed exact feature SHA
+  `391657c5f9c929ace8712dfe8cfa381166d822ba` in run `36404357739`, job
+  `108869418439`. Predeploy App-state run `36403430839` verified App ID
+  `5082884`, `TRACE Production Integration`, zero installations, and
+  `ABSENT_NOT_FOUND` / no configured webhook URL. GET-only Queue run
+  `36403438289` observed backlog zero at `2026-09-28T09:25:59.753Z`.
+- The protected deploy preflight passed against the expected closed Worker
+  version `b64aec75-81c4-4146-964d-8ff456bbe726` and deployment
+  `473864fd-83b8-42ac-800d-2ea173c9649e`, at 100% traffic. It verified closed
+  mode, exact production D1/Queue, no Hyperdrive or fixture variables, 22/22
+  empty application tables, zero Queue backlog, and the five Worker secret
+  names. The exact source was uploaded as version
+  `94b005f1-4e4f-47b7-a1b9-350a504a1267`, deployment
+  `029825a6-cd17-4f7f-8f65-c93f35ae6194`, at 100%; captured source SHA and
+  fixture identity matched the requested release and authorized repository.
+- Acceptance stopped before tail startup and before all route probes. The
+  `Record Wrangler version for bounded tail diagnostics` step expected
+  `wrangler <version>`, but the locked Wrangler `4.120.1` emits `4.120.1`.
+  The step exited with `Wrangler version output had an unexpected format.`
+  Thus tail readiness, route results, and error-event count are unobserved; no
+  inference is made about tail connectivity. No route request ran.
+- Automatic rollback completed as deployment
+  `599ec20b-b90b-4499-af73-21024e8b5e19`, restoring version
+  `b64aec75-81c4-4146-964d-8ff456bbe726` at 100% in closed mode. Postrollback
+  health was HTTP 200; OAuth start was HTTP 503 with `no-store`. Read-only
+  production D1 queries confirmed all 22 application tables remained empty,
+  zero foreign-key violations, and zero rows written. GET-only Queue run
+  `36405048138` verified backlog zero at `2026-09-28T09:41:07.038Z`.
+- No Queue message, D1 mutation/migration/restore, GitHub mutation, staging
+  operation, route probe, or completed OAuth occurred. The predeploy App-state
+  result remains the latest read-only state evidence; the postdeploy state
+  workflow did not run. CF4.18E result: FAIL. The single authorized retry is
+  consumed; this phase authorizes no further retry.
