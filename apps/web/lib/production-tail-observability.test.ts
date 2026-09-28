@@ -165,6 +165,21 @@ describe('production tail observability harness', () => {
     expect(harness).toContain('TAIL_SANITIZED_DIAGNOSTIC_BEGIN');
   });
 
+  it('materializes the comparison config without introducing an unrelated Cloudflare build', () => {
+    const smoke = readFileSync(path.join(root, 'scripts/production-tail-smoke.ts'), 'utf8');
+    expect(smoke).toContain('materializeGeneratedClosedConfig(workerVariables)');
+    expect(smoke).toContain("kind: 'config'");
+    expect(smoke).not.toContain("['cf:build']");
+  });
+
+  it('keeps the simple smoke proof independent of the optional config/env comparison', () => {
+    const smoke = readFileSync(path.join(root, 'scripts/production-tail-smoke.ts'), 'utf8');
+    expect(smoke.indexOf("kind: 'simple'")).toBeLessThan(smoke.indexOf('TAIL_SMOKE_SIMPLE=PASS'));
+    expect(smoke.indexOf('TAIL_SMOKE_SIMPLE=PASS')).toBeLessThan(
+      smoke.indexOf('materializeGeneratedClosedConfig(workerVariables)'),
+    );
+  });
+
   it('keeps the dedicated smoke workflow manual, feature-ref restricted, and credential-minimal', () => {
     const workflow = readFileSync(
       path.join(root, '.github/workflows/production-tail-smoke.yml'),

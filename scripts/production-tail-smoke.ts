@@ -380,19 +380,6 @@ function materializeGeneratedClosedConfig(variables: Map<string | undefined, str
   }
 }
 
-function runLocalCloudflareBuild() {
-  const buildEnvironment: NodeJS.ProcessEnv = { ...process.env };
-  delete buildEnvironment.CLOUDFLARE_API_TOKEN;
-  execFileSync(process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', ['cf:build'], {
-    cwd: repositoryRoot,
-    env: buildEnvironment,
-    stdio: 'inherit',
-    shell: process.platform === 'win32',
-    timeout: 12 * 60_000,
-    windowsHide: true,
-  });
-}
-
 export async function runTailSmoke(options: {
   token: string;
   accountId: string;
@@ -448,7 +435,6 @@ async function main() {
     });
     console.log('TAIL_SMOKE_SIMPLE=PASS');
 
-    runLocalCloudflareBuild();
     const versionResult = await cloudflareRequest<{ resources?: { bindings?: Binding[] } }>(
       `/accounts/${productionTailSmokeBaseline.accountId}/workers/scripts/${productionTailSmokeBaseline.workerName}/versions/${state.versionId}`,
       token,
