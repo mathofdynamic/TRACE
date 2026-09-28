@@ -6,8 +6,10 @@ import { describe, expect, it } from 'vitest';
 import {
   buildWranglerTailArgs,
   classifyTailFailure,
+  normalizeWranglerVersionOutput,
   reportBeforeCleanup,
   runOnlyAfterTailReady,
+  safeWranglerVersionDiagnostic,
   sanitizeTailDiagnostic,
   waitForChildClose,
 } from '../../../scripts/production-tail-observability.js';
@@ -15,6 +17,59 @@ import {
 const root = path.resolve(fileURLToPath(new URL('../../../', import.meta.url)));
 
 describe('production tail observability harness', () => {
+  it.each([
+    ['4.120.1', '4.120.1'],
+    ['wrangler 4.120.1', 'wrangler 4.120.1'],
+    ['4.121.0', '4.121.0'],
+    ['wrangler 5.0.0', 'wrangler 5.0.0'],
+    ['wrangler 5.0.0-beta.1', 'wrangler 5.0.0-beta.1'],
+  ])(
+    'normalizes safe Wrangler output %s without enforcing a presentation format',
+    (raw, expected) => {
+      expect(normalizeWranglerVersionOutput(raw)).toBe(expected);
+      expect(normalizeWranglerVersionOutput(`${raw}\r\n`)).toBe(expected);
+    },
+  );
+
+  it('accepts the exact bare semver output that stopped the previous fixture run', () => {
+    expect(normalizeWranglerVersionOutput('4.120.1')).toBe('4.120.1');
+  });
+
+  it.each([
+    ['empty output', ''],
+    ['whitespace-only output', ' \r\n  '],
+    ['embedded control character', '4.120.1\u001b[31m'],
+    ['tab control character', '4.120.1\t'],
+    ['unbounded first line', `${'v'.repeat(161)}`],
+    ['oversized output', '4.120.1\n' + 'x'.repeat(4_100)],
+  ])('rejects %s without echoing its content', (_label, raw) => {
+    expect(() => normalizeWranglerVersionOutput(raw)).toThrow();
+    expect(safeWranglerVersionDiagnostic(raw)).toBe('UNAVAILABLE');
+  });
+
+  it('keeps Wrangler display text diagnostic-only and independent of the exact-version tail command', () => {
+    const expected = [
+      'exec',
+      'wrangler',
+      'tail',
+      'trace-production',
+      '--format',
+      'json',
+      '--status',
+      'error',
+      '--version-id',
+      'b64aec75-81c4-4146-964d-8ff456bbe726',
+    ];
+
+    for (const output of ['4.120.1', 'wrangler 4.120.1', 'wrangler 5.0.0']) {
+      expect(normalizeWranglerVersionOutput(output)).toBe(output);
+      expect(
+        buildWranglerTailArgs('simple', 'trace-production', 'b64aec75-81c4-4146-964d-8ff456bbe726'),
+      ).toEqual(expected);
+    }
+    expect(safeWranglerVersionDiagnostic('\u001b[31m')).toBe('UNAVAILABLE');
+  });
+
   it('builds the simple explicit Worker/version tail without config or env', () => {
     expect(
       buildWranglerTailArgs('simple', 'trace-production', 'b64aec75-81c4-4146-964d-8ff456bbe726'),
@@ -177,6 +232,42 @@ describe('production tail observability harness', () => {
     expect(smoke.indexOf("kind: 'simple'")).toBeLessThan(smoke.indexOf('TAIL_SMOKE_SIMPLE=PASS'));
     expect(smoke.indexOf('TAIL_SMOKE_SIMPLE=PASS')).toBeLessThan(
       smoke.indexOf('materializeGeneratedClosedConfig(workerVariables)'),
+    );
+  });
+
+  it('captures diagnostic-only version text before exact-version tail and route acceptance', () => {
+    const workflow = readFileSync(
+      path.join(root, '.github/workflows/validate-production-canary.yml'),
+      'utf8',
+    );
+    const capture = workflow.indexOf('Capture deployed fixture identity before acceptance probes');
+    const secrets = workflow.indexOf('Verify deployed production Worker secret names');
+    const version = workflow.indexOf('Record Wrangler version for bounded tail diagnostics');
+    const tailAndRoutes = workflow.indexOf(
+      'Verify fixture routes and bounded production error tail',
+    );
+    const sideEffects = workflow.indexOf(
+      'Verify fixture transition side effects after acceptance probes',
+    );
+    const rollback = workflow.indexOf('Inspect and safely roll back a failed fixture transition');
+
+    expect(capture).toBeGreaterThanOrEqual(0);
+    expect(capture).toBeLessThan(secrets);
+    expect(secrets).toBeLessThan(version);
+    expect(version).toBeLessThan(tailAndRoutes);
+    expect(tailAndRoutes).toBeLessThan(sideEffects);
+    expect(sideEffects).toBeLessThan(rollback);
+    expect(workflow).toContain(
+      'pnpm exec wrangler --version | pnpm exec tsx scripts/production-fixture-tail-acceptance.ts normalize-version',
+    );
+    expect(workflow).not.toMatch(/version=.*=~|unexpected format/i);
+    expect(workflow).toContain(
+      'WRANGLER_VERSION: ${{ steps.tail_wrangler_version.outputs.version }}',
+    );
+
+    const ci = readFileSync(path.join(root, '.github/workflows/ci.yml'), 'utf8');
+    expect(ci).toContain(
+      'pnpm exec wrangler --version | pnpm exec tsx scripts/production-fixture-tail-acceptance.ts normalize-version',
     );
   });
 

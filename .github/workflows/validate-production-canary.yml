@@ -365,13 +365,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          version="$(pnpm exec wrangler --version)"
-          if [[ ! "$version" =~ ^wrangler[[:space:]][0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Wrangler version output had an unexpected format." >&2
-            exit 1
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "WRANGLER_VERSION=$version"
+          version="$(pnpm exec wrangler --version | pnpm exec tsx scripts/production-fixture-tail-acceptance.ts normalize-version)"
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+          printf 'WRANGLER_VERSION=%s\n' "$version"
 
       - name: Verify fixture routes and bounded production error tail
         if: ${{ inputs.mode == 'deploy' && inputs.runtime_mode == 'fixture' }}
