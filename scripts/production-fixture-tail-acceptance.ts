@@ -1,5 +1,6 @@
 import {
   runBoundedTailSession,
+  normalizeWranglerVersionOutput,
   sanitizeTailDiagnostic,
   type BoundedTailSessionOptions,
 } from './production-tail-observability.js';
@@ -63,6 +64,25 @@ export async function runProductionFixtureTailAcceptance(options: {
 }
 
 async function main() {
+  if (process.argv[2] === 'normalize-version') {
+    try {
+      let raw = '';
+      process.stdin.setEncoding('utf8');
+      for await (const chunk of process.stdin) {
+        const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+        if (raw.length + text.length > 4_096) {
+          throw new Error('Wrangler version output exceeds the diagnostic size limit.');
+        }
+        raw += text;
+      }
+      process.stdout.write(`${normalizeWranglerVersionOutput(raw)}\n`);
+    } catch {
+      console.error('Wrangler version diagnostic could not be normalized.');
+      process.exitCode = 1;
+    }
+    return;
+  }
+
   const token = process.env.CLOUDFLARE_API_TOKEN ?? '';
   try {
     await runProductionFixtureTailAcceptance({

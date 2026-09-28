@@ -23,6 +23,45 @@ export type TailCommandKind = 'simple' | 'config';
 
 export type TailExit = { code: number | null; signal: NodeJS.Signals | null };
 
+const maxWranglerVersionOutputCharacters = 4_096;
+const maxWranglerVersionLineLength = 160;
+
+export function normalizeWranglerVersionOutput(raw: string) {
+  if (raw.length > maxWranglerVersionOutputCharacters) {
+    throw new Error('Wrangler version output exceeds the diagnostic size limit.');
+  }
+
+  const normalized = raw.replace(/\r\n/g, '\n');
+  if (
+    Array.from(normalized).some((character) => {
+      const codePoint = character.codePointAt(0) ?? 0;
+      return (codePoint <= 0x1f && codePoint !== 0x0a) || (codePoint >= 0x7f && codePoint <= 0x9f);
+    })
+  ) {
+    throw new Error('Wrangler version output contains control characters.');
+  }
+
+  const line = (normalized.trim().split('\n', 1)[0] ?? '').trim();
+  if (!line) throw new Error('Wrangler version output is empty.');
+  if (line.length > maxWranglerVersionLineLength) {
+    throw new Error('Wrangler version line exceeds the diagnostic size limit.');
+  }
+  if (!/^[\x20-\x7E]+$/.test(line)) {
+    throw new Error('Wrangler version line is not safe printable text.');
+  }
+
+  return line;
+}
+
+export function safeWranglerVersionDiagnostic(raw: string | undefined) {
+  if (raw === undefined) return 'NOT_RECORDED';
+  try {
+    return normalizeWranglerVersionOutput(raw);
+  } catch {
+    return 'UNAVAILABLE';
+  }
+}
+
 export function buildWranglerTailArgs(
   kind: TailCommandKind,
   workerName: string,
@@ -237,6 +276,7 @@ export type BoundedTailSessionOptions = {
 export async function runBoundedTailSession(options: BoundedTailSessionOptions) {
   const fetchImplementation = options.fetchImplementation ?? fetch;
   const spawnImplementation = options.spawnImplementation ?? spawnProcess;
+  const wranglerVersion = safeWranglerVersionDiagnostic(process.env.WRANGLER_VERSION);
   const baseTemp = options.tempDirectory ?? process.env.RUNNER_TEMP ?? os.tmpdir();
   const privateDirectory = mkdtempSync(path.join(baseTemp, 'trace-production-tail-'));
   chmodSync(privateDirectory, 0o700);
@@ -244,7 +284,7 @@ export async function runBoundedTailSession(options: BoundedTailSessionOptions) 
   const stderrPath = path.join(privateDirectory, 'stderr.txt');
   const exitPath = path.join(privateDirectory, 'exit.txt');
   const versionPath = path.join(privateDirectory, 'wrangler-version.txt');
-  writeFileSync(versionPath, `${process.env.WRANGLER_VERSION ?? 'NOT_RECORDED'}\n`, {
+  writeFileSync(versionPath, `${wranglerVersion}\n`, {
     encoding: 'utf8',
     mode: 0o600,
     flag: 'wx',
@@ -284,7 +324,7 @@ export async function runBoundedTailSession(options: BoundedTailSessionOptions) 
       options.token,
       8 * 1024,
     );
-    console.error(`WRANGLER_VERSION=${process.env.WRANGLER_VERSION ?? 'NOT_RECORDED'}`);
+    console.error(`WRANGLER_VERSION=${wranglerVersion}`);
     console.error(`TAIL_FAILURE_CLASS=${failureClass}`);
     console.error(`TAIL_EXIT_CODE=${exit.code ?? 'none'}`);
     console.error(`TAIL_EXIT_SIGNAL=${exit.signal ?? 'none'}`);

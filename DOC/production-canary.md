@@ -843,3 +843,30 @@ App-state check was not reached; the predeploy state check passed and the
 workflow performed no GitHub mutation. CF4.18E is **FAIL**: the single
 authorized retry was consumed, the closed Worker was restored, and no further
 retry is authorized by this phase.
+
+### CF4.18E.3 Wrangler version capture repair — no deployment
+
+Run `36404357739` was confirmed to stop at the Wrangler diagnostic-version
+matcher after deployment identity and Worker secret-name checks had passed.
+The locked Wrangler emitted bare `4.120.1`, while the workflow incorrectly
+required a `wrangler ` prefix. Tail startup and all route/post-probe checks
+were skipped; the automatic rollback restored the closed version described
+above.
+
+The production workflow now normalizes one bounded line of safe version text
+without requiring a prefix or exact semver shape. The version remains
+diagnostic-only; tail construction is still pinned to `trace-production` and
+the captured Worker version ID, with no generated config or `--env`. Focused
+local coverage accepts `4.120.1`, prefixed versions, and compatible suffixes,
+and rejects empty, control-bearing, or oversized output. CI now includes a
+Linux step that executes the actual installed-Wrangler capture pipeline.
+Existing readiness ordering, stderr sanitization/reporting, and automatic
+rollback remain covered.
+
+Local focused suites passed (49 tests), the exact Wrangler capture returned
+`4.120.1`, and `pnpm cf:build` passed. The local `pnpm check` reached its CLI
+unit tests after formatting, lint, and typecheck passed; two CLI tests failed
+locally (Windows timeout and missing login fixture). Pull-request Linux CI/E2E
+is the final quality gate. No production deployment, GitHub mutation, Queue
+message, D1 mutation, or staging change occurred. CF4.18E remains **FAIL**;
+no retry was dispatched or authorized here.

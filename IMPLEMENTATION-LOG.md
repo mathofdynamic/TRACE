@@ -1435,3 +1435,31 @@
   result remains the latest read-only state evidence; the postdeploy state
   workflow did not run. CF4.18E result: FAIL. The single authorized retry is
   consumed; this phase authorizes no further retry.
+
+### Phase CF4.18E.3 - Wrangler version capture repair (no deployment)
+
+- Run `36404357739` was inspected through the failed step and skipped-step
+  list. Deployment identity capture and Worker secret-name verification had
+  passed. The bare output `4.120.1` failed only because the matcher required
+  the `wrangler ` prefix. Tail startup, route probes, and post-probe checks
+  were skipped; automatic rollback completed as documented above.
+- Added bounded `normalizeWranglerVersionOutput` handling for CRLF, safe
+  printable text, control characters, and output length. It accepts bare or
+  prefixed version text without semver/prefix policy. The workflow records
+  only this sanitized value; the exact Worker/version tail command does not
+  consume or branch on it. The tail's diagnostic fallback also prevents an
+  unsafe diagnostic environment value from being logged.
+- Added regression coverage for bare/prefixed/future-compatible output,
+  CRLF, empty/control/oversized input, diagnostic-only behavior, deployment
+  and tail ordering, readiness before routes, diagnostic preservation, and
+  the unchanged rollback guard. The production workflow keeps the simple
+  exact-version form without `--config` or `--env production`.
+- Focused observability, fixture-tail, and transition suites passed (49 tests).
+  The exact installed-CLI capture pipeline returned and accepted `4.120.1`.
+  `pnpm cf:build` and `git diff --check` passed. `pnpm check` passed formatting,
+  lint, and workspace typecheck; its unit stage reported a Windows timeout in
+  the CLI credential-storage test and a missing login fixture in a CLI sync
+  test. Linux CI/E2E remains the merge gate.
+- No production deployment, Worker/version change, GitHub mutation, Queue
+  message, D1 mutation, or staging change occurred. CF4.18E remains failed;
+  this remediation does not authorize or dispatch another retry.
