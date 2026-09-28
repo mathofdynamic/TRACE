@@ -9,7 +9,11 @@ import {
   parseProductionApplicationCountsResult,
 } from './production-canary-d1.js';
 import { productionGitHubRuntimeVariableSources } from './production-canary-runtime-config.js';
-import { runBoundedTailSession, type TailCommandKind } from './production-tail-observability.js';
+import {
+  classifyTailFailure,
+  runBoundedTailSession,
+  type TailCommandKind,
+} from './production-tail-observability.js';
 
 export const productionTailSmokeBaseline = {
   accountId: 'c5d6cf110905c91fc3eed1abaf8236a2',
@@ -350,16 +354,7 @@ function materializeGeneratedClosedConfig(variables: Map<string | undefined, str
     '--write-config',
     'apps/web/.trace-cache/production-canary/wrangler.json',
   ];
-  execFileSync(executable, args, {
-    cwd: repositoryRoot,
-    env: sourceEnvironment,
-    encoding: 'utf8',
-    stdio: 'inherit',
-    shell: process.platform === 'win32',
-    timeout: 30_000,
-    windowsHide: true,
-  });
-  return path.join(
+  const configPath = path.join(
     repositoryRoot,
     'apps',
     'web',
@@ -367,6 +362,22 @@ function materializeGeneratedClosedConfig(variables: Map<string | undefined, str
     'production-canary',
     'wrangler.json',
   );
+  rmSync(configPath, { force: true });
+  try {
+    execFileSync(executable, args, {
+      cwd: repositoryRoot,
+      env: sourceEnvironment,
+      encoding: 'utf8',
+      stdio: 'inherit',
+      shell: process.platform === 'win32',
+      timeout: 30_000,
+      windowsHide: true,
+    });
+    return configPath;
+  } catch (error) {
+    rmSync(configPath, { force: true });
+    throw error;
+  }
 }
 
 function runLocalCloudflareBuild() {
@@ -456,8 +467,14 @@ async function main() {
     console.log('TAIL_SMOKE_CONFIG=PASS');
     console.log('TAIL_SMOKE=PASS');
   } catch (error) {
-    console.error('TAIL_SMOKE=FAILED');
-    console.error(error instanceof Error ? error.message : 'Production tail smoke failed.');
+    const message = error instanceof Error ? error.message : 'Production tail smoke failed.';
+    const tailFailure =
+      /^(AUTHORIZATION_FAILURE|WORKER_TARGET_FAILURE|CONFIGURATION_FAILURE|NETWORK_FAILURE|WRANGLER_FAILURE|UNKNOWN_FAILURE):/.exec(
+        message,
+      )?.[1];
+    const classification = tailFailure ?? classifyTailFailure(message, { code: 0, signal: null });
+    console.error(`TAIL_SMOKE=${classification}`);
+    console.error(message);
     process.exitCode = 1;
   } finally {
     if (configPath) {

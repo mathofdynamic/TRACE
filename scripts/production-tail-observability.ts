@@ -32,7 +32,9 @@ export function buildWranglerTailArgs(
   if (!/^[a-z0-9][a-z0-9-]{2,62}$/.test(workerName)) {
     throw new Error('Tail Worker name is invalid.');
   }
-  if (!/^[0-9a-f-]{36}$/i.test(versionId)) throw new Error('Tail version ID is invalid.');
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(versionId)) {
+    throw new Error('Tail version ID is invalid.');
+  }
   const args = ['exec', 'wrangler', 'tail', workerName];
   if (kind === 'config') {
     if (!configPath) throw new Error('Config tail requires a generated Wrangler config path.');

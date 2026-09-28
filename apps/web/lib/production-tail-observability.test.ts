@@ -61,7 +61,12 @@ describe('production tail observability harness', () => {
       'version ID',
     );
     expect(() =>
-      buildWranglerTailArgs('simple', 'trace-production', 'a'.repeat(36), 'config.json'),
+      buildWranglerTailArgs(
+        'simple',
+        'trace-production',
+        'b64aec75-81c4-4146-964d-8ff456bbe726',
+        'config.json',
+      ),
     ).toThrow('must not receive');
   });
 
