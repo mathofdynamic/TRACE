@@ -1346,3 +1346,24 @@
   write, external GitHub mutation, or staging operation occurred. The
   fixture transition acceptance is FAIL; no retry or second deployment was
   dispatched.
+
+### Phase CF4.18E.1 - production tail observability diagnosis (in progress)
+
+- Date: 2026-09-28. The failed fixture run's bounded tail subprocess exited
+  before its five-second liveness check. The workflow's exit trap removed its
+  captured stderr before reporting it, so the tail failure class is unknown;
+  no cause is inferred from the generic step error. The route matrix did not
+  run, and the recorded automatic rollback restored the closed Worker.
+- Added a manual-only, feature-ref-restricted diagnostic workflow and a
+  bounded tail harness. It first verifies the recorded rollback deployment,
+  closed runtime bindings, production D1/Queue identities, empty application
+  tables, zero Queue backlog, health, and closed OAuth start. The first tail
+  uses an explicit Worker/version without generated config or `--env`; only
+  after readiness does it request `/api/health`. It then builds the exact
+  closed generated Wrangler config and tests the former config/`--env`
+  invocation against the same version.
+- The harness stores stdout/stderr only in a private runner-temp directory,
+  reports a bounded sanitized diagnostic before cleanup on failure, and
+  removes temporary files. It neither deploys nor sends Queue messages. Live
+  smoke result, workflow registration, and fixture-workflow repair remain
+  pending; production must remain closed until a later authorized retry.
