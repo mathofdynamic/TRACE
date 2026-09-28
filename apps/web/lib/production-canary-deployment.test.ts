@@ -378,7 +378,7 @@ describe('production canary deployment workflow', () => {
     expect(workflow).toContain('--runtime-mode "$RUNTIME_MODE"');
     expect(workflow).toContain('scripts/verify-production-fixture-transition.ts before');
     expect(workflow).toContain('scripts/verify-production-fixture-transition.ts after');
-    expect(workflow).toContain('scripts/verify-production-fixture-routes.ts');
+    expect(workflow).toContain('scripts/production-fixture-tail-acceptance.ts');
     expect(workflow).toContain('scripts/verify-production-github-app-state.ts');
     expect(workflow).toContain('scripts/verify-production-fixture-transition.ts rollback');
     expect(workflow).toContain(
@@ -392,6 +392,8 @@ describe('production canary deployment workflow', () => {
     );
     expect(transitionScript).toContain("'wrangler'");
     expect(transitionScript).toContain('productionFixtureTransitionBaseline.workerVersionId');
+    expect(transitionScript).toContain('formatFixtureDeploymentOutputs(result)');
+    expect(transitionScript).toContain('appendFileSync(outputPath');
     expect(workflow).not.toMatch(/^ {6}CLOUDFLARE_API_TOKEN:/m);
     expect(workflow).toContain('scripts/verify-production-github-app.ts');
     expect(workflow).toContain('scripts/production-canary-secrets.ts --output "$secrets_file"');
@@ -415,5 +417,59 @@ describe('production canary deployment workflow', () => {
       ?.split('\n      - name: ')[0];
     expect(deployStep).toContain('CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}');
     expect(productionManifest.runtime.canaryMode).toBe('closed');
+  });
+
+  it('captures exact fixture deployment identity before secrets/routes and pins a ready simple tail', () => {
+    const workflowPath = fileURLToPath(
+      new URL('../../../.github/workflows/validate-production-canary.yml', import.meta.url),
+    );
+    const workflow = readFileSync(workflowPath, 'utf8');
+    const deploy = workflow.indexOf('- name: Deploy production canary');
+    const capture = workflow.indexOf(
+      '- name: Capture deployed fixture identity before acceptance probes',
+    );
+    const secrets = workflow.indexOf('- name: Verify deployed production Worker secret names');
+    const wranglerVersion = workflow.indexOf(
+      '- name: Record Wrangler version for bounded tail diagnostics',
+    );
+    const tail = workflow.indexOf(
+      '- name: Verify fixture routes and bounded production error tail',
+    );
+    const postProbes = workflow.indexOf(
+      '- name: Verify fixture transition side effects after acceptance probes',
+    );
+
+    expect(deploy).toBeGreaterThanOrEqual(0);
+    expect(capture).toBeGreaterThan(deploy);
+    expect(secrets).toBeGreaterThan(capture);
+    expect(wranglerVersion).toBeGreaterThan(secrets);
+    expect(tail).toBeGreaterThan(secrets);
+    expect(tail).toBeGreaterThan(wranglerVersion);
+    expect(postProbes).toBeGreaterThan(tail);
+    expect(workflow).toContain('after --capture-deployment-outputs');
+    expect(workflow).toContain(
+      'WORKER_VERSION_ID: ${{ steps.capture_fixture_identity.outputs.worker_version_id }}',
+    );
+    expect(workflow).toContain(
+      'WRANGLER_VERSION: ${{ steps.tail_wrangler_version.outputs.version }}',
+    );
+    expect(workflow).toContain('pnpm exec wrangler --version');
+    expect(workflow).toContain('run: pnpm exec tsx scripts/production-fixture-tail-acceptance.ts');
+    const obsoleteConfigTail = ['wrangler tail trace-production \\', '--config'].join('\n');
+    expect(workflow).not.toContain(obsoleteConfigTail);
+
+    const tailScript = readFileSync(
+      fileURLToPath(
+        new URL('../../../scripts/production-fixture-tail-acceptance.ts', import.meta.url),
+      ),
+      'utf8',
+    );
+    expect(tailScript).toContain("kind: 'simple'");
+    expect(tailScript).toContain('workerName: productionTailTarget.workerName');
+    expect(tailScript).toContain('versionId: options.workerVersionId');
+    expect(tailScript).toContain('onReady: async () =>');
+    expect(tailScript).toContain('verifyRoutes(options.oauthClientId)');
+    expect(tailScript).not.toContain('--config');
+    expect(tailScript).not.toContain('--env');
   });
 });

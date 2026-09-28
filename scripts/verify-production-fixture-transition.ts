@@ -1,3 +1,4 @@
+import { appendFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,7 +18,7 @@ export const productionFixtureTransitionBaseline = {
   accountId: 'c5d6cf110905c91fc3eed1abaf8236a2',
   workerName: 'trace-production',
   workerVersionId: 'b64aec75-81c4-4146-964d-8ff456bbe726',
-  deploymentId: '868cc8d4-ce0f-42d3-b1e2-a9f9c30dc05f',
+  deploymentId: '473864fd-83b8-42ac-800d-2ea173c9649e',
   sourceSha: '12c0ea321d235e621bccddde4cf575bab62aba06',
   d1Id: '7a566f2e-da27-46e7-8c3f-271e5566f225',
   queueName: 'trace-production-jobs',
@@ -179,13 +180,6 @@ function assertExpectedDeployment(
       versionId !== productionFixtureTransitionBaseline.workerVersionId
     ) {
       fail('The expected closed production deployment is no longer active.');
-    }
-    const sourceAnnotation = deployment.annotations?.['workers/message'];
-    if (
-      sourceAnnotation !==
-      `TRACE production canary ${productionFixtureTransitionBaseline.sourceSha}`
-    ) {
-      fail('The active rollback target source annotation does not match the approved baseline.');
     }
   } else if (phase === 'rollback') {
     if (versionId !== productionFixtureTransitionBaseline.workerVersionId) {
@@ -636,20 +630,53 @@ export async function verifyProductionFixtureTransitionState(options: {
 
 type TransitionCommand = TransitionPhase | 'rollback-if-needed';
 
-function parseArguments(arguments_: string[]): TransitionCommand {
+export function formatFixtureDeploymentOutputs(result: {
+  versionId: string;
+  deploymentId: string;
+  trafficPercentage: number;
+  sourceSha: string | undefined;
+}) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(result.versionId)) {
+    fail('Worker version output is not a valid version ID.');
+  }
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(result.deploymentId)
+  ) {
+    fail('Deployment output is not a valid deployment ID.');
+  }
+  if (result.trafficPercentage !== 100) fail('Worker traffic output must be 100 percent.');
+  if (!result.sourceSha) fail('Worker source output SHA is missing.');
+  const sourceSha = normalizeReviewedSourceSha(result.sourceSha, 'Worker source output SHA');
+  return [
+    `worker_version_id=${result.versionId}`,
+    `deployment_id=${result.deploymentId}`,
+    `traffic_percent=${result.trafficPercentage}`,
+    `source_sha=${sourceSha}`,
+    '',
+  ].join('\n');
+}
+
+function parseArguments(arguments_: string[]): {
+  command: TransitionCommand;
+  captureDeploymentOutputs: boolean;
+} {
   const phase = arguments_[0];
   if (
-    arguments_.length !== 1 ||
+    (arguments_.length !== 1 && arguments_.length !== 2) ||
     (phase !== 'before' && phase !== 'after' && phase !== 'rollback-if-needed')
   ) {
     fail('Usage: verify-production-fixture-transition.ts before|after|rollback-if-needed.');
   }
-  return phase;
+  const captureDeploymentOutputs = arguments_[1] === '--capture-deployment-outputs';
+  if (arguments_.length === 2 && (phase !== 'after' || !captureDeploymentOutputs)) {
+    fail('Only the after phase may capture deployment outputs.');
+  }
+  return { command: phase, captureDeploymentOutputs };
 }
 
 async function main() {
   try {
-    const phase = parseArguments(process.argv.slice(2));
+    const { command: phase, captureDeploymentOutputs } = parseArguments(process.argv.slice(2));
     if (phase === 'rollback-if-needed') {
       await rollbackFixtureDeploymentIfNeeded({
         expectedSourceSha: process.env.DEPLOY_SHA ?? '',
@@ -662,6 +689,11 @@ async function main() {
       environment: process.env,
       expectedSourceSha: process.env.DEPLOY_SHA,
     });
+    if (captureDeploymentOutputs) {
+      const outputPath = process.env.GITHUB_OUTPUT;
+      if (!outputPath) fail('GitHub Actions output file is unavailable.');
+      appendFileSync(outputPath, formatFixtureDeploymentOutputs(result), { encoding: 'utf8' });
+    }
     console.log(`TRANSITION_PHASE=${result.phase}`);
     console.log(`WORKER_DEPLOYMENT_ID=${result.deploymentId}`);
     console.log(`WORKER_VERSION_ID=${result.versionId}`);

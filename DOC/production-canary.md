@@ -760,3 +760,41 @@ After rollback, `/api/health` returned `200` and `/api/auth/github` returned
 App-state check, and runtime-error observation did not complete. No Queue
 message, D1 write, webhook/App/OAuth mutation, or staging operation was
 performed. CF4.18E did not pass; no second deployment was dispatched.
+
+### CF4.18E.1 tail observability repair — no deployment
+
+The protected smoke workflow run `36396694888` checked out feature SHA
+`6e8fdd73b1258fbafd362b6305dca0c2b6a9092c` and verified the restored closed
+baseline: rollback deployment `473864fd-83b8-42ac-800d-2ea173c9649e`, Worker
+version `b64aec75-81c4-4146-964d-8ff456bbe726` at 100%, D1
+`7a566f2e-da27-46e7-8c3f-271e5566f225`, Queue `trace-production-jobs`, no
+Hyperdrive, no fixture vars, 22/22 application tables empty, backlog zero,
+health `200`, and OAuth start `503` with `no-store`.
+
+Wrangler `4.120.1` successfully established a new error-filtered tail using
+the simple explicit Worker/version form, without generated config or `--env`.
+The single health request during that tail returned `200`; the tail remained
+active for its bounded session and observed zero error events. No fixture route
+matrix ran. The optional comparison using the former config/`--env` form did
+not start: the diagnostic unnecessarily ran `pnpm cf:build` without the
+preceding workspace build, and OpenNext failed to resolve `@trace/db` and
+`@trace/auth`. This was a diagnostic build-precondition failure, not evidence
+of tail API or token-permission failure. The old config/`--env` tail form
+therefore remains unverified, and the cause of the earlier five-second tail
+startup failure remains unknown.
+
+The follow-up removes that unrelated build before config materialization. The
+fixture acceptance workflow uses the proven simple tail form pinned to the
+exact newly deployed Worker version. It captures and validates version ID,
+deployment ID, 100% traffic, source SHA, fixture mode, allowlist, and bindings
+immediately after deployment and before route probes. The route matrix is
+invoked only after a new tail is observed active and stable; stderr is retained,
+sanitized, reported before cleanup, and never uploaded. The Wrangler version,
+tail stdout/stderr, and exit status are captured under the temporary directory.
+Automatic rollback remains constrained to the exact attempted fixture release
+and the captured closed version.
+
+No Worker was deployed or rolled back in CF4.18E.1. Production remains on the
+closed rollback deployment/version above; D1, Queue, GitHub settings, and
+staging were not changed. CF4.18E remains failed pending a separate controlled
+fixture retry; this phase does not authorize that retry.

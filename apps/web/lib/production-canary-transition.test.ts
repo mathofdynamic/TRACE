@@ -3,6 +3,7 @@ import { productionApplicationTables } from '../../../scripts/production-canary-
 import {
   assertWranglerProductionConsumer,
   classifyFixtureDeploymentForRollback,
+  formatFixtureDeploymentOutputs,
   productionFixtureTransitionBaseline as baseline,
   verifyProductionFixtureTransitionState,
 } from '../../../scripts/verify-production-fixture-transition.js';
@@ -111,6 +112,7 @@ function fakeCloudflare(
     backlog?: number;
     counts?: Record<string, number>;
     deploymentId?: string;
+    deploymentMessage?: string;
     traffic?: number;
     workerBindings?: ReturnType<typeof bindings>;
   } = {},
@@ -130,6 +132,9 @@ function fakeCloudflare(
         deployments: [
           {
             ...deployment(phase, sourceSha),
+            ...(overrides.deploymentMessage
+              ? { annotations: { 'workers/message': overrides.deploymentMessage } }
+              : {}),
             ...(overrides.traffic === undefined
               ? {}
               : {
@@ -251,6 +256,51 @@ describe('production fixture transition state gate', () => {
     expect(queryBody.sql).toMatch(/^SELECT 1 AS ok,/);
     expect(queryBody.sql).not.toMatch(/\b(INSERT|UPDATE|DELETE|DROP|ALTER|REPLACE)\b/i);
     expect(queryBody.params).toEqual([]);
+  });
+
+  it('accepts the rollback-created closed deployment without assuming its original source annotation', async () => {
+    const fake = fakeCloudflare('before', baseline.sourceSha, {
+      deploymentMessage: 'Rollback failed TRACE fixture-canary acceptance',
+    });
+    const result = await verifyProductionFixtureTransitionState({
+      phase: 'before',
+      environment: commonEnvironment,
+      fetchImplementation: fake.fetchImplementation,
+      consumerOutput: consumerList,
+    });
+
+    expect(result).toMatchObject({
+      deploymentId: '473864fd-83b8-42ac-800d-2ea173c9649e',
+      versionId: baseline.workerVersionId,
+      canaryMode: 'closed',
+    });
+  });
+
+  it('formats exact deployed identity outputs and rejects non-100% traffic', () => {
+    expect(
+      formatFixtureDeploymentOutputs({
+        versionId: 'fc4be1e1-699b-4a3b-bd18-8c1757aab277',
+        deploymentId: 'f3d80c42-337b-49e6-b36c-40b8bd0b0165',
+        trafficPercentage: 100,
+        sourceSha: 'a'.repeat(40),
+      }),
+    ).toBe(
+      [
+        'worker_version_id=fc4be1e1-699b-4a3b-bd18-8c1757aab277',
+        'deployment_id=f3d80c42-337b-49e6-b36c-40b8bd0b0165',
+        'traffic_percent=100',
+        `source_sha=${'a'.repeat(40)}`,
+        '',
+      ].join('\n'),
+    );
+    expect(() =>
+      formatFixtureDeploymentOutputs({
+        versionId: 'fc4be1e1-699b-4a3b-bd18-8c1757aab277',
+        deploymentId: 'f3d80c42-337b-49e6-b36c-40b8bd0b0165',
+        trafficPercentage: 50,
+        sourceSha: 'a'.repeat(40),
+      }),
+    ).toThrow('100 percent');
   });
 
   it('normalizes uppercase reviewed SHAs for post-deployment evidence', async () => {

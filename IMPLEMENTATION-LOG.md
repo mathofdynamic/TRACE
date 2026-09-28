@@ -1347,7 +1347,7 @@
   fixture transition acceptance is FAIL; no retry or second deployment was
   dispatched.
 
-### Phase CF4.18E.1 - production tail observability diagnosis (in progress)
+### Phase CF4.18E.1 - initial tail diagnostic implementation
 
 - Date: 2026-09-28. The failed fixture run's bounded tail subprocess exited
   before its five-second liveness check. The workflow's exit trap removed its
@@ -1364,6 +1364,38 @@
   invocation against the same version.
 - The harness stores stdout/stderr only in a private runner-temp directory,
   reports a bounded sanitized diagnostic before cleanup on failure, and
-  removes temporary files. It neither deploys nor sends Queue messages. Live
-  smoke result, workflow registration, and fixture-workflow repair remain
-  pending; production must remain closed until a later authorized retry.
+  removes temporary files. The live result and follow-up corrections are
+  recorded in the next CF4.18E.1 entry below.
+
+### Phase CF4.18E.1 - live closed-tail proof and fixture harness repair (no deployment)
+
+- Date: 2026-09-28. PR #24 merged the feature-ref-restricted, read-only tail
+  diagnostic; PR #25 registered the same workflow-only file on `main`.
+  Feature SHA tested: `6e8fdd73b1258fbafd362b6305dca0c2b6a9092c`. Smoke run
+  `36396694888` verified rollback deployment
+  `473864fd-83b8-42ac-800d-2ea173c9649e`, version
+  `b64aec75-81c4-4146-964d-8ff456bbe726` at 100%, closed mode, dedicated D1
+  and Queue, absent Hyperdrive/fixture vars, 22/22 empty tables, backlog zero,
+  health `200`, and OAuth-start `503 no-store`.
+- Wrangler `4.120.1` established the simple explicit Worker/version error
+  tail. Health returned `200` during the bounded session; no error events were
+  observed. The config/`--env` comparison was not reached because the smoke
+  script unnecessarily ran `pnpm cf:build` without first building workspace
+  packages; OpenNext reported unresolved `@trace/db` and `@trace/auth` modules.
+  This does not establish why the prior config/`--env` tail exited, nor any
+  Cloudflare authorization defect. The simple pinned-version form is proven;
+  the previous invocation form remains unverified.
+- The fixture acceptance step now uses the proven simple tail,
+  starts route probes only from its readiness callback, preserves and reports
+  bounded sanitized stderr after pipe closure, and captures exact Worker
+  version/deployment/source/traffic plus fixture bindings before probes. The
+  smoke comparison no longer runs the unrelated Cloudflare build. The
+  transition preflight recognizes only the current rollback-created closed
+  deployment/version as its retry baseline. Wrangler version, tail stdout,
+  stderr, and exit code are saved in the private runner-temp directory and
+  diagnostics are printed before cleanup. Automatic rollback safeguards remain
+  in place.
+- No fixture route matrix, Worker deployment, rollback, Queue send, D1 write,
+  GitHub mutation, or staging operation occurred in this phase. Follow-up PR
+  changes implement only the retry harness; CF4.18E remains failed pending a
+  separate controlled retry, and this phase does not authorize it.
