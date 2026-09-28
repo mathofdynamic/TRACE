@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { EventEmitter } from 'node:events';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -8,6 +9,7 @@ import {
   reportBeforeCleanup,
   runOnlyAfterTailReady,
   sanitizeTailDiagnostic,
+  waitForChildClose,
 } from '../../../scripts/production-tail-observability.js';
 
 const root = path.resolve(fileURLToPath(new URL('../../../', import.meta.url)));
@@ -133,6 +135,22 @@ describe('production tail observability harness', () => {
     expect(order).toEqual(['stderr-reported', 'temporary-files-cleaned']);
   });
 
+  it('waits for child close after exit so stdout and stderr pipes can drain', async () => {
+    const child = new EventEmitter();
+    let completed = false;
+    const result = waitForChildClose(child as never).then((value) => {
+      completed = true;
+      return value;
+    });
+
+    child.emit('exit', 1, null);
+    await Promise.resolve();
+    expect(completed).toBe(false);
+
+    child.emit('close', 1, null);
+    await expect(result).resolves.toEqual({ code: 1, signal: null });
+  });
+
   it('captures stdout, stderr, exit status, and Wrangler version privately under runner temp', () => {
     const harness = readFileSync(
       path.join(root, 'scripts/production-tail-observability.ts'),
@@ -154,6 +172,10 @@ describe('production tail observability harness', () => {
     );
     expect(workflow).toContain('workflow_dispatch:');
     expect(workflow).toContain("github.ref == 'refs/heads/feat/cloudflare-native-runtime'");
+    expect(workflow).toContain('git merge-base --is-ancestor "$approved_sha" HEAD');
+    expect(workflow).toContain('ref: feat/cloudflare-native-runtime');
+    expect(workflow).toContain('ref: ${{ steps.verify_sha.outputs.sha }}');
+    expect(workflow).toContain('expected_sha="${EXPECTED_SHA,,}"');
     expect(workflow).toContain('environment: production-canary');
     expect(workflow).toContain('permissions:\n  contents: read');
     expect(workflow).toContain('secrets.CLOUDFLARE_API_TOKEN');

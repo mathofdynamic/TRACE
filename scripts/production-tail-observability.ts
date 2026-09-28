@@ -177,10 +177,9 @@ function delay(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
-function exitPromise(child: ChildProcess) {
+export function waitForChildClose(child: Pick<ChildProcess, 'once'>) {
   return new Promise<TailExit>((resolve) => {
-    child.once('exit', (code, signal) => resolve({ code, signal }));
-    child.once('error', () => resolve({ code: 1, signal: null }));
+    child.once('close', (code, signal) => resolve({ code, signal }));
   });
 }
 
@@ -334,7 +333,7 @@ export async function runBoundedTailSession(options: BoundedTailSessionOptions) 
       childSpawnError = error;
       stderrStream.write(`${error.name}: ${error.message}\n`);
     });
-    exited = exitPromise(child);
+    exited = waitForChildClose(child);
     void exited.then((result) => {
       exit = result;
     });
