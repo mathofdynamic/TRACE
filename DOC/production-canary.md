@@ -798,3 +798,48 @@ No Worker was deployed or rolled back in CF4.18E.1. Production remains on the
 closed rollback deployment/version above; D1, Queue, GitHub settings, and
 staging were not changed. CF4.18E remains failed pending a separate controlled
 fixture retry; this phase does not authorize that retry.
+
+### CF4.18E.2 single authorized fixture-mode retry — failed and rolled back
+
+Date: 2026-09-28. The only authorized retry used feature SHA
+`391657c5f9c929ace8712dfe8cfa381166d822ba` in workflow run
+`36404357739` (job `108869418439`). Immediately before deployment, protected
+App-state run `36403430839` verified App ID `5082884`, App name
+`TRACE Production Integration`, zero installations, and
+`WEBHOOK_CONFIG_STATE=ABSENT_NOT_FOUND` with no configured URL. The GET-only
+Queue check `36403438289` reported `backlog_count=0` at
+`2026-09-28T09:25:59.753Z`. The deployment workflow rechecked the closed
+baseline, 22/22 empty production application tables, zero Queue backlog,
+production D1/Queue identities, absent Hyperdrive and fixture variables, and
+the five Worker secret names before deployment.
+
+The exact source deployed successfully as Worker version
+`94b005f1-4e4f-47b7-a1b9-350a504a1267`, deployment
+`029825a6-cd17-4f7f-8f65-c93f35ae6194`, at 100% traffic. The workflow captured
+source SHA `391657c5f9c929ace8712dfe8cfa381166d822ba`, fixture mode, the exact
+allowlist `mathofdynamic/trace-staging-fixture/1378441300`, production D1 and
+Queue identities, absent Hyperdrive, and all five Worker secret names before
+any route probe.
+
+The next step failed on its Wrangler version-output matcher with
+`Wrangler version output had an unexpected format.` The step expected
+`wrangler <version>`, while the locked Wrangler `4.120.1` reports the version
+as `4.120.1`. Consequently the pinned-version tail never started, the route
+matrix was skipped, and no runtime-error count was collected. No fixture route
+request ran.
+
+The workflow's automatic rollback completed. Rollback deployment
+`599ec20b-b90b-4499-af73-21024e8b5e19` restored Worker version
+`b64aec75-81c4-4146-964d-8ff456bbe726` at 100%, with production mode `closed`.
+After rollback, health returned HTTP 200 and `/api/auth/github` returned HTTP
+503 with `Cache-Control: no-store`. Read-only D1 checks again found 22/22
+application tables empty and zero `PRAGMA foreign_key_check` violations; the
+queries reported zero rows written. GET-only Queue run `36405048138` confirmed
+backlog zero at `2026-09-28T09:41:07.038Z`.
+
+No Queue message was sent, no route probe or GitHub mutation occurred, and no
+D1 write, migration, restore, or staging operation occurred. The postdeploy
+App-state check was not reached; the predeploy state check passed and the
+workflow performed no GitHub mutation. CF4.18E is **FAIL**: the single
+authorized retry was consumed, the closed Worker was restored, and no further
+retry is authorized by this phase.
