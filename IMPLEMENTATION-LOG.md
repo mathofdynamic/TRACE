@@ -1664,7 +1664,21 @@
   credentials, or internal row identifiers. Queue observation remains GET-only;
   D1 SQL remains limited to `SELECT` and `PRAGMA foreign_key_check`.
 - Focused tests cover exact stage counts, cross-links, invalid profile/audit
-  states, secret-safe output, and read-only query validation. The protected
-  workflow run is pending merge and dispatch. No OAuth retry, App installation,
-  webhook change, production D1 mutation, Queue message, Worker deployment, or
-  staging change occurred.
+  states, secret-safe output, and read-only query validation. `pnpm check`,
+  `pnpm cf:build`, and `git diff --check` passed locally; Linux CI/E2E passed
+  on PR #42. Workflow-only registration PR #43 merged to `main`, and its
+  workflow definition is byte-identical to the feature-ref workflow.
+- The single protected after-onboarding run `36599973760` passed against
+  implementation SHA `fa2cca8b637656490b991544fb06cdbd2bd56c73`. It verified
+  1 user, GitHub account, active session, completed onboarding profile, and
+  exactly one `workspace.profile.completed` audit event linked to the same
+  expected GitHub user, with `organization_id` NULL. The profile and audit
+  timestamps were `2026-09-29T14:24:01Z`; user, account, and session timestamps
+  were `2026-09-29T14:23:52Z`. The profile/audit occurred after OAuth rows and
+  inside the observed 14:12–14:33 UTC window; timestamps alone do not prove
+  causality.
+- All installation/workspace tables and other unrelated application tables
+  were zero, foreign-key violations were zero, Queue backlog was zero, and
+  production health was 200. No OAuth retry, App installation, webhook change,
+  production D1 mutation, Queue message, Worker deployment, or staging change
+  occurred.
