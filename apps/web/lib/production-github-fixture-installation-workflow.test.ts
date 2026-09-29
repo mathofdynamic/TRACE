@@ -49,6 +49,7 @@ describe('production fixture verification workflows', () => {
     expect(d1Workflow).toContain('CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}');
     expect(d1Workflow).toContain('before-oauth');
     expect(d1Workflow).toContain('after-oauth');
+    expect(d1Workflow).toContain('after-onboarding');
     expect(d1Workflow).toContain('after-installation');
     expect(d1Workflow).not.toContain('wrangler deploy');
     expect(d1Workflow).not.toContain('secret put');

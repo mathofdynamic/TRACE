@@ -1648,3 +1648,23 @@
   is GET-only; health is GET-only. Workflow registration and one protected
   read-only run are pending. No OAuth retry, installation, webhook change,
   Worker deployment, D1 mutation, Queue message, or staging change occurred.
+
+### CF4.18F.1C read-only OAuth and onboarding state classification
+
+- Date: 2026-09-29. Added an `after-onboarding` state to the protected
+  production D1 verifier without changing the existing `before-oauth`,
+  `after-oauth`, or `after-installation` expected-count contracts.
+- The new stage requires exactly one expected GitHub OAuth user/account/session,
+  an active linked session, one completed profile with valid usage/execution
+  values, and the single `workspace.profile.completed` audit event linked to
+  that user with `organization_id` NULL. Installation and unrelated business
+  tables remain required to be empty.
+- The read-only report includes safe UTC timestamps and ordering/window
+  indicators. It does not select or emit email, session tokens, OAuth
+  credentials, or internal row identifiers. Queue observation remains GET-only;
+  D1 SQL remains limited to `SELECT` and `PRAGMA foreign_key_check`.
+- Focused tests cover exact stage counts, cross-links, invalid profile/audit
+  states, secret-safe output, and read-only query validation. The protected
+  workflow run is pending merge and dispatch. No OAuth retry, App installation,
+  webhook change, production D1 mutation, Queue message, Worker deployment, or
+  staging change occurred.
