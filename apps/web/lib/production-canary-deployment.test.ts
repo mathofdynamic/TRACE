@@ -472,4 +472,41 @@ describe('production canary deployment workflow', () => {
     expect(tailScript).not.toContain('--config');
     expect(tailScript).not.toContain('--env');
   });
+
+  it('captures a verified closed-or-fixture predecessor and rolls back to that exact version', () => {
+    const workflow = readFileSync(
+      fileURLToPath(
+        new URL('../../../.github/workflows/validate-production-canary.yml', import.meta.url),
+      ),
+      'utf8',
+    );
+    const baseline = workflow.indexOf(
+      '- name: Capture verified production baseline before fixture deployment',
+    );
+    const deploy = workflow.indexOf('- name: Deploy production canary');
+    const transitionScript = readFileSync(
+      fileURLToPath(
+        new URL('../../../scripts/verify-production-fixture-transition.ts', import.meta.url),
+      ),
+      'utf8',
+    );
+
+    expect(baseline).toBeGreaterThanOrEqual(0);
+    expect(baseline).toBeLessThan(deploy);
+    expect(workflow).toContain('before --capture-baseline-outputs');
+    expect(workflow).toContain(
+      'TRACE_BASELINE_WORKER_VERSION_ID: ${{ steps.capture_transition_baseline.outputs.baseline_worker_version_id }}',
+    );
+    expect(workflow).toContain(
+      'TRACE_BASELINE_RUNTIME_MODE: ${{ steps.capture_transition_baseline.outputs.baseline_mode }}',
+    );
+    expect(workflow).toContain(
+      "failure() && inputs.mode == 'deploy' && inputs.runtime_mode == 'fixture' && steps.capture_transition_baseline.outcome == 'success'",
+    );
+    expect(transitionScript).toContain(
+      "previousFixtureVersionId: 'c37568b9-247e-498a-b066-7cb6e97c26bb'",
+    );
+    expect(transitionScript).toContain('runRollback(baseline.versionId)');
+    expect(transitionScript).toContain('formatFixtureBaselineOutputs');
+  });
 });

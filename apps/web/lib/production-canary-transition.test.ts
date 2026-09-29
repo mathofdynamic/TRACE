@@ -3,6 +3,7 @@ import { productionApplicationTables } from '../../../scripts/production-canary-
 import {
   assertWranglerProductionConsumer,
   classifyFixtureDeploymentForRollback,
+  formatFixtureBaselineOutputs,
   formatFixtureDeploymentOutputs,
   productionFixtureTransitionBaseline as baseline,
   rollbackFixtureDeploymentIfNeeded,
@@ -231,12 +232,16 @@ function simulatedRollbackCloudflare(initialDeployment: SimulatedDeploymentState
   return {
     fetchImplementation,
     requests,
-    restoreBaseline(deploymentId: string) {
+    restoreBaseline(
+      deploymentId: string,
+      versionId: string = baseline.workerVersionId,
+      mode: 'closed' | 'fixture' = 'closed',
+    ) {
       activeDeployment = {
         id: deploymentId,
-        versionId: baseline.workerVersionId,
+        versionId,
         message: 'Rollback failed TRACE fixture-canary acceptance',
-        mode: 'closed',
+        mode,
       };
     },
   };
@@ -268,6 +273,15 @@ describe('production fixture transition state gate', () => {
           deploymentMessage: 'Rollback failed TRACE fixture-canary acceptance',
         }),
         expectedSourceSha,
+      ),
+    ).toBe('baseline-active');
+    expect(
+      classifyFixtureDeploymentForRollback(
+        deployment('before', baseline.previousFixtureSourceSha, {
+          activeVersionId: baseline.previousFixtureVersionId,
+        }),
+        expectedSourceSha,
+        baseline.previousFixtureVersionId,
       ),
     ).toBe('baseline-active');
     expect(
@@ -372,6 +386,35 @@ describe('production fixture transition state gate', () => {
     expect(result.sourceSha).toBeUndefined();
   });
 
+  it('accepts the verified active fixture version as a dynamic rollback baseline', async () => {
+    const fake = fakeCloudflare('before', baseline.previousFixtureSourceSha, {
+      deploymentId: '226a32c7-174e-4a75-939f-7a316e34e632',
+      activeVersionId: baseline.previousFixtureVersionId,
+      mode: 'fixture',
+    });
+
+    const result = await verifyProductionFixtureTransitionState({
+      phase: 'before',
+      environment: commonEnvironment,
+      fetchImplementation: fake.fetchImplementation,
+      consumerOutput: consumerList,
+    });
+
+    expect(result).toMatchObject({
+      deploymentId: '226a32c7-174e-4a75-939f-7a316e34e632',
+      versionId: baseline.previousFixtureVersionId,
+      trafficPercentage: 100,
+      baselineActiveVersionId: baseline.previousFixtureVersionId,
+      baselineRuntimeMode: 'fixture',
+      canaryMode: 'fixture',
+      fixtureOwner: 'mathofdynamic',
+      fixtureRepository: 'trace-staging-fixture',
+      fixtureRepositoryId: '1378441300',
+      emptyApplicationTableCount: 22,
+      queueBacklogCount: 0,
+    });
+  });
+
   it('verifies closed bindings and empty state before treating an active baseline version as restored', async () => {
     const fake = fakeCloudflare('before', baseline.sourceSha, {
       deploymentId: '599ec20b-b90b-4499-af73-21024e8b5e19',
@@ -454,6 +497,49 @@ describe('production fixture transition state gate', () => {
     }
   });
 
+  it('restores the previously active fixture version after a failed fixture update', async () => {
+    const expectedSourceSha = 'e'.repeat(40);
+    const fixtureRollbackDeploymentId = '6f7d8432-7f6a-4d44-a448-ccfc0ab7f016';
+    const simulated = simulatedRollbackCloudflare({
+      id: 'failed-fixture-deployment',
+      versionId: 'failed-fixture-version',
+      message: `TRACE production canary ${expectedSourceSha}`,
+      mode: 'fixture',
+    });
+    const rollbackVersionIds: string[] = [];
+
+    const result = await rollbackFixtureDeploymentIfNeeded({
+      expectedSourceSha,
+      expectedBaselineVersionId: baseline.previousFixtureVersionId,
+      expectedBaselineMode: 'fixture',
+      environment: commonEnvironment,
+      fetchImplementation: simulated.fetchImplementation,
+      consumerOutput: consumerList,
+      runRollback(versionId) {
+        rollbackVersionIds.push(versionId);
+        simulated.restoreBaseline(
+          fixtureRollbackDeploymentId,
+          baseline.previousFixtureVersionId,
+          'fixture',
+        );
+      },
+    });
+
+    expect(result).toMatchObject({
+      rollback: 'completed',
+      deploymentId: fixtureRollbackDeploymentId,
+      versionId: baseline.previousFixtureVersionId,
+      trafficPercentage: 100,
+      canaryMode: 'fixture',
+      fixtureOwner: 'mathofdynamic',
+      fixtureRepository: 'trace-staging-fixture',
+      fixtureRepositoryId: '1378441300',
+      emptyApplicationTableCount: 22,
+      queueBacklogCount: 0,
+    });
+    expect(rollbackVersionIds).toEqual([baseline.previousFixtureVersionId]);
+  });
+
   it('formats exact deployed identity outputs and rejects non-100% traffic', () => {
     expect(
       formatFixtureDeploymentOutputs({
@@ -479,6 +565,33 @@ describe('production fixture transition state gate', () => {
         sourceSha: 'a'.repeat(40),
       }),
     ).toThrow('100 percent');
+  });
+
+  it('captures the verified immutable baseline version and runtime mode as workflow outputs', () => {
+    expect(
+      formatFixtureBaselineOutputs({
+        versionId: baseline.previousFixtureVersionId,
+        deploymentId: '226a32c7-174e-4a75-939f-7a316e34e632',
+        trafficPercentage: 100,
+        runtimeMode: 'fixture',
+      }),
+    ).toBe(
+      [
+        `baseline_worker_version_id=${baseline.previousFixtureVersionId}`,
+        'baseline_deployment_id=226a32c7-174e-4a75-939f-7a316e34e632',
+        'baseline_traffic_percent=100',
+        'baseline_mode=fixture',
+        '',
+      ].join('\n'),
+    );
+    expect(() =>
+      formatFixtureBaselineOutputs({
+        versionId: 'unverified-worker-version',
+        deploymentId: '226a32c7-174e-4a75-939f-7a316e34e632',
+        trafficPercentage: 100,
+        runtimeMode: 'fixture',
+      }),
+    ).toThrow('previously verified');
   });
 
   it('normalizes uppercase reviewed SHAs for post-deployment evidence', async () => {

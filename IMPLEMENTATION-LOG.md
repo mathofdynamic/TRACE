@@ -1550,3 +1550,26 @@
   OAuth completion, D1 mutation, Queue message, staging change, or rollback
   occurred. CF4.18E.6 acceptance passed; webhook activation, App installation,
   and customer cutover remain unauthorized.
+
+### Phase CF4.18F.0 — signed ping transport acknowledgement (implementation pending deployment)
+
+- Date: 2026-09-29. In production fixture mode, a `ping` delivery is now
+  acknowledged with HTTP 200 and `Cache-Control: no-store` only after the
+  production canary gate, JSON content/body-size checks, configured secret,
+  raw-body HMAC verification, required GitHub headers, and JSON parsing pass.
+  The response returns before payload eligibility, normalization, D1 scope or
+  delivery persistence, Queue sends, or business ingestion. Closed production
+  still rejects first. `ping` remains unsupported by the business-event
+  allowlist and no TRACE event/job schema changed. Staging/non-production keeps
+  its previous processing path.
+- The guarded fixture deployment now accepts only the known closed baseline
+  version or the previously verified fixture version as its predecessor. It
+  records the active deployment ID as metadata, passes the immutable baseline
+  version and mode through workflow outputs, and rolls back to that captured
+  version/mode if post-deploy acceptance fails. Fixture bindings, external App
+  state, D1 emptiness, Queue identity/backlog, version-specific tail, and route
+  acceptance checks remain required.
+- Focused webhook, canary, transition, and deployment-contract tests passed
+  locally (122 tests). Production preflight, implementation PR checks, guarded
+  deployment, and post-deployment acceptance are pending; no production or
+  staging change, GitHub mutation, Queue message, or D1 mutation has occurred.

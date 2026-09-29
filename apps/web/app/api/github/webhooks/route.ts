@@ -15,6 +15,7 @@ import {
   canaryWebhookPayloadEligibility,
   productionCanaryGateResponse,
   productionCanaryIntegrationEligibility,
+  resolveProductionCanaryMode,
 } from '../../../../lib/production-canary';
 
 const MAX_BODY_BYTES = 1_048_576;
@@ -66,6 +67,14 @@ export async function POST(request: Request) {
   } catch {
     return Response.json({ error: 'Invalid JSON payload.' }, { status: 400 });
   }
+
+  if (eventName === 'ping' && resolveProductionCanaryMode(cloudflareEnv).kind === 'fixture') {
+    return Response.json(
+      { accepted: true, ping: true },
+      { status: 200, headers: { 'cache-control': 'no-store' } },
+    );
+  }
+
   const webhookEligibility = canaryWebhookPayloadEligibility(cloudflareEnv, eventName, payload);
   if (!webhookEligibility.allowed) return productionCanaryGateResponse(webhookEligibility);
 
