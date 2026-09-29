@@ -19,8 +19,8 @@ export const productionFixtureTransitionBaseline = {
   workerName: 'trace-production',
   workerVersionId: 'b64aec75-81c4-4146-964d-8ff456bbe726',
   sourceSha: '12c0ea321d235e621bccddde4cf575bab62aba06',
-  previousFixtureVersionId: 'c37568b9-247e-498a-b066-7cb6e97c26bb',
-  previousFixtureSourceSha: 'e6ac65b5708e4bc9973e7e806978d79f1840c547',
+  fixtureVersionId: '16055223-3a33-43a3-8d09-fafddb8abe72',
+  fixtureSourceSha: 'eba409078774d427b7b7b52933b9f05b25761b60',
   d1Id: '7a566f2e-da27-46e7-8c3f-271e5566f225',
   queueName: 'trace-production-jobs',
   queueId: '9ef092975a554ba296a63b162b16522f',
@@ -77,13 +77,20 @@ type QueueMetrics = { backlog_count?: number };
 type TransitionPhase = 'before' | 'after' | 'rollback';
 type RuntimeCanaryMode = 'closed' | 'fixture';
 type FetchImplementation = typeof fetch;
+type KnownBaseline =
+  | { versionId: string; mode: 'closed' }
+  | { versionId: string; mode: 'fixture'; sourceSha: string };
 
-function knownBaselineForVersion(versionId: string) {
+function knownBaselineForVersion(versionId: string): KnownBaseline | undefined {
   if (versionId === productionFixtureTransitionBaseline.workerVersionId) {
     return { versionId, mode: 'closed' as const };
   }
-  if (versionId === productionFixtureTransitionBaseline.previousFixtureVersionId) {
-    return { versionId, mode: 'fixture' as const };
+  if (versionId === productionFixtureTransitionBaseline.fixtureVersionId) {
+    return {
+      versionId,
+      mode: 'fixture' as const,
+      sourceSha: productionFixtureTransitionBaseline.fixtureSourceSha,
+    };
   }
   return undefined;
 }
@@ -204,6 +211,14 @@ function assertExpectedDeployment(
     const baseline = requireKnownBaseline(versionId);
     expectedBaselineVersionId = baseline.versionId;
     expectedBaselineMode = baseline.mode;
+    if (
+      baseline.mode === 'fixture' &&
+      !sourceAnnotationMatches(deployment.annotations?.['workers/message'], baseline.sourceSha)
+    ) {
+      fail(
+        'Active fixture baseline source annotation does not match the verified production release.',
+      );
+    }
   } else if (phase === 'rollback') {
     if (versionId !== expectedBaselineVersionId) {
       fail('Production Worker rollback did not restore the captured baseline version.');

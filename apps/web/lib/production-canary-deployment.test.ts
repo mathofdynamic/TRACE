@@ -503,8 +503,9 @@ describe('production canary deployment workflow', () => {
     expect(workflow).toContain(
       "failure() && inputs.mode == 'deploy' && inputs.runtime_mode == 'fixture' && steps.capture_transition_baseline.outcome == 'success'",
     );
+    expect(transitionScript).toContain("fixtureVersionId: '16055223-3a33-43a3-8d09-fafddb8abe72'");
     expect(transitionScript).toContain(
-      "previousFixtureVersionId: 'c37568b9-247e-498a-b066-7cb6e97c26bb'",
+      "fixtureSourceSha: 'eba409078774d427b7b7b52933b9f05b25761b60'",
     );
     expect(transitionScript).toContain('runRollback(baseline.versionId)');
     expect(transitionScript).toContain('formatFixtureBaselineOutputs');
