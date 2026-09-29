@@ -219,10 +219,11 @@ jobs:
           TRACE_GITHUB_APP_CLIENT_ID: ${{ vars.TRACE_GITHUB_APP_CLIENT_ID }}
           TRACE_GITHUB_APP_PRIVATE_KEY: ${{ secrets.TRACE_GITHUB_APP_PRIVATE_KEY }}
 
-      - name: Verify exact closed production state before fixture transition
+      - name: Capture verified production baseline before fixture deployment
         if: ${{ inputs.mode == 'deploy' && inputs.runtime_mode == 'fixture' }}
+        id: capture_transition_baseline
         shell: bash
-        run: pnpm exec tsx scripts/verify-production-fixture-transition.ts before
+        run: pnpm exec tsx scripts/verify-production-fixture-transition.ts before --capture-baseline-outputs
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           TRACE_GITHUB_APP_ID: ${{ vars.TRACE_GITHUB_APP_ID }}
@@ -333,6 +334,8 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           DEPLOY_SHA: ${{ inputs.sha }}
+          TRACE_BASELINE_WORKER_VERSION_ID: ${{ steps.capture_transition_baseline.outputs.baseline_worker_version_id }}
+          TRACE_BASELINE_RUNTIME_MODE: ${{ steps.capture_transition_baseline.outputs.baseline_mode }}
           TRACE_GITHUB_APP_ID: ${{ vars.TRACE_GITHUB_APP_ID }}
           TRACE_GITHUB_APP_CLIENT_ID: ${{ vars.TRACE_GITHUB_APP_CLIENT_ID }}
           TRACE_GITHUB_APP_SLUG: ${{ vars.TRACE_GITHUB_APP_SLUG }}
@@ -387,6 +390,8 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           DEPLOY_SHA: ${{ inputs.sha }}
+          TRACE_BASELINE_WORKER_VERSION_ID: ${{ steps.capture_transition_baseline.outputs.baseline_worker_version_id }}
+          TRACE_BASELINE_RUNTIME_MODE: ${{ steps.capture_transition_baseline.outputs.baseline_mode }}
           TRACE_GITHUB_APP_ID: ${{ vars.TRACE_GITHUB_APP_ID }}
           TRACE_GITHUB_APP_CLIENT_ID: ${{ vars.TRACE_GITHUB_APP_CLIENT_ID }}
           TRACE_GITHUB_APP_SLUG: ${{ vars.TRACE_GITHUB_APP_SLUG }}
@@ -395,12 +400,14 @@ jobs:
           TRACE_GITHUB_OAUTH_CLIENT_ID: ${{ vars.TRACE_GITHUB_OAUTH_CLIENT_ID }}
 
       - name: Inspect and safely roll back a failed fixture transition
-        if: ${{ failure() && inputs.mode == 'deploy' && inputs.runtime_mode == 'fixture' }}
+        if: ${{ failure() && inputs.mode == 'deploy' && inputs.runtime_mode == 'fixture' && steps.capture_transition_baseline.outcome == 'success' }}
         shell: bash
         run: pnpm exec tsx scripts/verify-production-fixture-transition.ts rollback-if-needed
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           DEPLOY_SHA: ${{ inputs.sha }}
+          TRACE_BASELINE_WORKER_VERSION_ID: ${{ steps.capture_transition_baseline.outputs.baseline_worker_version_id }}
+          TRACE_BASELINE_RUNTIME_MODE: ${{ steps.capture_transition_baseline.outputs.baseline_mode }}
           TRACE_GITHUB_APP_ID: ${{ vars.TRACE_GITHUB_APP_ID }}
           TRACE_GITHUB_APP_CLIENT_ID: ${{ vars.TRACE_GITHUB_APP_CLIENT_ID }}
           TRACE_GITHUB_APP_SLUG: ${{ vars.TRACE_GITHUB_APP_SLUG }}
