@@ -1617,3 +1617,20 @@
   deployment, webhook configuration/activation, Queue operation, D1 mutation,
   or staging change occurred. The user-facing authorization sequence remains
   pending fresh protected prechecks and the same-session browser handoff.
+
+### CF4.18F.1 preflight baseline repair
+
+- Date: 2026-09-29. The first post-merge read-only baseline check rejected the
+  active production fixture Worker because the verifier still recognized only
+  an older fixture version. No OAuth or installation flow had started.
+- Updated the verifier to pin the currently deployed immutable fixture Worker
+  version `16055223-3a33-43a3-8d09-fafddb8abe72` and source SHA
+  `eba409078774d427b7b7b52933b9f05b25761b60`. Fixture baseline validation
+  now checks that source annotation, while deployment IDs remain observed
+  metadata. The previous historical fixture version is no longer accepted as
+  the active baseline. The immutable closed rollback baseline remains intact.
+- Added regression coverage for the current fixture baseline, stale historical
+  version rejection, and incorrect fixture source annotation. No production
+  deployment, GitHub mutation, OAuth, App installation, Queue operation, D1
+  mutation, or staging change occurred; protected baseline verification and
+  the user-facing authorization sequence remain pending.
