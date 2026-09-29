@@ -52,7 +52,7 @@ jobs:
             exit 1
           fi
           case "$FIXTURE_D1_STAGE" in
-          before-oauth|after-oauth|after-onboarding|after-installation) ;;
+            before-oauth|after-oauth|after-onboarding|after-installation) ;;
             *) echo "Unsupported production fixture D1 stage." >&2; exit 1 ;;
           esac
           if [[ "$FIXTURE_D1_STAGE" == "after-installation" && ! "$FIXTURE_INSTALLATION_ID" =~ ^[1-9][0-9]{0,19}$ ]]; then
