@@ -4,6 +4,7 @@ import {
   assertExpectedProductionFixtureCounts,
   assertProductionFixtureForeignKeys,
   assertProductionFixtureIdentity,
+  buildProductionFixtureOnboardingEvidence,
   buildProductionFixtureIdentityQuery,
   formatProductionFixtureD1State,
   parseProductionApplicationCountsResult,
@@ -11,6 +12,7 @@ import {
   parseProductionFixtureIdentityResult,
   productionFixtureD1State,
   validateReadOnlySql,
+  type FixtureD1Identity,
   type ProductionFixtureD1Stage,
 } from './production-fixture-d1-state.js';
 import { buildProductionApplicationCountsSql } from './production-canary-d1.js';
@@ -150,6 +152,7 @@ export async function verifyProductionFixtureD1State(input: {
   const counts = parseProductionApplicationCountsResult(countsResult);
   assertExpectedProductionFixtureCounts(input.stage, counts);
 
+  let identity: FixtureD1Identity | undefined;
   if (input.stage !== 'before-oauth') {
     const identityQuery = buildProductionFixtureIdentityQuery(input.stage, input.installationId);
     const identityResult = await cloudflareRequest<unknown>({
@@ -160,7 +163,7 @@ export async function verifyProductionFixtureD1State(input: {
       params: identityQuery.params,
       fetchImplementation,
     });
-    const identity = parseProductionFixtureIdentityResult(identityResult);
+    identity = parseProductionFixtureIdentityResult(identityResult);
     assertProductionFixtureIdentity(input.stage, identity);
   }
 
@@ -195,12 +198,19 @@ export async function verifyProductionFixtureD1State(input: {
   if (health.status !== 200)
     fail(`Production health returned HTTP ${health.status}, expected 200.`);
 
+  let onboardingEvidence: ReturnType<typeof buildProductionFixtureOnboardingEvidence> | undefined;
+  if (input.stage === 'after-onboarding') {
+    if (!identity) fail('Production fixture onboarding identity was not checked.');
+    onboardingEvidence = buildProductionFixtureOnboardingEvidence(identity);
+  }
+
   return {
     stage: input.stage,
     counts,
     foreignKeyViolations: 0,
     queueBacklogCount,
     healthStatus: health.status,
+    onboardingEvidence,
   } as const;
 }
 
@@ -219,6 +229,7 @@ async function main() {
         counts: result.counts,
         foreignKeyViolations: result.foreignKeyViolations,
         queueBacklogCount: result.queueBacklogCount,
+        onboardingEvidence: result.onboardingEvidence,
       }),
     );
     console.log(`PRODUCTION_HEALTH=${result.healthStatus}`);

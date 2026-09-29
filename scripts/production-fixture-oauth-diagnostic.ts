@@ -2,12 +2,12 @@ import {
   productionApplicationTables,
   type ProductionApplicationCounts,
 } from './production-canary-d1.js';
-import { productionFixtureD1State } from './production-fixture-d1-state.js';
+import {
+  productionFixtureD1ObservationWindow,
+  productionFixtureD1State,
+} from './production-fixture-d1-state.js';
 
-export const productionFixtureOAuthDiagnosticWindow = {
-  start: Date.parse('2026-09-29T14:12:00.000Z'),
-  end: Date.parse('2026-09-29T14:33:00.000Z'),
-} as const;
+export const productionFixtureOAuthDiagnosticWindow = productionFixtureD1ObservationWindow;
 
 export const productionFixtureOAuthDiagnosticEndpoints = {
   cloudflareOrigin: 'https://api.cloudflare.com',
