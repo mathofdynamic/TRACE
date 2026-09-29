@@ -1592,3 +1592,28 @@
   webhook, Queue message, D1 mutation, or staging change occurred. CF4.18F.0
   acceptance passed; controlled external activation remains a separate
   authorized phase.
+
+### CF4.18F.1 controlled OAuth and fixture-installation preparation
+
+- Date: 2026-09-29.
+- Added a protected post-install verifier for the production GitHub App. It
+  requires exactly one unsuspended, selected-only installation for
+  `mathofdynamic`, mints an installation token only to enumerate repositories,
+  requires the sole repository to be `mathofdynamic/trace-staging-fixture`
+  (`1378441300`), and rejects any retrievable webhook URL. The original
+  zero-installation preactivation verifier is unchanged.
+- Added a separate protected D1 state verifier for the pre-OAuth, post-OAuth,
+  and post-install checkpoints. It uses fixed read-only count/identity SQL,
+  checks all 22 application tables, cross-links the expected user/workspace/
+  installation/repository/audit rows, checks foreign keys, health, and Queue
+  backlog, and emits no email or credential material.
+- Focused contracts passed (29 tests), as did `pnpm check`, `pnpm cf:build`,
+  direct strict TypeScript checking for the verifier scripts, and
+  `git diff --check`. Local build verification required repairing an
+  incomplete dependency link inside this isolated worktree; the original
+  checkout was not modified. Protected Linux CI/E2E and workflow registration
+  are pending.
+- No production OAuth or App installation has been attempted. No Worker
+  deployment, webhook configuration/activation, Queue operation, D1 mutation,
+  or staging change occurred. The user-facing authorization sequence remains
+  pending fresh protected prechecks and the same-session browser handoff.
