@@ -1551,25 +1551,44 @@
   occurred. CF4.18E.6 acceptance passed; webhook activation, App installation,
   and customer cutover remain unauthorized.
 
-### Phase CF4.18F.0 — signed ping transport acknowledgement (implementation pending deployment)
+### Phase CF4.18F.0 — signed ping transport acknowledgement
 
-- Date: 2026-09-29. In production fixture mode, a `ping` delivery is now
-  acknowledged with HTTP 200 and `Cache-Control: no-store` only after the
-  production canary gate, JSON content/body-size checks, configured secret,
-  raw-body HMAC verification, required GitHub headers, and JSON parsing pass.
-  The response returns before payload eligibility, normalization, D1 scope or
-  delivery persistence, Queue sends, or business ingestion. Closed production
-  still rejects first. `ping` remains unsupported by the business-event
-  allowlist and no TRACE event/job schema changed. Staging/non-production keeps
-  its previous processing path.
-- The guarded fixture deployment now accepts only the known closed baseline
-  version or the previously verified fixture version as its predecessor. It
-  records the active deployment ID as metadata, passes the immutable baseline
-  version and mode through workflow outputs, and rolls back to that captured
-  version/mode if post-deploy acceptance fails. Fixture bindings, external App
-  state, D1 emptiness, Queue identity/backlog, version-specific tail, and route
-  acceptance checks remain required.
-- Focused webhook, canary, transition, and deployment-contract tests passed
-  locally (122 tests). Production preflight, implementation PR checks, guarded
-  deployment, and post-deployment acceptance are pending; no production or
-  staging change, GitHub mutation, Queue message, or D1 mutation has occurred.
+- Date: 2026-09-29. Implementation PR #34 merged as
+  `eba409078774d427b7b7b52933b9f05b25761b60`; workflow registration PR #35
+  merged as `b5e46ae0387f217bcc73a49797be65e20b7b2916`. The `main` and feature
+  production workflow definitions match.
+- A production fixture-mode `ping` is acknowledged with HTTP 200 and
+  `Cache-Control: no-store` only after the canary gate, content/body-size
+  checks, configured webhook secret, raw-body HMAC verification, required
+  GitHub delivery/event headers, and JSON parsing pass. It returns before
+  fixture payload eligibility, normalization, D1 scope/delivery persistence,
+  Queue send, audit, or business ingestion. Closed mode remains closed before
+  webhook processing; ping is not a TRACE domain event or Queue job. No valid
+  signed ping was sent to production.
+- Focused route/canary/transition/deployment tests passed (122 tests).
+  `pnpm check`, `pnpm cf:build`, `git diff --check`, and Linux CI including E2E
+  passed.
+- Fresh baseline run `36560457735` verified the existing fixture version
+  `c37568b9-247e-498a-b066-7cb6e97c26bb` at 100%, exact fixture bindings,
+  22/22 empty application tables, and Queue backlog 0. Fresh App-state run
+  `36560456790` verified App `5082884`, zero installations, and hook config
+  `ABSENT_NOT_FOUND` / no URL.
+- Exactly one fixture deployment run `36560585268` deployed source
+  `eba409078774d427b7b7b52933b9f05b25761b60` as Worker version
+  `16055223-3a33-43a3-8d09-fafddb8abe72`, deployment
+  `d963ea4c-5bf5-412e-a7a7-4704bc7ecb4d`, at 100%. Runtime is production/D1/
+  fixture with exact allowlist `mathofdynamic/trace-staging-fixture/1378441300`,
+  correct D1 and Queue, no Hyperdrive, six expected GitHub runtime variable
+  names, and exactly the approved five Worker secret names. Wrangler was
+  `4.120.1`; exact-version tail was ready and observed zero error events.
+- The fixture route matrix passed: health 200; OAuth/install/setup/reconcile
+  redirects were not followed; unauthenticated repository POST and recovery
+  GET/POST returned 401; unsigned webhook returned 401 Invalid webhook
+  signature. Post-probe D1 remained 22/22 tables empty and Queue backlog
+  remained zero. Postdeployment App-state run `36560947857` again reported
+  zero installations and `ABSENT_NOT_FOUND` / no configured webhook URL. The
+  GitHub UI Active state was not independently verified. No rollback, webhook
+  configuration/activation, App installation, OAuth completion, valid
+  webhook, Queue message, D1 mutation, or staging change occurred. CF4.18F.0
+  acceptance passed; controlled external activation remains a separate
+  authorized phase.
