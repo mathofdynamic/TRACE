@@ -910,7 +910,12 @@ Regression coverage accepts the current rollback deployment ID and simulates
 two fixture-to-rollback cycles with different rollback deployment IDs. It
 still rejects a wrong Worker version, split traffic, multiple active
 versions, fixture mode/vars before transition, wrong D1/Queue, Hyperdrive,
-nonempty application tables, or nonzero Queue backlog. No workflow or runtime
-config was changed. No deployment, Queue message, D1 write, GitHub mutation,
-OAuth, App installation, webhook activation, or staging change occurred.
-CF4.18E remains failed pending a separately authorized deployment decision.
+nonempty application tables, or nonzero Queue backlog. The production deploy
+workflow and runtime config were not changed. A separate manual-only,
+feature-ref-restricted baseline-check workflow uses the sealed Cloudflare
+environment secret to run the verifier's `before` phase after merge; its
+requested SHA must equal the dispatch ref SHA. It has no deploy, Queue-write,
+or D1-write step and requires default-branch registration before dispatch. No
+deployment, Queue message, D1 write, GitHub mutation, OAuth, App installation,
+webhook activation, or staging change occurred. CF4.18E remains failed pending
+a separately authorized deployment decision.
