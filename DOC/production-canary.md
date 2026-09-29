@@ -931,3 +931,49 @@ OAuth, App installation, webhook activation, or staging change occurred.
 CF4.18E.5 passes and the baseline-ID drift blocker is resolved. CF4.18E
 overall remains failed pending a separate explicit deployment decision;
 CF4.18F is not ready.
+
+### CF4.18E.6 controlled fixture acceptance
+
+On 2026-09-29, the protected baseline check run `36534787327` passed against
+the current feature head `23cf2d586dfbfe244c2434b7c5bc95983a58e8d8`. This
+head contains the requested runtime implementation
+`e6ac65b5708e4bc9973e7e806978d79f1840c547`; the only later changes are
+documentation. The deployment workflow on `main` and the feature ref was
+identical. The check recorded the immutable closed Worker version
+`b64aec75-81c4-4146-964d-8ff456bbe726` at 100% under active deployment
+`599ec20b-b90b-4499-af73-21024e8b5e19`. Runtime was production/D1/closed,
+fixture variables were absent, production D1 and Queue identities matched,
+Hyperdrive was absent, 22/22 application tables were empty, and Queue backlog
+was zero.
+
+Protected App-state run `36534899062` passed before deployment: App
+`5082884` / `TRACE Production Integration`, installation count and list both
+zero, and `/app/hook/config` returned 404, recorded as
+`ABSENT_NOT_FOUND` with no retrievable webhook URL. The GitHub UI Active state
+was not independently verified. No GitHub mutation occurred.
+
+Exactly one fixture deployment was dispatched as run `36535066901` against
+runtime SHA `e6ac65b5708e4bc9973e7e806978d79f1840c547`. It completed
+successfully without rollback. Cloudflare reported Worker version
+`c37568b9-247e-498a-b066-7cb6e97c26bb`, deployment
+`226a32c7-174e-4a75-939f-7a316e34e632`, and 100% traffic, with exact source
+annotation. The deployed configuration is production/D1/fixture with allowlist
+`mathofdynamic/trace-staging-fixture/1378441300`, the dedicated production D1
+and Queue, no Hyperdrive, six expected GitHub runtime variable names, and the
+five approved Worker secret names. No secret values were read or logged.
+
+The exact-version error tail was ready for the new Worker version and observed
+zero error events. The route matrix passed: health 200; OAuth start 302 to the
+production authorization endpoint without following it; unauthenticated
+install/setup/reconcile 302 to TRACE sign-in without following; unauthenticated
+repository POST and recovery GET/POST 401; unsigned webhook POST 401 Invalid
+webhook signature. No valid webhook or Queue message was sent. Post-probe
+read-only checks confirmed 22/22 application tables empty, Queue backlog zero,
+and unchanged D1/Queue/Hyperdrive identities.
+
+Postdeployment App-state run `36535388787` again reported installation count
+and list zero and webhook configuration `ABSENT_NOT_FOUND` / URL not
+configured. No App installation, OAuth completion, webhook configuration or
+activation, D1 mutation, Queue message, or staging change occurred. CF4.18E
+acceptance passed; production remains in fixture mode for the separately
+controlled next phase. Customer cutover remains unauthorized.

@@ -1519,3 +1519,34 @@
   GitHub mutation, OAuth, App installation, webhook activation, or staging
   change occurred. CF4.18E.5 passes; CF4.18E remains failed pending a separate
   explicit deployment decision, and CF4.18F is not ready.
+- CF4.18E.6: fresh baseline run `36534787327` accepted the immutable closed
+  version `b64aec75-81c4-4146-964d-8ff456bbe726` at 100%, recording current
+  deployment `599ec20b-b90b-4499-af73-21024e8b5e19` as metadata. It verified
+  production/D1/closed mode, fixture-variable absence, exact D1/Queue identity,
+  no Hyperdrive, 22/22 empty application tables, and zero Queue backlog. The
+  requested runtime SHA `e6ac65b5708e4bc9973e7e806978d79f1840c547` is on the
+  feature ref; only docs differ at dispatch head `23cf2d586dfbfe244c2434b7c5bc95983a58e8d8`.
+  The registered deployment workflows on `main` and feature were identical.
+- Predeploy App-state run `36534899062` passed for App `5082884`:
+  `TRACE Production Integration`, zero installations/list entries, and no
+  retrievable webhook configuration (`ABSENT_NOT_FOUND`, no configured URL).
+  The UI Active state was not independently verified.
+- Exactly one fixture deployment run `36535066901` deployed source
+  `e6ac65b5708e4bc9973e7e806978d79f1840c547` as version
+  `c37568b9-247e-498a-b066-7cb6e97c26bb`, deployment
+  `226a32c7-174e-4a75-939f-7a316e34e632`, at 100%. Runtime was
+  production/D1/fixture with the exact allowlist `mathofdynamic/trace-staging-fixture/1378441300`,
+  correct D1 and Queue, no Hyperdrive, exact GitHub runtime variable names,
+  and exactly the approved five Worker secret names. Wrangler diagnostic was
+  `4.120.1`; exact-version tail readiness passed and zero error events were
+  observed.
+- Fixture route matrix passed: health 200; OAuth authorization redirect and
+  three install/setup/reconcile sign-in redirects were not followed;
+  unauthenticated repository POST, recovery GET/POST returned 401; unsigned
+  webhook returned 401 Invalid webhook signature. No valid webhook or Queue
+  message was sent. Post-probe D1 remained 22/22 tables empty and Queue backlog
+  remained zero. Postdeploy App-state run `36535388787` again reported zero
+  installations and no retrievable/configured webhook URL. No GitHub mutation,
+  OAuth completion, D1 mutation, Queue message, staging change, or rollback
+  occurred. CF4.18E.6 acceptance passed; webhook activation, App installation,
+  and customer cutover remain unauthorized.
