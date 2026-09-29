@@ -1498,8 +1498,10 @@
   issued.
 - Focused canary/transition/tail suites passed (123 tests); `pnpm check`
   passed (format, lint, typecheck, unit suite, and build); `pnpm cf:build`
-  passed; changed-file Prettier and `git diff --check` passed. Linux PR CI/E2E,
-  review, merge, and postmerge read-only verification remain pending. The
+  passed; changed-file Prettier and `git diff --check` passed. Linux CI/E2E run
+  `36530477020` passed on head `a07bf587df5c9ebeca21cbc074e2cc92875c0a1d`.
+  PR review/merge, workflow registration, and postmerge read-only verification
+  remain pending. The
   production deploy workflow was unchanged. Added a separate manual-only,
   feature-ref-restricted workflow that invokes only the verifier's `before`
   phase with the sealed environment credential; it requires SHA input to match
