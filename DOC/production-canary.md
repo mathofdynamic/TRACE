@@ -870,3 +870,52 @@ locally (Windows timeout and missing login fixture). Pull-request Linux CI/E2E
 is the final quality gate. No production deployment, GitHub mutation, Queue
 message, D1 mutation, or staging change occurred. CF4.18E remains **FAIL**;
 no retry was dispatched or authorized here.
+
+### CF4.18E.5 closed-baseline identity repair — no deployment
+
+The protected transition check no longer treats a Cloudflare deployment ID
+as the closed release identity. Its baseline is the immutable Worker version
+`b64aec75-81c4-4146-964d-8ff456bbe726`; the active deployment ID is captured
+as `BASELINE_ACTIVE_DEPLOYMENT_ID` metadata. Before-transition and rollback
+checks require one active version at 100%, then validate closed runtime vars,
+fixture-var absence, production D1/Queue bindings, GitHub runtime/secret names,
+Queue producer/consumer identity, empty application tables, and zero Queue
+backlog. The rollback target remains the exact Worker version, so a later
+Cloudflare rollback deployment ID is valid. Closed rollback annotations may
+describe the rollback operation; exact source-annotation matching remains
+required for a new fixture deployment.
+
+Read-only production evidence collected on 2026-09-29:
+
+- Active deployment `599ec20b-b90b-4499-af73-21024e8b5e19` assigns 100% to
+  Worker version `b64aec75-81c4-4146-964d-8ff456bbe726`. The deployment's
+  rollback message differs from the original source annotation; it does not
+  change the immutable Worker version identity.
+- The active version remains `TRACE_DEPLOYMENT_ENV=production`,
+  `TRACE_DATABASE_DRIVER=d1`, and `TRACE_CANARY_MODE=closed`. Fixture allowlist
+  vars are absent; DB points to production D1
+  `7a566f2e-da27-46e7-8c3f-271e5566f225`; `TRACE_QUEUE` points to
+  `trace-production-jobs`; Hyperdrive is absent. Production GitHub runtime
+  variables and the five approved Worker secret names are present.
+- Queue `trace-production-jobs` (`9ef092975a554ba296a63b162b16522f`) reports
+  one `trace-production` producer and one `trace-production` consumer. The
+  GET-only drain run `36526877932` observed `backlog_count=0` at
+  `2026-09-29T05:35:33.412Z`.
+- Read-only D1 checks found all 22 application tables empty. `PRAGMA
+foreign_key_check` returned zero rows. The count query reported zero rows
+  written and `changed_db=false`. `/api/health` returned `200`; OAuth start
+  returned `503` with `Cache-Control: no-store`.
+
+Regression coverage accepts the current rollback deployment ID and simulates
+two fixture-to-rollback cycles with different rollback deployment IDs. It
+still rejects a wrong Worker version, split traffic, multiple active
+versions, fixture mode/vars before transition, wrong D1/Queue, Hyperdrive,
+nonempty application tables, or nonzero Queue backlog. The production deploy
+workflow and runtime config were not changed. A separate manual-only,
+feature-ref-restricted baseline-check workflow uses the sealed Cloudflare
+environment secret to run the verifier's `before` phase after merge; its
+requested SHA must equal the dispatch ref SHA. It has no deploy, Queue-write,
+or D1-write step and requires default-branch registration before dispatch. No
+deployment, Queue message, D1 write, GitHub mutation, OAuth, App installation,
+webhook activation, or staging change occurred. CF4.18E remains failed pending
+a separately authorized deployment decision.
