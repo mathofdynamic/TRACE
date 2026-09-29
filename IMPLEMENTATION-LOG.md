@@ -1634,3 +1634,17 @@
   deployment, GitHub mutation, OAuth, App installation, Queue operation, D1
   mutation, or staging change occurred; protected baseline verification and
   the user-facing authorization sequence remain pending.
+
+### CF4.18F.1B read-only OAuth persistence diagnostic
+
+- Date: 2026-09-29. Added a dedicated protected manual diagnostic that prints
+  all 22 production application-table counts before identity analysis, then
+  reports aggregate GitHub-account counts, expected `mathofdynamic` account
+  links, safe account/user/session timestamps, foreign-key violations, Queue
+  backlog, and production health.
+- SQL is fixed and read-only (`SELECT` plus `PRAGMA foreign_key_check`). The
+  diagnostic never selects email, session tokens, OAuth credentials, account
+  tokens, internal IDs, or unexpected account identities. Queue observability
+  is GET-only; health is GET-only. Workflow registration and one protected
+  read-only run are pending. No OAuth retry, installation, webhook change,
+  Worker deployment, D1 mutation, Queue message, or staging change occurred.
