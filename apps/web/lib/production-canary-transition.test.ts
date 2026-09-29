@@ -5,8 +5,11 @@ import {
   classifyFixtureDeploymentForRollback,
   formatFixtureDeploymentOutputs,
   productionFixtureTransitionBaseline as baseline,
+  rollbackFixtureDeploymentIfNeeded,
   verifyProductionFixtureTransitionState,
 } from '../../../scripts/verify-production-fixture-transition.js';
+
+const previousClosedDeploymentId = '473864fd-83b8-42ac-800d-2ea173c9649e';
 
 const sourceVariables = {
   TRACE_GITHUB_APP_ID: '5082884',
@@ -82,17 +85,32 @@ function queueResponse() {
   };
 }
 
-function deployment(phase: 'before' | 'after', sourceSha: string) {
+function deployment(
+  phase: 'before' | 'after',
+  sourceSha: string,
+  overrides: {
+    deploymentId?: string;
+    activeVersionId?: string;
+    traffic?: number;
+    versions?: Array<{ version_id: string; percentage: number }>;
+    deploymentMessage?: string;
+  } = {},
+) {
   const before = phase === 'before';
   return {
-    id: before ? baseline.deploymentId : 'new-fixture-deployment-id',
-    versions: [
+    id:
+      overrides.deploymentId ?? (before ? previousClosedDeploymentId : 'new-fixture-deployment-id'),
+    versions: overrides.versions ?? [
       {
-        version_id: before ? baseline.workerVersionId : 'new-fixture-version-id',
-        percentage: 100,
+        version_id:
+          overrides.activeVersionId ??
+          (before ? baseline.workerVersionId : 'new-fixture-version-id'),
+        percentage: overrides.traffic ?? 100,
       },
     ],
-    annotations: { 'workers/message': `TRACE production canary ${sourceSha}` },
+    annotations: {
+      'workers/message': overrides.deploymentMessage ?? `TRACE production canary ${sourceSha}`,
+    },
   };
 }
 
@@ -114,6 +132,8 @@ function fakeCloudflare(
     deploymentId?: string;
     deploymentMessage?: string;
     traffic?: number;
+    activeVersionId?: string;
+    versions?: Array<{ version_id: string; percentage: number }>;
     workerBindings?: ReturnType<typeof bindings>;
   } = {},
 ) {
@@ -129,30 +149,13 @@ function fakeCloudflare(
     let result: unknown;
     if (url.pathname.endsWith('/deployments')) {
       result = {
-        deployments: [
-          {
-            ...deployment(phase, sourceSha),
-            ...(overrides.deploymentMessage
-              ? { annotations: { 'workers/message': overrides.deploymentMessage } }
-              : {}),
-            ...(overrides.traffic === undefined
-              ? {}
-              : {
-                  versions: [
-                    {
-                      version_id:
-                        phase === 'before' ? baseline.workerVersionId : 'new-fixture-version-id',
-                      percentage: overrides.traffic,
-                    },
-                  ],
-                }),
-            ...(overrides.deploymentId ? { id: overrides.deploymentId } : {}),
-          },
-        ],
+        deployments: [deployment(phase, sourceSha, overrides)],
       };
     } else if (url.pathname.includes('/versions/')) {
       result = {
-        id: phase === 'before' ? baseline.workerVersionId : 'new-fixture-version-id',
+        id:
+          overrides.activeVersionId ??
+          (phase === 'before' ? baseline.workerVersionId : 'new-fixture-version-id'),
         resources: {
           bindings:
             overrides.workerBindings ??
@@ -180,6 +183,65 @@ function fakeCloudflare(
   return { fetchImplementation, requests };
 }
 
+type SimulatedDeploymentState = {
+  id: string;
+  versionId: string;
+  message: string;
+  mode: 'closed' | 'fixture';
+};
+
+function simulatedRollbackCloudflare(initialDeployment: SimulatedDeploymentState) {
+  let activeDeployment = initialDeployment;
+  const requests: Array<{ path: string; method: string }> = [];
+  const fetchImplementation: typeof fetch = async (input, init) => {
+    const url = new URL(String(input));
+    const method = init?.method ?? 'GET';
+    requests.push({ path: url.pathname, method });
+    let result: unknown;
+    if (url.pathname.endsWith('/deployments')) {
+      result = {
+        deployments: [
+          {
+            id: activeDeployment.id,
+            versions: [{ version_id: activeDeployment.versionId, percentage: 100 }],
+            annotations: { 'workers/message': activeDeployment.message },
+          },
+        ],
+      };
+    } else if (url.pathname.includes('/versions/')) {
+      result = {
+        id: activeDeployment.versionId,
+        resources: { bindings: bindings(activeDeployment.mode) },
+      };
+    } else if (url.pathname.endsWith(`/queues/${baseline.queueId}/metrics`)) {
+      result = { backlog_count: 0 };
+    } else if (url.pathname.endsWith(`/queues/${baseline.queueId}`)) {
+      result = queueResponse();
+    } else if (url.pathname.endsWith(`/d1/database/${baseline.d1Id}/query`)) {
+      result = [{ results: [zeroCountRow()] }];
+    } else {
+      throw new Error(`Unexpected endpoint: ${url.pathname}`);
+    }
+    return new Response(JSON.stringify({ success: true, result }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  return {
+    fetchImplementation,
+    requests,
+    restoreBaseline(deploymentId: string) {
+      activeDeployment = {
+        id: deploymentId,
+        versionId: baseline.workerVersionId,
+        message: 'Rollback failed TRACE fixture-canary acceptance',
+        mode: 'closed',
+      };
+    },
+  };
+}
+
 const commonEnvironment = {
   CLOUDFLARE_API_TOKEN: 'fake-cloudflare-token',
   CLOUDFLARE_ACCOUNT_ID: baseline.accountId,
@@ -190,8 +252,9 @@ const commonEnvironment = {
 };
 
 describe('production fixture transition state gate', () => {
-  it('classifies only the captured baseline or exact attempted fixture release for rollback', () => {
+  it('classifies the closed baseline by immutable version and traffic, not deployment ID', () => {
     const expectedSourceSha = 'c'.repeat(40);
+    expect(baseline).not.toHaveProperty('deploymentId');
     expect(
       classifyFixtureDeploymentForRollback(
         deployment('before', baseline.sourceSha),
@@ -200,34 +263,59 @@ describe('production fixture transition state gate', () => {
     ).toBe('baseline-active');
     expect(
       classifyFixtureDeploymentForRollback(
-        {
-          ...deployment('after', expectedSourceSha),
-          id: 'failed-fixture-deployment',
-        },
+        deployment('before', baseline.sourceSha, {
+          deploymentId: '599ec20b-b90b-4499-af73-21024e8b5e19',
+          deploymentMessage: 'Rollback failed TRACE fixture-canary acceptance',
+        }),
+        expectedSourceSha,
+      ),
+    ).toBe('baseline-active');
+    expect(
+      classifyFixtureDeploymentForRollback(
+        deployment('before', baseline.sourceSha, {
+          activeVersionId: 'wrong-worker-version',
+        }),
+        expectedSourceSha,
+      ),
+    ).toBe('unrecognized-active-deployment');
+    expect(
+      classifyFixtureDeploymentForRollback(
+        deployment('before', baseline.sourceSha, { traffic: 50 }),
+        expectedSourceSha,
+      ),
+    ).toBe('unrecognized-active-deployment');
+    expect(
+      classifyFixtureDeploymentForRollback(
+        deployment('before', baseline.sourceSha, {
+          versions: [
+            { version_id: baseline.workerVersionId, percentage: 50 },
+            { version_id: 'other-worker-version', percentage: 50 },
+          ],
+        }),
+        expectedSourceSha,
+      ),
+    ).toBe('unrecognized-active-deployment');
+    expect(
+      classifyFixtureDeploymentForRollback(
+        deployment('after', expectedSourceSha, { deploymentId: 'failed-fixture-deployment' }),
         expectedSourceSha,
       ),
     ).toBe('fixture-deployment-active');
     expect(
       classifyFixtureDeploymentForRollback(
-        {
-          ...deployment('after', expectedSourceSha),
-          id: 'failed-fixture-deployment',
-        },
+        deployment('after', expectedSourceSha, { deploymentId: 'failed-fixture-deployment' }),
         expectedSourceSha.toUpperCase(),
       ),
     ).toBe('fixture-deployment-active');
     expect(
       classifyFixtureDeploymentForRollback(
-        {
-          ...deployment('after', 'd'.repeat(40)),
-          id: 'unrelated-deployment',
-        },
+        deployment('after', 'd'.repeat(40), { deploymentId: 'unrelated-deployment' }),
         expectedSourceSha,
       ),
     ).toBe('unrecognized-active-deployment');
   });
 
-  it('accepts the exact closed deployment with zero application data and Queue backlog', async () => {
+  it('accepts the initial closed version with zero application data and Queue backlog', async () => {
     const fake = fakeCloudflare('before', baseline.sourceSha);
     const result = await verifyProductionFixtureTransitionState({
       phase: 'before',
@@ -236,9 +324,12 @@ describe('production fixture transition state gate', () => {
       consumerOutput: consumerList,
     });
     expect(result).toMatchObject({
-      deploymentId: baseline.deploymentId,
+      deploymentId: previousClosedDeploymentId,
       versionId: baseline.workerVersionId,
       trafficPercentage: 100,
+      baselineActiveDeploymentId: previousClosedDeploymentId,
+      baselineActiveVersionId: baseline.workerVersionId,
+      baselineTrafficPercent: 100,
       canaryMode: 'closed',
       applicationTableCount: 22,
       emptyApplicationTableCount: 22,
@@ -258,8 +349,9 @@ describe('production fixture transition state gate', () => {
     expect(queryBody.params).toEqual([]);
   });
 
-  it('accepts the rollback-created closed deployment without assuming its original source annotation', async () => {
+  it('accepts the current 599ec rollback deployment with the same immutable baseline version', async () => {
     const fake = fakeCloudflare('before', baseline.sourceSha, {
+      deploymentId: '599ec20b-b90b-4499-af73-21024e8b5e19',
       deploymentMessage: 'Rollback failed TRACE fixture-canary acceptance',
     });
     const result = await verifyProductionFixtureTransitionState({
@@ -270,10 +362,96 @@ describe('production fixture transition state gate', () => {
     });
 
     expect(result).toMatchObject({
-      deploymentId: '473864fd-83b8-42ac-800d-2ea173c9649e',
+      deploymentId: '599ec20b-b90b-4499-af73-21024e8b5e19',
       versionId: baseline.workerVersionId,
+      baselineActiveDeploymentId: '599ec20b-b90b-4499-af73-21024e8b5e19',
+      baselineActiveVersionId: baseline.workerVersionId,
+      baselineTrafficPercent: 100,
       canaryMode: 'closed',
     });
+    expect(result.sourceSha).toBeUndefined();
+  });
+
+  it('verifies closed bindings and empty state before treating an active baseline version as restored', async () => {
+    const fake = fakeCloudflare('before', baseline.sourceSha, {
+      deploymentId: '599ec20b-b90b-4499-af73-21024e8b5e19',
+      deploymentMessage: 'Rollback failed TRACE fixture-canary acceptance',
+    });
+    const result = await rollbackFixtureDeploymentIfNeeded({
+      expectedSourceSha: 'c'.repeat(40),
+      environment: commonEnvironment,
+      fetchImplementation: fake.fetchImplementation,
+      consumerOutput: consumerList,
+      runRollback() {
+        throw new Error('Already-restored baseline must not be rolled back again.');
+      },
+    });
+
+    expect(result).toMatchObject({
+      rollback: 'baseline-active',
+      deploymentId: '599ec20b-b90b-4499-af73-21024e8b5e19',
+      versionId: baseline.workerVersionId,
+      canaryMode: 'closed',
+      emptyApplicationTableCount: 22,
+      queueBacklogCount: 0,
+    });
+  });
+
+  it('verifies repeated fixture rollback deployments by baseline version, not deployment ID', async () => {
+    const expectedSourceSha = 'c'.repeat(40);
+    const rollbackIds = [
+      '599ec20b-b90b-4499-af73-21024e8b5e19',
+      'd4f4c7c5-4f91-4b3d-b08a-1671b9a7e0d2',
+    ];
+
+    for (const [index, rollbackDeploymentId] of rollbackIds.entries()) {
+      const fixtureDeploymentId = `fixture-deployment-${index + 1}`;
+      const simulated = simulatedRollbackCloudflare({
+        id: fixtureDeploymentId,
+        versionId: `fixture-version-${index + 1}`,
+        message: `TRACE production canary ${expectedSourceSha}`,
+        mode: 'fixture',
+      });
+      const rollbackVersionIds: string[] = [];
+
+      const result = await rollbackFixtureDeploymentIfNeeded({
+        expectedSourceSha,
+        environment: commonEnvironment,
+        fetchImplementation: simulated.fetchImplementation,
+        consumerOutput: consumerList,
+        runRollback(versionId) {
+          rollbackVersionIds.push(versionId);
+          simulated.restoreBaseline(rollbackDeploymentId);
+        },
+      });
+
+      expect(result).toMatchObject({
+        rollback: 'completed',
+        deploymentId: rollbackDeploymentId,
+        versionId: baseline.workerVersionId,
+        trafficPercentage: 100,
+        canaryMode: 'closed',
+        emptyApplicationTableCount: 22,
+        queueBacklogCount: 0,
+      });
+      expect(rollbackVersionIds).toEqual([baseline.workerVersionId]);
+      expect(simulated.requests.filter((request) => request.method === 'POST')).toHaveLength(1);
+
+      const baselineCheck = await verifyProductionFixtureTransitionState({
+        phase: 'before',
+        environment: commonEnvironment,
+        fetchImplementation: simulated.fetchImplementation,
+        consumerOutput: consumerList,
+      });
+      expect(baselineCheck).toMatchObject({
+        baselineActiveDeploymentId: rollbackDeploymentId,
+        baselineActiveVersionId: baseline.workerVersionId,
+        baselineTrafficPercent: 100,
+        canaryMode: 'closed',
+        emptyApplicationTableCount: 22,
+        queueBacklogCount: 0,
+      });
+    }
   });
 
   it('formats exact deployed identity outputs and rejects non-100% traffic', () => {
@@ -339,11 +517,40 @@ describe('production fixture transition state gate', () => {
   });
 
   it.each([
-    ['wrong active deployment', { deploymentId: 'unexpected-deployment' }],
+    [
+      'historical deployment ID with wrong Worker version',
+      { deploymentId: previousClosedDeploymentId, activeVersionId: 'wrong-worker-version' },
+    ],
+    [
+      'different deployment ID with wrong Worker version',
+      { activeVersionId: 'wrong-worker-version' },
+    ],
     ['fixture mode before transition', { mode: 'fixture' as const }],
+    [
+      'fixture allowlist variable before transition',
+      {
+        workerBindings: [
+          ...bindings('closed'),
+          {
+            type: 'plain_text',
+            name: 'TRACE_CANARY_GITHUB_REPOSITORY',
+            text: 'trace-staging-fixture',
+          },
+        ],
+      },
+    ],
     ['nonempty application table', { counts: { github_repositories: 1 } }],
     ['nonzero Queue backlog', { backlog: 1 }],
     ['wrong traffic percentage', { traffic: 50 }],
+    [
+      'multiple active Worker versions',
+      {
+        versions: [
+          { version_id: baseline.workerVersionId, percentage: 50 },
+          { version_id: 'other-worker-version', percentage: 50 },
+        ],
+      },
+    ],
     [
       'wrong production D1 binding',
       {
@@ -355,6 +562,16 @@ describe('production fixture transition state gate', () => {
     [
       'unexpected Hyperdrive binding',
       { workerBindings: [...bindings('closed'), { type: 'hyperdrive', name: 'HYPERDRIVE' }] },
+    ],
+    [
+      'wrong production Queue binding',
+      {
+        workerBindings: bindings('closed').map((binding) =>
+          binding.name === 'TRACE_QUEUE'
+            ? { ...binding, queue_name: 'trace-test-staging-jobs' }
+            : binding,
+        ),
+      },
     ],
   ])('fails before transition on %s', async (_label, overrides) => {
     const fake = fakeCloudflare('before', baseline.sourceSha, overrides);

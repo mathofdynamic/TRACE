@@ -18,7 +18,6 @@ export const productionFixtureTransitionBaseline = {
   accountId: 'c5d6cf110905c91fc3eed1abaf8236a2',
   workerName: 'trace-production',
   workerVersionId: 'b64aec75-81c4-4146-964d-8ff456bbe726',
-  deploymentId: '473864fd-83b8-42ac-800d-2ea173c9649e',
   sourceSha: '12c0ea321d235e621bccddde4cf575bab62aba06',
   d1Id: '7a566f2e-da27-46e7-8c3f-271e5566f225',
   queueName: 'trace-production-jobs',
@@ -91,10 +90,14 @@ function normalizeReviewedSourceSha(value: unknown, label: string) {
   return value.toLowerCase();
 }
 
-function sourceAnnotationMatches(value: unknown, expectedSourceSha: string) {
-  if (typeof value !== 'string') return false;
+function sourceAnnotationSha(value: unknown) {
+  if (typeof value !== 'string') return undefined;
   const match = /^TRACE production canary ([0-9a-f]{40})$/i.exec(value);
-  return match?.[1]?.toLowerCase() === expectedSourceSha.toLowerCase();
+  return match?.[1]?.toLowerCase();
+}
+
+function sourceAnnotationMatches(value: unknown, expectedSourceSha: string) {
+  return sourceAnnotationSha(value) === expectedSourceSha.toLowerCase();
 }
 
 function assertIdentityEnvironment(environment: Record<string, string | undefined>) {
@@ -175,22 +178,16 @@ function assertExpectedDeployment(
   if (!versionId) fail('Active production Worker version ID is missing.');
 
   if (phase === 'before') {
-    if (
-      deployment.id !== productionFixtureTransitionBaseline.deploymentId ||
-      versionId !== productionFixtureTransitionBaseline.workerVersionId
-    ) {
-      fail('The expected closed production deployment is no longer active.');
+    if (versionId !== productionFixtureTransitionBaseline.workerVersionId) {
+      fail('The immutable closed production Worker version is not active.');
     }
   } else if (phase === 'rollback') {
     if (versionId !== productionFixtureTransitionBaseline.workerVersionId) {
       fail('Production Worker rollback did not restore the captured version.');
     }
   } else {
-    if (
-      deployment.id === productionFixtureTransitionBaseline.deploymentId ||
-      versionId === productionFixtureTransitionBaseline.workerVersionId
-    ) {
-      fail('The fixture transition did not create a new Worker deployment and version.');
+    if (versionId === productionFixtureTransitionBaseline.workerVersionId) {
+      fail('The fixture transition did not create a new Worker version.');
     }
     if (
       !expectedSourceSha ||
@@ -200,7 +197,12 @@ function assertExpectedDeployment(
     }
   }
 
-  return { deploymentId: deployment.id, versionId, trafficPercentage: 100 };
+  return {
+    deploymentId: deployment.id,
+    versionId,
+    trafficPercentage: 100,
+    sourceSha: sourceAnnotationSha(deployment.annotations?.['workers/message']) || undefined,
+  };
 }
 
 function assertWorkerBindings(
@@ -399,23 +401,22 @@ export function classifyFixtureDeploymentForRollback(
   deployment: WorkerDeployment | undefined,
   expectedSourceSha: string,
 ) {
-  if (
-    deployment?.id === productionFixtureTransitionBaseline.deploymentId &&
+  const isSingleFullTrafficVersion =
+    typeof deployment?.id === 'string' &&
+    deployment.id.length > 0 &&
     deployment.versions?.length === 1 &&
-    deployment.versions[0]?.version_id === productionFixtureTransitionBaseline.workerVersionId &&
-    deployment.versions[0]?.percentage === 100
+    deployment.versions[0]?.percentage === 100;
+  const versionId = deployment?.versions?.[0]?.version_id;
+
+  if (
+    isSingleFullTrafficVersion &&
+    versionId === productionFixtureTransitionBaseline.workerVersionId
   ) {
     return 'baseline-active' as const;
   }
   if (
-    deployment?.versions?.length === 1 &&
-    deployment.versions[0]?.version_id === productionFixtureTransitionBaseline.workerVersionId &&
-    deployment.versions[0]?.percentage === 100
-  ) {
-    return 'baseline-restored' as const;
-  }
-  if (
-    deployment?.id !== productionFixtureTransitionBaseline.deploymentId &&
+    isSingleFullTrafficVersion &&
+    versionId !== productionFixtureTransitionBaseline.workerVersionId &&
     sourceAnnotationMatches(deployment?.annotations?.['workers/message'], expectedSourceSha)
   ) {
     return 'fixture-deployment-active' as const;
@@ -444,11 +445,16 @@ export async function rollbackFixtureDeploymentIfNeeded(options: {
   const activeDeployment = envelope.deployments?.[0];
   const disposition = classifyFixtureDeploymentForRollback(activeDeployment, expectedSourceSha);
 
-  if (disposition === 'baseline-active' || disposition === 'baseline-restored') {
-    console.log(
-      `FIXTURE_ROLLBACK=${disposition === 'baseline-active' ? 'NOT_REQUIRED' : 'ALREADY_RESTORED'}`,
-    );
-    return { rollback: disposition, deploymentId: activeDeployment?.id } as const;
+  if (disposition === 'baseline-active') {
+    const baselineState = await verifyProductionFixtureTransitionState({
+      phase: 'rollback',
+      environment: options.environment,
+      fetchImplementation,
+      consumerOutput: options.consumerOutput,
+    });
+    console.log('FIXTURE_ROLLBACK=NOT_REQUIRED_BASELINE_VERSION_ACTIVE');
+    console.log(`ROLLBACK_DEPLOYMENT_ID=${baselineState.deploymentId}`);
+    return { rollback: disposition, ...baselineState } as const;
   }
   if (disposition !== 'fixture-deployment-active') {
     fail(
@@ -616,8 +622,14 @@ export async function verifyProductionFixtureTransitionState(options: {
     deploymentId: deployment.deploymentId,
     versionId: deployment.versionId,
     trafficPercentage: deployment.trafficPercentage,
-    sourceSha:
-      options.phase === 'after' ? expectedSourceSha : productionFixtureTransitionBaseline.sourceSha,
+    ...(options.phase === 'before'
+      ? {
+          baselineActiveDeploymentId: deployment.deploymentId,
+          baselineActiveVersionId: deployment.versionId,
+          baselineTrafficPercent: deployment.trafficPercentage,
+        }
+      : {}),
+    sourceSha: deployment.sourceSha,
     d1Id: productionFixtureTransitionBaseline.d1Id,
     applicationTableCount: productionApplicationTables.length,
     emptyApplicationTableCount: Object.values(counts).filter((count) => count === 0).length,
@@ -695,10 +707,15 @@ async function main() {
       appendFileSync(outputPath, formatFixtureDeploymentOutputs(result), { encoding: 'utf8' });
     }
     console.log(`TRANSITION_PHASE=${result.phase}`);
+    if (result.phase === 'before') {
+      console.log(`BASELINE_ACTIVE_DEPLOYMENT_ID=${result.deploymentId}`);
+      console.log(`BASELINE_ACTIVE_VERSION_ID=${result.versionId}`);
+      console.log(`BASELINE_TRAFFIC_PERCENT=${result.trafficPercentage}`);
+    }
     console.log(`WORKER_DEPLOYMENT_ID=${result.deploymentId}`);
     console.log(`WORKER_VERSION_ID=${result.versionId}`);
     console.log(`WORKER_TRAFFIC_PERCENT=${result.trafficPercentage}`);
-    console.log(`WORKER_SOURCE_SHA=${result.sourceSha}`);
+    console.log(`WORKER_SOURCE_SHA=${result.sourceSha ?? 'NOT_ASSERTED_FOR_BASELINE'}`);
     console.log(`TRACE_CANARY_MODE=${result.canaryMode}`);
     console.log(
       `FIXTURE_ALLOWLIST=${result.fixtureOwner ?? 'ABSENT'}/${result.fixtureRepository ?? 'ABSENT'}/${result.fixtureRepositoryId ?? 'ABSENT'}`,

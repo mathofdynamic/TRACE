@@ -1463,3 +1463,42 @@
 - No production deployment, Worker/version change, GitHub mutation, Queue
   message, D1 mutation, or staging change occurred. CF4.18E remains failed;
   this remediation does not authorize or dispatch another retry.
+
+### Phase CF4.18E.5 - closed-baseline identity invariant repair (no deployment)
+
+- Date: 2026-09-29. Before editing source, independently verified the active
+  production deployment `599ec20b-b90b-4499-af73-21024e8b5e19` assigns 100%
+  traffic to the expected closed Worker version
+  `b64aec75-81c4-4146-964d-8ff456bbe726`. Runtime remained production/D1/closed;
+  fixture vars were absent; the DB and Queue producer bindings matched the
+  dedicated production resources; Hyperdrive was absent; GitHub runtime vars
+  and approved Worker secret names were present; health was 200 and OAuth
+  start was 503/no-store.
+- Removed the historical deployment ID from the transition baseline. The
+  `before` and rollback phases now require one active version at 100% and the
+  exact immutable baseline version, then verify its current bindings and
+  closed configuration. They capture/log the active deployment ID as
+  metadata. The baseline source annotation is not required after rollback;
+  new fixture deployment annotation matching remains strict.
+- Rollback classification now uses the single-version/100%-traffic baseline
+  version regardless of deployment ID. A baseline-active state is fully
+  reverified before rollback is considered unnecessary. Automatic rollback
+  still targets the immutable baseline Worker version and verifies closed
+  bindings, D1 emptiness, Queue identity, and backlog afterward.
+- Added regression tests for the previous deployment `473864fd-83b8-42ac-800d-2ea173c9649e`,
+  current rollback deployment `599ec20b-b90b-4499-af73-21024e8b5e19`, wrong
+  versions/traffic, multiple active versions, fixture vars/mode, wrong D1 or
+  Queue, Hyperdrive, nonempty D1, nonzero backlog, and two repeated
+  fixture-to-rollback cycles with new deployment IDs.
+- Read-only D1 queries confirmed all 22 application tables empty and
+  `PRAGMA foreign_key_check` returned zero rows. The count query reported no
+  rows written and `changed_db=false`. GET-only Queue drain run `36526877932`
+  observed backlog zero at `2026-09-29T05:35:33.412Z`; Wrangler reported one
+  production Worker producer and consumer. No Queue message or D1 write was
+  issued.
+- Focused canary/transition/tail suites passed (123 tests); `pnpm check`
+  passed (format, lint, typecheck, unit suite, and build); `pnpm cf:build`
+  passed; changed-file Prettier and `git diff --check` passed. Linux PR CI/E2E,
+  review, merge, and postmerge read-only verification remain pending. No
+  workflow definition was changed. No production deployment, GitHub mutation,
+  OAuth, App installation, webhook activation, or staging change occurred.
