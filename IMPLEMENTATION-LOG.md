@@ -1498,14 +1498,24 @@
   issued.
 - Focused canary/transition/tail suites passed (123 tests); `pnpm check`
   passed (format, lint, typecheck, unit suite, and build); `pnpm cf:build`
-  passed; changed-file Prettier and `git diff --check` passed. Linux CI/E2E run
-  `36530477020` passed on head `a07bf587df5c9ebeca21cbc074e2cc92875c0a1d`.
-  PR review/merge, workflow registration, and postmerge read-only verification
-  remain pending. The
-  production deploy workflow was unchanged. Added a separate manual-only,
-  feature-ref-restricted workflow that invokes only the verifier's `before`
-  phase with the sealed environment credential; it requires SHA input to match
-  the dispatch ref and has no deploy, Queue-write, or D1-write command. It
-  requires a workflow-only PR to main before use. No production deployment,
+  passed; changed-file Prettier and `git diff --check` passed. Linux PR #30
+  quality/E2E run `36530882405` passed; PR #30 merged to the feature branch as
+  `e6ac65b5708e4bc9973e7e806978d79f1840c547`. The production deploy workflow
+  remained unchanged. Added a separate manual-only, feature-ref-restricted
+  workflow that invokes only the verifier's `before` phase with the sealed
+  environment credential; the input SHA must match the dispatch ref, and the
+  workflow has no deploy, Queue-write, or D1-write command. Workflow-only PR
+  #31 passed CI run `36531319063` and merged to `main` as
+  `ed7577c5df503c9d2439b43991921341d9f2b463`; registered workflow blobs match.
+- Post-merge baseline-check run `36531720683` passed against feature SHA
+  `e6ac65b5708e4bc9973e7e806978d79f1840c547`. It accepted active deployment
+  `599ec20b-b90b-4499-af73-21024e8b5e19` because it assigns 100% to immutable
+  baseline version `b64aec75-81c4-4146-964d-8ff456bbe726`, with
+  `TRACE_CANARY_MODE=closed`. It independently verified fixture vars absent,
+  production D1/Queue, Hyperdrive absent, production GitHub runtime vars and
+  approved secret names, exact Queue producer/consumer checks, 22/22 D1 tables
+  empty, and backlog 0. The deployment annotation was not asserted for the
+  restored baseline. No production deployment, Queue message, D1 write,
   GitHub mutation, OAuth, App installation, webhook activation, or staging
-  change occurred.
+  change occurred. CF4.18E.5 passes; CF4.18E remains failed pending a separate
+  explicit deployment decision, and CF4.18F is not ready.

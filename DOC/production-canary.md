@@ -914,8 +914,20 @@ nonempty application tables, or nonzero Queue backlog. The production deploy
 workflow and runtime config were not changed. A separate manual-only,
 feature-ref-restricted baseline-check workflow uses the sealed Cloudflare
 environment secret to run the verifier's `before` phase after merge; its
-requested SHA must equal the dispatch ref SHA. It has no deploy, Queue-write,
-or D1-write step and requires default-branch registration before dispatch. No
-deployment, Queue message, D1 write, GitHub mutation, OAuth, App installation,
-webhook activation, or staging change occurred. CF4.18E remains failed pending
-a separately authorized deployment decision.
+requested SHA must equal the dispatch ref SHA. Workflow-only PR #31 registered
+it on `main` (merge `ed7577c5df503c9d2439b43991921341d9f2b463`); the main and
+feature workflow blobs match. It has no deploy, Queue-write, or D1-write step.
+
+Post-merge read-only baseline check run `36531720683` passed against feature
+SHA `e6ac65b5708e4bc9973e7e806978d79f1840c547`. The verifier recorded active
+deployment `599ec20b-b90b-4499-af73-21024e8b5e19`, version
+`b64aec75-81c4-4146-964d-8ff456bbe726`, and 100% traffic. It verified
+production/D1/closed mode, no fixture vars, exact production D1 and Queue
+bindings, Hyperdrive absence, production GitHub runtime vars and approved
+Worker secret names, Queue producer/consumer configuration, all 22 D1 tables
+empty, and Queue backlog 0. The rollback deployment annotation was not treated
+as source identity. No deployment, Queue message, D1 write, GitHub mutation,
+OAuth, App installation, webhook activation, or staging change occurred.
+CF4.18E.5 passes and the baseline-ID drift blocker is resolved. CF4.18E
+overall remains failed pending a separate explicit deployment decision;
+CF4.18F is not ready.
