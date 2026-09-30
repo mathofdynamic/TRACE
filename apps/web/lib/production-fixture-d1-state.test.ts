@@ -24,7 +24,7 @@ function identityRow(stage: 'after-oauth' | 'after-onboarding' | 'after-installa
   return {
     ok: 1,
     oauth_identity_links: 1,
-    ...(stage === 'after-onboarding'
+    ...(stage !== 'after-oauth'
       ? {
           active_session_links: 1,
           onboarding_profile_links: 1,
@@ -100,7 +100,8 @@ describe('production fixture D1 state verifier', () => {
     expect(afterInstall.github_installations).toBe(1);
     expect(afterInstall.github_repositories).toBe(1);
     expect(afterInstall.github_installation_repositories).toBe(1);
-    expect(afterInstall.audit_events).toBe(1);
+    expect(afterInstall.audit_events).toBe(2);
+    expect(afterInstall.onboarding_profiles).toBe(1);
     expect(afterInstall.github_webhook_deliveries).toBe(0);
   });
 
@@ -282,7 +283,7 @@ describe('production fixture D1 state verifier', () => {
     }
   });
 
-  it('keeps the after-installation cross-link contract unchanged', () => {
+  it('preserves onboarding links along with independent installation audit identity', () => {
     const install = parseProductionFixtureIdentityResult([
       { results: [identityRow('after-installation')] },
     ]);

@@ -23,7 +23,9 @@ export type ProductionFixtureD1Stage =
   | 'before-oauth'
   | 'after-oauth'
   | 'after-onboarding'
-  | 'after-installation';
+  | 'after-installation'
+  | 'after-selection'
+  | 'after-live-issue';
 export type FixtureD1Identity = {
   ok: unknown;
   oauth_identity_links?: unknown;
@@ -48,6 +50,11 @@ export type FixtureD1Identity = {
   fixture_repository_links?: unknown;
   fixture_installation_repository_links?: unknown;
   fixture_audit_event_links?: unknown;
+  fixture_selection_audit_links?: unknown;
+  fixture_active_repository_links?: unknown;
+  fixture_selected_mapping_links?: unknown;
+  fixture_issue_links?: unknown;
+  fixture_processed_delivery_links?: unknown;
 };
 
 export const productionFixtureD1ObservationWindow = {
@@ -72,12 +79,20 @@ export function parseProductionFixtureD1Stage(value: string | undefined): Produc
     value === 'before-oauth' ||
     value === 'after-oauth' ||
     value === 'after-onboarding' ||
-    value === 'after-installation'
+    value === 'after-installation' ||
+    value === 'after-selection' ||
+    value === 'after-live-issue'
   ) {
     return value;
   }
   throw new Error(
-    'Production fixture D1 stage must be before-oauth, after-oauth, after-onboarding, or after-installation.',
+    'Production fixture D1 stage must be before-oauth, after-oauth, after-onboarding, after-installation, after-selection, or after-live-issue.',
+  );
+}
+
+export function isPostInstallationStage(stage: ProductionFixtureD1Stage) {
+  return (
+    stage === 'after-installation' || stage === 'after-selection' || stage === 'after-live-issue'
   );
 }
 
@@ -85,22 +100,26 @@ export function expectedProductionFixtureCounts(stage: ProductionFixtureD1Stage)
   const counts = Object.fromEntries(
     productionApplicationTables.map((table) => [table, 0]),
   ) as Record<(typeof productionApplicationTables)[number], number>;
-  if (stage === 'after-oauth' || stage === 'after-onboarding' || stage === 'after-installation') {
+  if (stage !== 'before-oauth') {
     counts.users = 1;
     counts.accounts = 1;
     counts.sessions = 1;
   }
-  if (stage === 'after-onboarding') {
+  if (stage !== 'before-oauth' && stage !== 'after-oauth') {
     counts.onboarding_profiles = 1;
     counts.audit_events = 1;
   }
-  if (stage === 'after-installation') {
+  if (isPostInstallationStage(stage)) {
     counts.organizations = 1;
     counts.memberships = 1;
     counts.github_installations = 1;
     counts.github_repositories = 1;
     counts.github_installation_repositories = 1;
-    counts.audit_events = 1;
+    counts.audit_events = stage === 'after-installation' ? 2 : 3;
+  }
+  if (stage === 'after-live-issue') {
+    counts.github_issues = 1;
+    counts.github_webhook_deliveries = 1;
   }
   return counts;
 }
@@ -123,7 +142,7 @@ export function buildProductionFixtureIdentityQuery(
   stage: Exclude<ProductionFixtureD1Stage, 'before-oauth'>,
   installationId?: string,
   now = Date.now(),
-) {
+): { sql: string; params: (string | number)[] } {
   const oauthLink = `(SELECT COUNT(*) FROM users u JOIN accounts a ON a.user_id = u.id JOIN sessions s ON s.user_id = u.id WHERE a.provider_id = 'github' AND lower(a.account_id) = lower(?))`;
   if (stage === 'after-oauth') {
     return {
@@ -140,10 +159,10 @@ export function buildProductionFixtureIdentityQuery(
       (SELECT COUNT(*) FROM users u JOIN accounts a ON a.user_id = u.id JOIN onboarding_profiles p ON p.user_id = u.id WHERE ${accountMatch} AND p.completed = 1) AS onboarding_completed_links,
       (SELECT COUNT(*) FROM users u JOIN accounts a ON a.user_id = u.id JOIN onboarding_profiles p ON p.user_id = u.id WHERE ${accountMatch} AND p.intended_usage IN ('individual', 'team', 'organization')) AS onboarding_intended_usage_links,
       (SELECT COUNT(*) FROM users u JOIN accounts a ON a.user_id = u.id JOIN onboarding_profiles p ON p.user_id = u.id WHERE ${accountMatch} AND p.execution_mode IN ('cloud', 'local', 'hybrid', 'undecided')) AS onboarding_execution_mode_links,
-      (SELECT COUNT(*) FROM audit_events ae JOIN users u ON u.id = ae.actor_user_id JOIN accounts a ON a.user_id = u.id WHERE ${accountMatch}) AS onboarding_audit_actor_links,
+      (SELECT COUNT(*) FROM audit_events ae JOIN users u ON u.id = ae.actor_user_id JOIN accounts a ON a.user_id = u.id WHERE ${accountMatch} AND ae.action = 'workspace.profile.completed') AS onboarding_audit_actor_links,
       (SELECT COUNT(*) FROM audit_events ae WHERE ae.action = 'workspace.profile.completed') AS onboarding_audit_action_links,
       (SELECT COUNT(*) FROM audit_events ae WHERE ae.subject_type = 'onboarding_profile') AS onboarding_audit_subject_links,
-      (SELECT COUNT(*) FROM audit_events ae WHERE ae.organization_id IS NULL) AS onboarding_audit_unscoped_links,
+      (SELECT COUNT(*) FROM audit_events ae WHERE ae.organization_id IS NULL AND ae.action = 'workspace.profile.completed') AS onboarding_audit_unscoped_links,
       (SELECT COUNT(*) FROM audit_events ae JOIN users u ON u.id = ae.actor_user_id JOIN accounts a ON a.user_id = u.id WHERE ${accountMatch} AND ae.action = 'workspace.profile.completed' AND ae.subject_type = 'onboarding_profile' AND ae.organization_id IS NULL) AS onboarding_audit_event_links,
       (SELECT MIN(u.created_at) FROM users u JOIN accounts a ON a.user_id = u.id WHERE ${accountMatch}) AS user_created_at,
       (SELECT MIN(a.created_at) FROM accounts a WHERE ${accountMatch}) AS account_created_at,
@@ -165,17 +184,30 @@ export function buildProductionFixtureIdentityQuery(
       'A valid external installation ID is required for post-install D1 verification.',
     );
   }
+  const onboarding = buildProductionFixtureIdentityQuery('after-onboarding', undefined, now);
+  const active = stage !== 'after-installation';
+  const selectionSql = active
+    ? `,
+      (SELECT COUNT(*) FROM audit_events ae JOIN organizations o ON o.id = ae.organization_id JOIN accounts a ON a.user_id = ae.actor_user_id WHERE ae.action = 'repositories.selection.updated' AND ae.subject_type = 'github_repository' AND o.slug = ? AND a.provider_id = 'github' AND lower(a.account_id) = lower(?)) AS fixture_selection_audit_links,
+      (SELECT COUNT(*) FROM github_repositories r WHERE r.github_repository_id = ? AND r.state = 'active') AS fixture_active_repository_links,
+      (SELECT COUNT(*) FROM github_installation_repositories ir JOIN github_installations gi ON gi.id = ir.installation_id WHERE ir.github_repository_id = ? AND gi.github_installation_id = ? AND ir.selected = 1) AS fixture_selected_mapping_links`
+    : '';
+  const issueSql =
+    stage === 'after-live-issue'
+      ? `,
+      (SELECT COUNT(*) FROM github_issues i JOIN github_repositories r ON r.id = i.repository_id JOIN github_installations gi ON gi.id = r.installation_id WHERE r.github_repository_id = ? AND i.organization_id = r.organization_id AND gi.organization_id = r.organization_id AND gi.github_installation_id = ?) AS fixture_issue_links,
+      (SELECT COUNT(*) FROM github_webhook_deliveries d JOIN github_repositories r ON r.id = d.repository_id JOIN github_installations gi ON gi.id = r.installation_id WHERE r.github_repository_id = ? AND d.organization_id = r.organization_id AND gi.organization_id = r.organization_id AND gi.github_installation_id = ? AND d.installation_id = ? AND d.event_name = 'issues' AND d.action = 'opened' AND d.status = 'processed' AND d.attempts >= 1 AND d.last_error IS NULL AND d.processed_at IS NOT NULL) AS fixture_processed_delivery_links`
+      : '';
   return {
-    sql: `SELECT 1 AS ok,
-      ${oauthLink} AS oauth_identity_links,
+    sql: `${onboarding.sql},
       (SELECT COUNT(*) FROM organizations o WHERE o.slug = ? AND o.name = ?) AS fixture_workspace_count,
       (SELECT COUNT(*) FROM memberships m JOIN organizations o ON o.id = m.organization_id JOIN accounts a ON a.user_id = m.user_id JOIN users u ON u.id = a.user_id JOIN sessions s ON s.user_id = u.id WHERE o.slug = ? AND m.role = 'owner' AND a.provider_id = 'github' AND lower(a.account_id) = lower(?)) AS owner_membership_links,
       (SELECT COUNT(*) FROM github_installations gi JOIN organizations o ON o.id = gi.organization_id WHERE gi.github_installation_id = ? AND lower(gi.account_login) = lower(?) AND gi.account_type = 'User' AND gi.state = 'active' AND gi.suspended_at IS NULL AND o.slug = ?) AS fixture_installation_links,
       (SELECT COUNT(*) FROM github_repositories r JOIN github_installations gi ON gi.id = r.installation_id JOIN organizations o ON o.id = r.organization_id WHERE r.github_repository_id = ? AND lower(r.owner) = lower(?) AND lower(r.name) = lower(?) AND lower(r.full_name) = lower(?) AND gi.github_installation_id = ? AND gi.organization_id = o.id) AS fixture_repository_links,
       (SELECT COUNT(*) FROM github_installation_repositories ir JOIN github_installations gi ON gi.id = ir.installation_id WHERE ir.github_repository_id = ? AND gi.github_installation_id = ?) AS fixture_installation_repository_links,
-      (SELECT COUNT(*) FROM audit_events ae JOIN github_installations gi ON ae.subject_id = gi.id JOIN organizations o ON o.id = gi.organization_id JOIN accounts a ON a.user_id = ae.actor_user_id WHERE ae.action = 'github.connected' AND ae.subject_type = 'github_installation' AND ae.organization_id = o.id AND ae.subject_id = gi.id AND o.slug = ? AND a.provider_id = 'github' AND lower(a.account_id) = lower(?)) AS fixture_audit_event_links`,
+      (SELECT COUNT(*) FROM audit_events ae JOIN github_installations gi ON ae.subject_id = gi.id JOIN organizations o ON o.id = gi.organization_id JOIN accounts a ON a.user_id = ae.actor_user_id WHERE ae.action = 'github.connected' AND ae.subject_type = 'github_installation' AND ae.organization_id = o.id AND ae.subject_id = gi.id AND o.slug = ? AND a.provider_id = 'github' AND lower(a.account_id) = lower(?)) AS fixture_audit_event_links${selectionSql}${issueSql}`,
     params: [
-      productionFixtureD1State.githubLogin,
+      ...onboarding.params,
       productionFixtureD1State.organizationSlug,
       productionFixtureD1State.organizationName,
       productionFixtureD1State.organizationSlug,
@@ -192,6 +224,24 @@ export function buildProductionFixtureIdentityQuery(
       installationId,
       productionFixtureD1State.organizationSlug,
       productionFixtureD1State.githubLogin,
+      ...(active
+        ? [
+            productionFixtureD1State.organizationSlug,
+            productionFixtureD1State.githubLogin,
+            productionFixtureD1State.repositoryId,
+            productionFixtureD1State.repositoryId,
+            installationId,
+          ]
+        : []),
+      ...(stage === 'after-live-issue'
+        ? [
+            productionFixtureD1State.repositoryId,
+            installationId,
+            productionFixtureD1State.repositoryId,
+            installationId,
+            installationId,
+          ]
+        : []),
     ],
   } as const;
 }
@@ -230,7 +280,7 @@ export function assertProductionFixtureIdentity(
   identity: FixtureD1Identity,
 ) {
   requireOne(identity, 'oauth_identity_links');
-  if (stage === 'after-onboarding') {
+  if (stage !== 'after-oauth') {
     requireOne(identity, 'active_session_links');
     requireOne(identity, 'onboarding_profile_links');
     requireOne(identity, 'onboarding_completed_links');
@@ -242,13 +292,22 @@ export function assertProductionFixtureIdentity(
     requireOne(identity, 'onboarding_audit_unscoped_links');
     requireOne(identity, 'onboarding_audit_event_links');
   }
-  if (stage === 'after-installation') {
+  if (isPostInstallationStage(stage)) {
     requireOne(identity, 'fixture_workspace_count');
     requireOne(identity, 'owner_membership_links');
     requireOne(identity, 'fixture_installation_links');
     requireOne(identity, 'fixture_repository_links');
     requireOne(identity, 'fixture_installation_repository_links');
     requireOne(identity, 'fixture_audit_event_links');
+  }
+  if (stage === 'after-selection' || stage === 'after-live-issue') {
+    requireOne(identity, 'fixture_selection_audit_links');
+    requireOne(identity, 'fixture_active_repository_links');
+    requireOne(identity, 'fixture_selected_mapping_links');
+  }
+  if (stage === 'after-live-issue') {
+    requireOne(identity, 'fixture_issue_links');
+    requireOne(identity, 'fixture_processed_delivery_links');
   }
 }
 
@@ -359,7 +418,7 @@ export function formatProductionFixtureD1State(input: {
           'INSTALLATION_STATE=NOT_STARTED',
         ]
       : []),
-    ...(input.stage === 'after-installation'
+    ...(isPostInstallationStage(input.stage)
       ? [
           'FIXTURE_WORKSPACE=VERIFIED',
           'OWNER_MEMBERSHIP=VERIFIED',
@@ -367,6 +426,35 @@ export function formatProductionFixtureD1State(input: {
           'FIXTURE_REPOSITORY=VERIFIED',
           'INSTALLATION_REPOSITORY_MAPPING=VERIFIED',
           'GITHUB_CONNECTED_AUDIT_EVENT=VERIFIED',
+        ]
+      : []),
+    ...(isPostInstallationStage(input.stage)
+      ? [
+          'ACTIVE_SESSION_LINK=VERIFIED',
+          'ONBOARDING_PROFILE_LINK=VERIFIED',
+          'ONBOARDING_COMPLETED=YES',
+          'ONBOARDING_AUDIT_EVENT=VERIFIED',
+          'ONBOARDING_AUDIT_ACTION=workspace.profile.completed',
+          'ONBOARDING_AUDIT_ORGANIZATION=NULL',
+          'EXISTING_OAUTH_SESSION_SHOULD_BE_PRESERVED=YES',
+          'OAUTH_RETRY_REQUIRED=NO',
+        ]
+      : []),
+    ...(input.stage === 'after-selection' || input.stage === 'after-live-issue'
+      ? [
+          'REPOSITORY_STATE=active',
+          'INSTALLATION_REPOSITORY_SELECTED=YES',
+          'SELECTION_AUDIT_EVENT=repositories.selection.updated',
+        ]
+      : []),
+    ...(input.stage === 'after-live-issue'
+      ? [
+          'ISSUE_FIXTURE_LINK=VERIFIED',
+          'WEBHOOK_FIXTURE_LINK=VERIFIED',
+          'WEBHOOK_STATUS=processed',
+          'WEBHOOK_ATTEMPTS_AT_LEAST_ONE=YES',
+          'WEBHOOK_LAST_ERROR=ABSENT',
+          'WEBHOOK_PROCESSED_TIMESTAMP=PRESENT',
         ]
       : []),
     `FOREIGN_KEY_VIOLATIONS=${input.foreignKeyViolations}`,

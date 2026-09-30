@@ -1038,3 +1038,54 @@ CF4.18F.0 acceptance passed. This makes the handler safe to acknowledge a
 real GitHub ping if a later authorized phase configures the webhook; it does
 not authorize that configuration, App installation, OAuth completion, or
 customer cutover.
+
+## CF4.18F.2 consolidated fixture activation harness
+
+The existing production version `16055223-3a33-43a3-8d09-fafddb8abe72` remains
+unchanged. Preparation adds verification and protected GitHub App control;
+it does not deploy the Worker or apply production migrations.
+
+The fixed D1 checkpoints preserve one accepted user, GitHub OAuth account,
+active session, and completed onboarding profile. `after-installation` requires
+one fixture workspace, owner membership, active installation, repository, and
+installation mapping, with exactly two independently verified audit events:
+`workspace.profile.completed` (unscoped onboarding profile, expected actor) and
+`github.connected` (fixture installation/workspace, expected actor).
+`after-selection` additionally requires an active repository, selected mapping,
+and the third independent `repositories.selection.updated` audit event.
+`after-live-issue` requires those same links plus one fixture issue and one
+processed `issues.opened` delivery with at least one attempt, no error, and a
+processed timestamp. All unrelated application tables remain empty. No checkpoint
+requires a successful remote-head lookup. Every check also requires zero foreign
+key violations, zero Queue backlog, and health 200.
+
+The manual `production-github-webhook-control.yml` workflow runs only on
+`feat/cloudflare-native-runtime`, validates the requested exact SHA, and uses
+`production-canary`. App identity `5082884 / TRACE Production Integration` and
+exactly one unsuspended `mathofdynamic` selected-only installation exposing only
+`mathofdynamic/trace-staging-fixture / 1378441300` are prerequisites for control.
+`configure` PATCHes only `/app/hook/config` with the fixed production webhook URL,
+JSON, verified TLS, and the existing protected webhook secret. An endpoint-specific
+404 directs the owner to the Active UI handoff; no alternate API is invented.
+`inspect-deliveries` reads configuration and at most 100 recent deliveries.
+`redeliver` first discovers the requested ID in that bounded protected read,
+checks its detail and fixture identity, and POSTs only that ID's `/attempts`
+endpoint. Already redelivered attempts are rejected. Ping recovery is limited
+to a pre-secret 401; issue redelivery is limited to an already accepted fixture
+`issues.opened` delivery. No issue body, request/response payload, secret, token,
+email, or session material is emitted.
+
+GitHub's Webhook Active toggle remains an owner UI operation; API configuration
+and successful deliveries do not independently prove its UI state. Installation
+and TRACE repository selection must use the existing completed-onboarding browser
+session. Protected after-onboarding/App-state prechecks must pass before that
+handoff. Production remains fixture-only; customer cutover, staging changes, and
+unrelated repositories are excluded. Live activation evidence is not yet recorded.
+
+The protected manual `production-fixture-error-tail-check.yml` wrapper reuses the
+existing bounded fixture-tail harness, pins the deployed version
+`16055223-3a33-43a3-8d09-fafddb8abe72`, and validates the exact feature dispatch
+SHA. It performs only the established unauthenticated route probes once tail
+readiness is confirmed; it sends no signed/synthetic webhook or Queue probe and
+does not deploy or roll back. The older closed-baseline tail workflow is not used
+for the active fixture runtime.

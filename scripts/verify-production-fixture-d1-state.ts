@@ -2,6 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   assertExpectedProductionFixtureCounts,
+  isPostInstallationStage,
   assertProductionFixtureForeignKeys,
   assertProductionFixtureIdentity,
   buildProductionFixtureOnboardingEvidence,
@@ -138,7 +139,7 @@ export async function verifyProductionFixtureD1State(input: {
 }) {
   const token = assertEnvironment(input.environment);
   const fetchImplementation = input.fetchImplementation ?? fetch;
-  if (input.stage === 'after-installation' && !input.installationId) {
+  if (isPostInstallationStage(input.stage) && !input.installationId) {
     fail('The external installation ID is required for post-install verification.');
   }
 
