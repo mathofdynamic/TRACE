@@ -51,8 +51,33 @@ describe('production fixture verification workflows', () => {
     expect(d1Workflow).toContain('after-oauth');
     expect(d1Workflow).toContain('after-onboarding');
     expect(d1Workflow).toContain('after-installation');
+    expect(d1Workflow).toContain('after-selection');
+    expect(d1Workflow).toContain('after-live-issue');
     expect(d1Workflow).not.toContain('wrangler deploy');
     expect(d1Workflow).not.toContain('secret put');
     expect(d1Workflow).not.toContain('Queue Push');
+  });
+});
+
+const fixtureTailWorkflow = readFileSync(
+  new URL('../../../.github/workflows/production-fixture-error-tail-check.yml', import.meta.url),
+  'utf8',
+);
+describe('production fixture read-only error tail wrapper', () => {
+  it('reuses the existing harness at the immutable live version behind exact-SHA protection', () => {
+    expect(fixtureTailWorkflow).toContain('workflow_dispatch:');
+    expect(fixtureTailWorkflow).toContain(
+      "github.ref == 'refs/heads/feat/cloudflare-native-runtime'",
+    );
+    expect(fixtureTailWorkflow).toContain('environment: production-canary');
+    expect(fixtureTailWorkflow).toContain('permissions:\n  contents: read');
+    expect(fixtureTailWorkflow).toContain('"${EXPECTED_SHA,,}" != "${GITHUB_SHA,,}"');
+    expect(fixtureTailWorkflow).toContain(
+      'WORKER_VERSION_ID: 16055223-3a33-43a3-8d09-fafddb8abe72',
+    );
+    expect(fixtureTailWorkflow).toContain('scripts/production-fixture-tail-acceptance.ts');
+    expect(fixtureTailWorkflow).not.toMatch(
+      /deploy|secret put|TRACE_GITHUB_APP_PRIVATE_KEY|TRACE_GITHUB_WEBHOOK_SECRET/,
+    );
   });
 });

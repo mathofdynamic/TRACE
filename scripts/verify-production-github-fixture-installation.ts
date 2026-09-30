@@ -50,8 +50,8 @@ export type ProductionGitHubFixtureInstallationState = {
   repositoryOwner: string;
   repositoryName: string;
   repositoryFullName: string;
-  webhookConfigState: 'ABSENT_NOT_FOUND' | 'PRESENT_EMPTY';
-  webhookUrlConfigured: false;
+  webhookConfigState: 'ABSENT_NOT_FOUND' | 'PRESENT_EMPTY' | 'CONFIGURED';
+  webhookUrlConfigured: boolean;
 };
 
 type GitHubResponse = { response: Response; body: unknown };
@@ -233,6 +233,7 @@ export async function readProductionGitHubFixtureInstallation(
   appClientId: string | undefined,
   privateKeyPem: string | undefined,
   fetchImplementation: typeof fetch = fetch,
+  allowProductionWebhook = false,
 ): Promise<ProductionGitHubFixtureInstallationState> {
   if (appId !== productionGitHubApp.id) fail('The configured App ID is not the production App.');
   if (typeof appClientId !== 'string' || appClientId.trim().length === 0) {
@@ -354,8 +355,17 @@ export async function readProductionGitHubFixtureInstallation(
   if (hookResponse.response.status === 404) {
     webhookConfigState = 'ABSENT_NOT_FOUND';
   } else {
-    assertNoWebhookUrl(hookResponse.body);
-    webhookConfigState = 'PRESENT_EMPTY';
+    if (
+      allowProductionWebhook &&
+      isRecord(hookResponse.body) &&
+      hookResponse.body.url ===
+        'https://trace-production.mathofdynamic2.workers.dev/api/github/webhooks'
+    ) {
+      webhookConfigState = 'CONFIGURED';
+    } else {
+      assertNoWebhookUrl(hookResponse.body);
+      webhookConfigState = 'PRESENT_EMPTY';
+    }
   }
 
   return {
@@ -371,7 +381,7 @@ export async function readProductionGitHubFixtureInstallation(
     repositoryName: expectedRepository.name,
     repositoryFullName: expectedRepository.fullName,
     webhookConfigState,
-    webhookUrlConfigured: false,
+    webhookUrlConfigured: webhookConfigState === 'CONFIGURED',
   };
 }
 
@@ -389,7 +399,7 @@ export function formatProductionGitHubFixtureInstallation(
     `EXTERNAL_REPOSITORY_ID=${state.repositoryId}`,
     `EXTERNAL_REPOSITORY=${state.repositoryFullName}`,
     `WEBHOOK_CONFIG_STATE=${state.webhookConfigState}`,
-    'WEBHOOK_URL_CONFIGURED=NO',
+    `WEBHOOK_URL_CONFIGURED=${state.webhookUrlConfigured ? 'YES' : 'NO'}`,
     'WEBHOOK_ACTIVE_UI_STATE=NOT_INDEPENDENTLY_VERIFIED',
   ].join('\n');
 }

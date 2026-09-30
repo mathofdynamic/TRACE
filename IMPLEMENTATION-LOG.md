@@ -1682,3 +1682,33 @@
   production health was 200. No OAuth retry, App installation, webhook change,
   production D1 mutation, Queue message, Worker deployment, or staging change
   occurred.
+
+### CF4.18F.2 — consolidated production fixture activation preparation
+
+- Date: 2026-09-30. Operations-only preparation for the already-deployed
+  production/D1/fixture runtime. No Worker application code or migrations change.
+- Corrected `after-installation` to preserve the accepted OAuth/session and
+  completed onboarding state, with exactly two independent onboarding and
+  `github.connected` audit identities. Added `after-selection` with the third
+  `repositories.selection.updated` audit, active fixture repository, and selected
+  installation mapping. Added `after-live-issue` with exactly one fixture-linked
+  issue and processed delivery, positive attempts, no last error, and a processed
+  timestamp. Remote head lookup is intentionally not required.
+- Added a protected, feature-ref-only, exact-SHA webhook workflow for configure,
+  bounded inspection, and one redelivery of a discovered eligible attempt. It
+  reuses the exact App/sole selected fixture installation verifier before control,
+  permits only the fixed production webhook URL, keeps TLS verification, and
+  emits only safe delivery metadata. The default installation verifier still
+  requires an unconfigured webhook; only control accepts the exact production URL.
+- Added an exact-version protected tail wrapper that reuses the existing bounded
+  fixture-tail harness without deployment or synthetic Queue/webhook probes.
+- Focused SQL and webhook-control contracts passed (99 tests), including actual
+  SQLite execution against the repository's D1 migrations and negative identity,
+  selection, extra-row, endpoint, redelivery, and secret-output cases.
+- `pnpm check`, `pnpm cf:build`, direct strict script type checks with the
+  repository-compatible ESNext/Bundler module settings, `git diff --check`, and
+  the additional tail-wrapper workflow test passed locally. Linux CI/E2E,
+  workflow registration, fresh protected prechecks, and the existing-session
+  installation handoff are pending. No
+  production OAuth retry, installation, webhook change, issue, D1 mutation,
+  Queue message, Worker deployment, staging change, or customer cutover occurred.
