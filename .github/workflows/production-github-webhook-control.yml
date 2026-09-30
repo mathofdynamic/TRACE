@@ -1,4 +1,4 @@
-name: TRACE production fixture D1 state check
+name: TRACE production GitHub webhook control
 
 on:
   workflow_dispatch:
@@ -7,19 +7,17 @@ on:
         description: Exact 40-character source commit to inspect
         required: true
         type: string
-      stage:
-        description: Fixed read-only D1 acceptance state
+
+      operation:
+        description: Fixed production fixture webhook operation
         required: true
         type: choice
         options:
-          - before-oauth
-          - after-oauth
-          - after-onboarding
-          - after-installation
-          - after-selection
-          - after-live-issue
-      installation_id:
-        description: External installation ID from the protected App verifier (post-install only)
+          - configure
+          - inspect-deliveries
+          - redeliver
+      delivery_id:
+        description: Delivery ID from the protected bounded inspection (redeliver only)
         required: false
         type: string
 
@@ -27,7 +25,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: trace-production-fixture-d1-state-check
+  group: trace-production-github-webhook-control
   cancel-in-progress: false
 
 jobs:
@@ -38,8 +36,8 @@ jobs:
     environment: production-canary
     env:
       EXPECTED_SHA: ${{ inputs.sha }}
-      FIXTURE_D1_STAGE: ${{ inputs.stage }}
-      FIXTURE_INSTALLATION_ID: ${{ inputs.installation_id }}
+      WEBHOOK_OPERATION: ${{ inputs.operation }}
+      WEBHOOK_DELIVERY_ID: ${{ inputs.delivery_id }}
     steps:
       - name: Validate exact feature-ref source SHA
         shell: bash
@@ -53,14 +51,12 @@ jobs:
             echo "The requested SHA must match the feature-ref dispatch SHA." >&2
             exit 1
           fi
-          case "$FIXTURE_D1_STAGE" in
-            before-oauth|after-oauth|after-onboarding|after-installation|after-selection|after-live-issue) ;;
-            *) echo "Unsupported production fixture D1 stage." >&2; exit 1 ;;
+
+          case "$WEBHOOK_OPERATION" in
+            configure|inspect-deliveries) [[ -z "$WEBHOOK_DELIVERY_ID" ]] ;;
+            redeliver) [[ "$WEBHOOK_DELIVERY_ID" =~ ^[1-9][0-9]{0,15}$ ]] ;;
+            *) echo "Unsupported webhook operation." >&2; exit 1 ;;
           esac
-          if [[ "$FIXTURE_D1_STAGE" == after-* && "$FIXTURE_D1_STAGE" != "after-oauth" && "$FIXTURE_D1_STAGE" != "after-onboarding" && ! "$FIXTURE_INSTALLATION_ID" =~ ^[1-9][0-9]{0,19}$ ]]; then
-            echo "Post-install verification requires the external installation ID." >&2
-            exit 1
-          fi
 
       - name: Check out the exact feature-ref source
         uses: actions/checkout@v4
@@ -93,13 +89,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Test read-only D1 state contract
-        run: pnpm exec vitest run --project @trace/web apps/web/lib/production-fixture-d1-state.test.ts
+      - name: Test fixture installation and webhook-control contracts
+        run: pnpm exec vitest run --project @trace/web apps/web/lib/verify-production-github-fixture-installation.test.ts apps/web/lib/production-github-webhook-control.test.ts
 
-      - name: Verify production D1, foreign keys, Queue backlog, and health
+      - name: Control the exact production fixture App webhook
         shell: bash
-        run: pnpm exec tsx scripts/verify-production-fixture-d1-state.ts
+        run: pnpm exec tsx scripts/production-github-webhook-control.ts
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          TRACE_PRODUCTION_D1_ID: ${{ vars.TRACE_PRODUCTION_D1_ID }}
+          TRACE_GITHUB_APP_ID: ${{ vars.TRACE_GITHUB_APP_ID }}
+          TRACE_GITHUB_APP_CLIENT_ID: ${{ vars.TRACE_GITHUB_APP_CLIENT_ID }}
+          TRACE_GITHUB_APP_PRIVATE_KEY: ${{ secrets.TRACE_GITHUB_APP_PRIVATE_KEY }}
+          TRACE_GITHUB_WEBHOOK_SECRET: ${{ secrets.TRACE_GITHUB_WEBHOOK_SECRET }}
