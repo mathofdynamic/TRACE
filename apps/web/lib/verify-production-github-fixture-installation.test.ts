@@ -2,6 +2,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   assertProductionFixtureVerificationRequest,
+  formatProductionFixtureInstallationEvidence,
   formatProductionGitHubFixtureInstallation,
   readProductionGitHubFixtureInstallation,
 } from '../../../scripts/verify-production-github-fixture-installation.js';
@@ -298,5 +299,55 @@ describe('production GitHub fixture installation verifier', () => {
     const fake = makeFetch(validResponses({ app: { ...app, id: 1 } }));
     await expect(read(fake.fetchImplementation)).rejects.toThrow(/App ID/i);
     expect(fake.requests).toHaveLength(1);
+  });
+});
+
+describe('safe evidence before installation rejection', () => {
+  it('distinguishes All repositories from unavailable metadata without exposing unrelated identities', () => {
+    const evidence = formatProductionFixtureInstallationEvidence(2, [
+      { ...installation, repository_selection: 'all' },
+      {
+        ...installation,
+        id: 987,
+        account: { login: 'unrelated-private-username' },
+        repository_selection: 'sensitive-invalid-value',
+        suspended_at: 'private-date-value',
+      },
+    ]);
+    expect(evidence).toContain('INSTALLATIONS_COUNT=2');
+    expect(evidence).toContain('INSTALLATION_LIST_COUNT=2');
+    expect(evidence).toContain('INSTALLATION_1_ACCOUNT_MATCH=YES');
+    expect(evidence).toContain('INSTALLATION_1_REPOSITORY_SELECTION=all');
+    expect(evidence).toContain('INSTALLATION_1_SUSPENDED=NO');
+    expect(evidence).toContain('INSTALLATION_2_ACCOUNT_MATCH=NO');
+    expect(evidence).toContain('INSTALLATION_2_REPOSITORY_SELECTION=UNAVAILABLE');
+    expect(evidence).toContain('INSTALLATION_2_SUSPENDED=YES');
+    for (const value of [
+      'unrelated-private-username',
+      'sensitive-invalid-value',
+      'private-date-value',
+    ])
+      expect(evidence).not.toContain(value);
+  });
+  it('emits proof before rejecting all-repositories access and never mints a read token', async () => {
+    const fake = makeFetch(
+      validResponses({ installations: [{ ...installation, repository_selection: 'all' }] }),
+    );
+    const evidence: string[] = [];
+    await expect(
+      readProductionGitHubFixtureInstallation(
+        '5082884',
+        'production-client-id',
+        privateKeyPem,
+        fake.fetchImplementation,
+        false,
+        (line) => evidence.push(line),
+      ),
+    ).rejects.toThrow(/selected repositories/);
+    expect(evidence.join('\n')).toContain('INSTALLATION_1_REPOSITORY_SELECTION=all');
+    expect(fake.requests).toHaveLength(2);
+    expect(fake.requests.every((request) => request.method === 'GET')).toBe(true);
+    expect(evidence.join('\n')).not.toContain(privateKeyPem);
+    expect(evidence.join('\n')).not.toContain(tokenValues.installationToken);
   });
 });
