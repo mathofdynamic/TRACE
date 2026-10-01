@@ -8,6 +8,12 @@ on:
         required: true
         type: string
 
+      worker_version_id:
+        description: Exact production version captured by guarded deployment acceptance
+        required: true
+        default: 16055223-3a33-43a3-8d09-fafddb8abe72
+        type: string
+
 permissions:
   contents: read
 
@@ -78,4 +84,4 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           TRACE_GITHUB_OAUTH_CLIENT_ID: ${{ vars.TRACE_GITHUB_OAUTH_CLIENT_ID }}
-          WORKER_VERSION_ID: 16055223-3a33-43a3-8d09-fafddb8abe72
+          WORKER_VERSION_ID: ${{ inputs.worker_version_id }}
