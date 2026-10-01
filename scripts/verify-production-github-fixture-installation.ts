@@ -44,8 +44,8 @@ export type ProductionGitHubFixtureInstallationState = {
   installationId: number;
   installationAccount: string;
   installationSuspended: false;
-  repositorySelection: 'selected';
-  repositoryCount: 1;
+  repositorySelection: 'selected' | 'all';
+  repositoryCount: number;
   repositoryId: number;
   repositoryOwner: string;
   repositoryName: string;
@@ -177,7 +177,7 @@ function requireInstallationList(value: unknown): AppInstallation[] {
 
 function validateInstallation(installation: AppInstallation) {
   const id = installation.id;
-  if (typeof id !== 'number' || !Number.isSafeInteger(id) || id <= 0) {
+  if (id !== 166179374) {
     fail('The App installation ID is missing or invalid.');
   }
   if (
@@ -189,8 +189,11 @@ function validateInstallation(installation: AppInstallation) {
   if (installation.suspended_at !== null) {
     fail('The App installation is suspended or suspension state is unavailable.');
   }
-  if (installation.repository_selection !== 'selected') {
-    fail('The App installation is not restricted to selected repositories.');
+  if (
+    installation.repository_selection !== 'selected' &&
+    installation.repository_selection !== 'all'
+  ) {
+    fail('The App installation repository selection is unavailable or invalid.');
   }
   return id;
 }
@@ -384,9 +387,14 @@ export async function readProductionGitHubFixtureInstallation(
     if (reportedRepositoryCount !== undefined && reportedRepositoryCount !== repositories.length) {
       fail('GitHub installation repository count does not match the paginated list.');
     }
-    if (repositories.length !== 1)
+    if (installation.repository_selection === 'selected' && repositories.length !== 1)
       fail('The App installation must have access to exactly one repository.');
-    validateRepository(repositories[0]);
+    const fixtures = repositories.filter(
+      (repository) => isRecord(repository) && repository.id === expectedRepository.id,
+    );
+    if (fixtures.length !== 1)
+      fail('The installation must contain exactly one authorized fixture repository.');
+    validateRepository(fixtures[0]);
   } finally {
     installationToken = '';
   }
@@ -421,8 +429,8 @@ export async function readProductionGitHubFixtureInstallation(
     installationId,
     installationAccount: expectedInstallationLogin,
     installationSuspended: false,
-    repositorySelection: 'selected',
-    repositoryCount: 1,
+    repositorySelection: installation.repository_selection as 'selected' | 'all',
+    repositoryCount: repositories.length,
     repositoryId: expectedRepository.id,
     repositoryOwner: expectedRepository.owner,
     repositoryName: expectedRepository.name,

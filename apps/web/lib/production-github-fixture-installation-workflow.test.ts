@@ -72,12 +72,10 @@ describe('production fixture read-only error tail wrapper', () => {
     expect(fixtureTailWorkflow).toContain('environment: production-canary');
     expect(fixtureTailWorkflow).toContain('permissions:\n  contents: read');
     expect(fixtureTailWorkflow).toContain('"${EXPECTED_SHA,,}" != "${GITHUB_SHA,,}"');
-    expect(fixtureTailWorkflow).toContain(
-      'WORKER_VERSION_ID: 16055223-3a33-43a3-8d09-fafddb8abe72',
-    );
+    expect(fixtureTailWorkflow).toContain('WORKER_VERSION_ID: ${{ inputs.worker_version_id }}');
     expect(fixtureTailWorkflow).toContain('scripts/production-fixture-tail-acceptance.ts');
     expect(fixtureTailWorkflow).not.toMatch(
-      /deploy|secret put|TRACE_GITHUB_APP_PRIVATE_KEY|TRACE_GITHUB_WEBHOOK_SECRET/,
+      /wrangler deploy|secret put|TRACE_GITHUB_APP_PRIVATE_KEY|TRACE_GITHUB_WEBHOOK_SECRET/,
     );
   });
 });

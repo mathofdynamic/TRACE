@@ -1,3 +1,7 @@
+import type { GitHubInstallationSnapshot, GitHubRepositorySnapshot } from '@trace/github';
+
+export const AUTHORIZED_FIXTURE_INSTALLATION_ID = 166179374;
+
 export const AUTHORIZED_FIXTURE_REPOSITORY = {
   owner: 'mathofdynamic',
   repository: 'trace-staging-fixture',
@@ -46,13 +50,6 @@ export type CanaryEligibility =
     };
 
 type GitHubUserIdentity = { githubLogin?: unknown } | null | undefined;
-
-type GitHubInstallationSnapshot = {
-  installation?: {
-    accountLogin?: unknown;
-  };
-  repositories?: unknown;
-};
 
 const githubLoginPattern = /^[a-z0-9](?:[a-z0-9-]{0,37})$/i;
 const repositoryNamePattern = /^[a-z0-9_.-]{1,100}$/i;
@@ -284,7 +281,7 @@ function rawRepositoryMatches(value: unknown, fixture: typeof AUTHORIZED_FIXTURE
 
 function installationAccountMatches(value: unknown, owner: string) {
   if (!isRecord(value) || !isRecord(value.account)) return false;
-  if (!Number.isSafeInteger(value.id) || (value.id as number) <= 0) return false;
+  if (value.id !== AUTHORIZED_FIXTURE_INSTALLATION_ID) return false;
   return matchesExact(value.account.login, owner, githubLoginPattern);
 }
 
@@ -340,10 +337,15 @@ export function canaryInstallationSnapshotEligibility(
   if (!isRecord(value) || !isRecord(value.installation) || !Array.isArray(value.repositories)) {
     return { allowed: false, reason: 'fixture-installation' };
   }
-  const repositories = value.repositories;
+  const repositories = value.repositories.filter(
+    (repository) => isRecord(repository) && repository.id === mode.fixture.repositoryId,
+  );
   if (
-    !Number.isSafeInteger(value.installation.id) ||
-    (value.installation.id as number) <= 0 ||
+    value.installation.id !== AUTHORIZED_FIXTURE_INSTALLATION_ID ||
+    value.installation.suspendedAt !== null ||
+    (value.installation.repositorySelection !== 'all' &&
+      value.installation.repositorySelection !== 'selected') ||
+    (value.installation.repositorySelection === 'selected' && value.repositories.length !== 1) ||
     (value.installation.accountType !== 'User' &&
       value.installation.accountType !== 'Organization') ||
     !matchesExact(value.installation.accountLogin, mode.fixture.owner, githubLoginPattern) ||
@@ -365,6 +367,23 @@ export function canaryInstallationSnapshotEligibility(
   return { allowed: true };
 }
 
+/** Reduce trusted GitHub metadata before either persistence path can create repository rows. */
+export function scopeCanaryInstallationSnapshot(
+  env: ProductionCanaryRuntime | null | undefined,
+  snapshot: { installation: GitHubInstallationSnapshot; repositories: GitHubRepositorySnapshot[] },
+) {
+  const eligibility = canaryInstallationSnapshotEligibility(env, snapshot);
+  if (!eligibility.allowed)
+    throw new Error('Installation snapshot is outside the production fixture scope.');
+  if (resolveProductionCanaryMode(env).kind !== 'fixture') return snapshot;
+  return {
+    ...snapshot,
+    repositories: snapshot.repositories.filter(
+      (repository) => repository.id === AUTHORIZED_FIXTURE_REPOSITORY.repositoryId,
+    ),
+  };
+}
+
 const repositoryBoundEvents = new Set(['repository', 'pull_request', 'push', 'issues']);
 
 export function canaryWebhookPayloadEligibility(
@@ -377,12 +396,29 @@ export function canaryWebhookPayloadEligibility(
   if (!isRecord(value)) return { allowed: false, reason: 'fixture-webhook' };
 
   const installation = value.installation;
-  if (installation !== undefined && !installationAccountMatches(installation, mode.fixture.owner)) {
+  if (
+    installation !== undefined &&
+    (!isRecord(installation) ||
+      installation.id !== AUTHORIZED_FIXTURE_INSTALLATION_ID ||
+      (Object.hasOwn(installation, 'account') &&
+        !installationAccountMatches(installation, mode.fixture.owner)))
+  ) {
     return { allowed: false, reason: 'fixture-webhook' };
   }
 
   if (repositoryBoundEvents.has(eventName)) {
     if (
+      !isRecord(installation) ||
+      installation.id !== AUTHORIZED_FIXTURE_INSTALLATION_ID ||
+      !isRecord(value.repository) ||
+      !isRecord(value.repository.owner) ||
+      !matchesExact(value.repository.owner.login, mode.fixture.owner, githubLoginPattern) ||
+      !matchesExact(value.repository.name, mode.fixture.repository, repositoryNamePattern) ||
+      !matchesExact(
+        value.repository.full_name,
+        mode.fixture.fullName,
+        /^[a-z0-9_.-]+\/[a-z0-9_.-]+$/i,
+      ) ||
       !rawRepositoryMatches(value.repository, mode.fixture) ||
       (eventName === 'pull_request' &&
         !referencedPullRequestRepositoriesMatch(value, mode.fixture)) ||

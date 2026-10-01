@@ -21,6 +21,7 @@ import {
 } from '../../../../lib/request-database';
 import {
   canaryInstallationSnapshotEligibility,
+  scopeCanaryInstallationSnapshot,
   canaryUserEligibility,
   productionCanaryGateResponse,
   productionCanaryIntegrationEligibility,
@@ -171,7 +172,7 @@ async function reconcileExistingInstallation(
       await persistGitHubInstallationSnapshot({
         db,
         user: session.user,
-        snapshot,
+        snapshot: scopeCanaryInstallationSnapshot(cloudflareEnv, snapshot),
         action: 'github.reconciled',
       });
     } finally {
@@ -238,7 +239,7 @@ export async function GET(request: Request) {
       await persistGitHubInstallationSnapshot({
         db,
         user: session.user,
-        snapshot,
+        snapshot: scopeCanaryInstallationSnapshot(cloudflareEnv, snapshot),
         action: 'github.connected',
       });
     } finally {

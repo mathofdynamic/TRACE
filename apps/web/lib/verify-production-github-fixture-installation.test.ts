@@ -14,7 +14,7 @@ const app = {
   installations_count: 1,
 };
 const installation = {
-  id: 123456789,
+  id: 166179374,
   account: { login: 'mathofdynamic' },
   suspended_at: null,
   repository_selection: 'selected',
@@ -108,6 +108,39 @@ function read(fetchImplementation: typeof fetch) {
 }
 
 describe('production GitHub fixture installation verifier', () => {
+  it('accepts all repositories with the fixture among many without disclosing other identities', async () => {
+    const fake = makeFetch(
+      validResponses({
+        installations: [{ ...installation, repository_selection: 'all' }],
+        repositories: {
+          total_count: 2,
+          repositories: [
+            {
+              ...repository,
+              id: 9,
+              name: 'private-other',
+              full_name: 'mathofdynamic/private-other',
+            },
+            repository,
+          ],
+        },
+      }),
+    );
+    const state = await read(fake.fetchImplementation);
+    expect(state.repositorySelection).toBe('all');
+    expect(state.repositoryCount).toBe(2);
+    expect(formatProductionGitHubFixtureInstallation(state)).not.toContain('private-other');
+  });
+  it('rejects all repositories when the fixture is absent', async () => {
+    const fake = makeFetch(
+      validResponses({
+        installations: [{ ...installation, repository_selection: 'all' }],
+        repositories: { total_count: 1, repositories: [{ ...repository, id: 9 }] },
+      }),
+    );
+    await expect(read(fake.fetchImplementation)).rejects.toThrow(/authorized fixture/);
+  });
+
   it('accepts exactly one active selected-only fixture installation and an absent webhook config', async () => {
     const fake = makeFetch(validResponses({ hookStatus: 404 }));
     const state = await read(fake.fetchImplementation);
@@ -115,7 +148,7 @@ describe('production GitHub fixture installation verifier', () => {
     expect(state).toEqual({
       appId: '5082884',
       appName: 'TRACE Production Integration',
-      installationId: 123456789,
+      installationId: 166179374,
       installationAccount: 'mathofdynamic',
       installationSuspended: false,
       repositorySelection: 'selected',
@@ -130,7 +163,7 @@ describe('production GitHub fixture installation verifier', () => {
     expect(fake.requests.map(({ method, url }) => [method, new URL(url).pathname])).toEqual([
       ['GET', '/app'],
       ['GET', '/app/installations'],
-      ['POST', '/app/installations/123456789/access_tokens'],
+      ['POST', '/app/installations/166179374/access_tokens'],
       ['GET', '/installation/repositories'],
       ['GET', '/app/hook/config'],
     ]);
@@ -186,7 +219,8 @@ describe('production GitHub fixture installation verifier', () => {
     ['wrong account', { ...installation, account: { login: 'another-user' } }],
     ['suspended', { ...installation, suspended_at: '2026-09-29T00:00:00Z' }],
     ['missing suspension state', { ...installation, suspended_at: undefined }],
-    ['all repositories selection', { ...installation, repository_selection: 'all' }],
+    ['unknown selection', { ...installation, repository_selection: 'unknown' }],
+    ['wrong installation', { ...installation, id: 7 }],
   ])('rejects installation with %s', async (_label, value) => {
     const fake = makeFetch(validResponses({ installations: [value] }));
     await expect(read(fake.fetchImplementation)).rejects.toThrow();
@@ -329,24 +363,21 @@ describe('safe evidence before installation rejection', () => {
     ])
       expect(evidence).not.toContain(value);
   });
-  it('emits proof before rejecting all-repositories access and never mints a read token', async () => {
+  it('emits safe proof before accepting authorized all-repositories access', async () => {
     const fake = makeFetch(
       validResponses({ installations: [{ ...installation, repository_selection: 'all' }] }),
     );
     const evidence: string[] = [];
-    await expect(
-      readProductionGitHubFixtureInstallation(
-        '5082884',
-        'production-client-id',
-        privateKeyPem,
-        fake.fetchImplementation,
-        false,
-        (line) => evidence.push(line),
-      ),
-    ).rejects.toThrow(/selected repositories/);
+    await readProductionGitHubFixtureInstallation(
+      '5082884',
+      'production-client-id',
+      privateKeyPem,
+      fake.fetchImplementation,
+      false,
+      (line) => evidence.push(line),
+    );
     expect(evidence.join('\n')).toContain('INSTALLATION_1_REPOSITORY_SELECTION=all');
-    expect(fake.requests).toHaveLength(2);
-    expect(fake.requests.every((request) => request.method === 'GET')).toBe(true);
+    expect(fake.requests).toHaveLength(5);
     expect(evidence.join('\n')).not.toContain(privateKeyPem);
     expect(evidence.join('\n')).not.toContain(tokenValues.installationToken);
   });

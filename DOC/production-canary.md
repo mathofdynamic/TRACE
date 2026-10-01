@@ -1089,3 +1089,29 @@ SHA. It performs only the established unauthenticated route probes once tail
 readiness is confirmed; it sends no signed/synthetic webhook or Queue probe and
 does not deploy or roll back. The older closed-baseline tail workflow is not used
 for the active fixture runtime.
+
+### Approved all-repositories installation with fixture-only TRACE persistence
+
+The owner authorizes external installation `166179374` (`mathofdynamic`, App
+`5082884`) with `repository_selection=all`. External repository count may exceed
+one. Verification still requires an unsuspended installation and the exact fixture
+identity `mathofdynamic/trace-staging-fixture` / `1378441300`. Do not reinstall it
+or change its GitHub repository selection.
+
+Setup and existing-installation reconciliation validate trusted GitHub metadata,
+then reduce the snapshot to the single fixture before persistence. Repository
+webhooks require the pinned installation ID and exact repository ID, owner, name,
+and full name before delivery persistence or Queue send. GitHub's ID-only
+installation object on repository events is supported; supplied account metadata
+must still match. Other repositories remain rejected before business processing.
+
+Existing-installation D1 acceptance must select `installation_provenance=reconciled`
+(the connected path remains distinct). A runtime fix deployment selects
+`runtime_mode=fixture` and `d1_baseline_stage=after-onboarding`; the guarded workflow
+verifies the approved external installation, existing onboarding identity, exact
+counts, foreign keys and empty Queue before and after deployment. It preserves
+existing credentials through the protected deployment workflow. Error-tail checks
+use the exact Worker version captured by deployment acceptance.
+
+Customer cutover remains **NO**. Live activation evidence is pending authenticated
+owner reconciliation and the subsequent controlled fixture issue round trip.

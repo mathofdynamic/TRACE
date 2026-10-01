@@ -46,10 +46,11 @@ vi.mock('@trace/github', () => ({
     async () =>
       mocks.snapshot ?? {
         installation: {
-          id: 123,
+          id: 166179374,
           accountLogin: mocks.installationAccountLogin,
           accountType: mocks.installationAccountType,
           suspendedAt: null,
+          repositorySelection: 'all',
           permissions: { metadata: 'read' },
         },
         repositories: [],
@@ -57,11 +58,12 @@ vi.mock('@trace/github', () => ({
   ),
   listGitHubUserInstallations: vi.fn(async () => [
     {
-      id: 123,
+      id: 166179374,
       accountLogin: mocks.installationAccountLogin,
       accountType: mocks.installationAccountType,
       appId: 123,
       suspendedAt: null,
+      repositorySelection: 'all',
     },
   ]),
   verifyUserInstallationAccess: vi.fn(async () => true),
@@ -99,7 +101,7 @@ describe('GitHub App setup callback', () => {
   it('preserves the existing setup callback persistence path', async () => {
     const response = await GET(
       new Request(
-        'https://trace-code.pages.dev/api/github/setup?state=setup-state&code=setup-code&installation_id=123',
+        'https://trace-code.pages.dev/api/github/setup?state=setup-state&code=setup-code&installation_id=166179374',
         {
           headers: {
             cookie:
@@ -206,7 +208,7 @@ describe('GitHub App setup callback', () => {
 
     const response = await GET(
       new Request(
-        'https://trace-code.pages.dev/api/github/setup?state=setup-state&code=setup-code&installation_id=123',
+        'https://trace-code.pages.dev/api/github/setup?state=setup-state&code=setup-code&installation_id=166179374',
         {
           headers: { cookie: 'trace_github_app_state=setup-state' },
         },
@@ -223,10 +225,11 @@ describe('GitHub App setup callback', () => {
     mocks.githubLogin = 'mathofdynamic';
     mocks.snapshot = {
       installation: {
-        id: 123,
+        id: 166179374,
         accountLogin: 'mathofdynamic',
         accountType: 'User',
         suspendedAt: null,
+        repositorySelection: 'all',
         permissions: { metadata: 'read' },
       },
       repositories: [
@@ -238,6 +241,15 @@ describe('GitHub App setup callback', () => {
           defaultBranch: 'main',
           visibility: 'private',
           permissions: { metadata: 'read' },
+        },
+        {
+          id: 9,
+          owner: 'mathofdynamic',
+          name: 'other',
+          fullName: 'mathofdynamic/other',
+          defaultBranch: 'main',
+          visibility: 'private',
+          permissions: {},
         },
       ],
     };
@@ -251,7 +263,7 @@ describe('GitHub App setup callback', () => {
 
     const response = await GET(
       new Request(
-        'https://trace-code.pages.dev/api/github/setup?state=setup-state&code=setup-code&installation_id=123',
+        'https://trace-code.pages.dev/api/github/setup?state=setup-state&code=setup-code&installation_id=166179374',
         {
           headers: { cookie: 'trace_github_app_state=setup-state' },
         },
@@ -260,7 +272,13 @@ describe('GitHub App setup callback', () => {
 
     expect(response.status).toBe(302);
     expect(persistGitHubInstallationSnapshot).toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'github.connected', snapshot: mocks.snapshot }),
+      expect.objectContaining({
+        action: 'github.connected',
+        snapshot: {
+          ...(mocks.snapshot as Record<string, unknown>),
+          repositories: [(mocks.snapshot as { repositories: unknown[] }).repositories[0]],
+        },
+      }),
     );
   });
 
@@ -280,7 +298,7 @@ describe('GitHub App setup callback', () => {
         {
           headers: {
             cookie:
-              'trace_github_reconcile_state=reconcile-state; trace_github_reconcile_next=%2Fapp%2Frepositories; trace_github_reconcile_installation=123',
+              'trace_github_reconcile_state=reconcile-state; trace_github_reconcile_next=%2Fapp%2Frepositories; trace_github_reconcile_installation=166179374',
           },
         },
       ),
@@ -298,10 +316,11 @@ describe('GitHub App setup callback', () => {
     mocks.installationAccountType = 'User';
     mocks.snapshot = {
       installation: {
-        id: 123,
+        id: 166179374,
         accountLogin: 'mathofdynamic',
         accountType: 'User',
         suspendedAt: null,
+        repositorySelection: 'all',
         permissions: { metadata: 'read' },
       },
       repositories: [
@@ -313,6 +332,15 @@ describe('GitHub App setup callback', () => {
           defaultBranch: 'main',
           visibility: 'private',
           permissions: { metadata: 'read' },
+        },
+        {
+          id: 9,
+          owner: 'mathofdynamic',
+          name: 'other',
+          fullName: 'mathofdynamic/other',
+          defaultBranch: 'main',
+          visibility: 'private',
+          permissions: {},
         },
       ],
     };
@@ -330,7 +358,7 @@ describe('GitHub App setup callback', () => {
         {
           headers: {
             cookie:
-              'trace_github_reconcile_state=reconcile-state; trace_github_reconcile_next=%2Fapp%2Frepositories; trace_github_reconcile_installation=123',
+              'trace_github_reconcile_state=reconcile-state; trace_github_reconcile_next=%2Fapp%2Frepositories; trace_github_reconcile_installation=166179374',
           },
         },
       ),
@@ -338,7 +366,13 @@ describe('GitHub App setup callback', () => {
 
     expect(response.status).toBe(302);
     expect(persistGitHubInstallationSnapshot).toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'github.reconciled', snapshot: mocks.snapshot }),
+      expect.objectContaining({
+        action: 'github.reconciled',
+        snapshot: {
+          ...(mocks.snapshot as Record<string, unknown>),
+          repositories: [(mocks.snapshot as { repositories: unknown[] }).repositories[0]],
+        },
+      }),
     );
   });
 });

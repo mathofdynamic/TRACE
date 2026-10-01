@@ -212,6 +212,7 @@ export type GitHubAppConfig = {
 };
 
 export type GitHubInstallationSnapshot = {
+  repositorySelection?: 'selected' | 'all';
   id: number;
   accountLogin: string;
   accountType: string;
@@ -505,12 +506,14 @@ export async function getGitHubInstallationSnapshot(
     id?: number;
     account?: { login?: string; type?: string };
     suspended_at?: string | null;
+    repository_selection?: 'selected' | 'all';
     permissions?: Record<string, string>;
   }>(`https://api.github.com/app/installations/${installationId}`, { token: appJwt });
   if (
     installation.id !== installationId ||
     typeof installation.account?.login !== 'string' ||
-    typeof installation.account.type !== 'string'
+    typeof installation.account.type !== 'string' ||
+    (installation.suspended_at !== null && typeof installation.suspended_at !== 'string')
   ) {
     throw new Error('GitHub App installation response invalid');
   }
@@ -532,9 +535,10 @@ export async function getGitHubInstallationSnapshot(
   return {
     installation: {
       id: installationId,
+      repositorySelection: installation.repository_selection,
       accountLogin: installation.account.login,
       accountType: installation.account.type,
-      suspendedAt: installation.suspended_at ?? null,
+      suspendedAt: installation.suspended_at,
       permissions: permissionMap(installation.permissions),
     } satisfies GitHubInstallationSnapshot,
     repositories,

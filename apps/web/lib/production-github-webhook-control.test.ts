@@ -16,7 +16,7 @@ const config = {
   secret: '********',
 };
 const installation = {
-  id: 123,
+  id: 166179374,
   account: { login: 'mathofdynamic' },
   suspended_at: null,
   repository_selection: 'selected',
@@ -38,7 +38,7 @@ const delivery = {
   guid: '12345678-1234-1234-1234-123456789abc',
   event: 'issues',
   action: 'opened',
-  installation_id: 123,
+  installation_id: 166179374,
   repository_id: 1378441300,
   delivered_at: '2026-09-30T00:00:00Z',
   status_code: 200,
@@ -132,7 +132,7 @@ describe('protected production GitHub webhook control', () => {
     { installation: [] },
     { installation: [installation, installation] },
     { installation: [{ ...installation, account: { login: 'other' } }] },
-    { installation: [{ ...installation, repository_selection: 'all' }] },
+    { installation: [{ ...installation, repository_selection: 'unknown' }] },
     { installation: [{ ...installation, suspended_at: '2026-09-30' }] },
     { repos: { total_count: 2, repositories: [repo, repo] } },
     { repos: { total_count: 1, repositories: [{ ...repo, id: 999 }] } },
@@ -170,7 +170,7 @@ describe('protected production GitHub webhook control', () => {
       request: {
         payload: {
           action: 'opened',
-          installation: { id: 123 },
+          installation: { id: 166179374 },
           repository: { id: 1378441300 },
           issue: { body: 'sensitive issue body' },
         },
@@ -251,7 +251,7 @@ describe('protected production GitHub webhook control', () => {
     { ...delivery, event: 'pull_request' },
     { ...delivery, action: 'closed' },
   ])('rejects out-of-fixture deliveries: %j', (entry) => {
-    expect(() => selectSafeDeliveries([entry], 123)).toThrow();
+    expect(() => selectSafeDeliveries([entry], 166179374)).toThrow();
   });
   it.each([
     ['PATCH', 'https://api.github.com/app/hook/config?url=other'],

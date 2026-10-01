@@ -10,6 +10,8 @@ import {
   formatProductionFixtureD1State,
   parseProductionApplicationCountsResult,
   parseProductionFixtureD1Stage,
+  parseInstallationProvenance,
+  type InstallationProvenance,
   parseProductionFixtureIdentityResult,
   productionFixtureD1State,
   validateReadOnlySql,
@@ -134,6 +136,7 @@ function parseQueueBacklog(value: unknown) {
 export async function verifyProductionFixtureD1State(input: {
   stage: ProductionFixtureD1Stage;
   installationId?: string;
+  installationProvenance?: InstallationProvenance;
   environment: Record<string, string | undefined>;
   fetchImplementation?: typeof fetch;
 }) {
@@ -155,7 +158,12 @@ export async function verifyProductionFixtureD1State(input: {
 
   let identity: FixtureD1Identity | undefined;
   if (input.stage !== 'before-oauth') {
-    const identityQuery = buildProductionFixtureIdentityQuery(input.stage, input.installationId);
+    const identityQuery = buildProductionFixtureIdentityQuery(
+      input.stage,
+      input.installationId,
+      Date.now(),
+      input.installationProvenance,
+    );
     const identityResult = await cloudflareRequest<unknown>({
       path: `/accounts/${productionFixtureD1State.accountId}/d1/database/${productionFixtureD1State.databaseId}/query`,
       token,
@@ -222,11 +230,17 @@ async function main() {
     const result = await verifyProductionFixtureD1State({
       stage,
       installationId,
+      installationProvenance: parseInstallationProvenance(
+        process.env.FIXTURE_INSTALLATION_PROVENANCE,
+      ),
       environment: process.env,
     });
     console.log(
       formatProductionFixtureD1State({
         stage: result.stage,
+        installationProvenance: parseInstallationProvenance(
+          process.env.FIXTURE_INSTALLATION_PROVENANCE,
+        ),
         counts: result.counts,
         foreignKeyViolations: result.foreignKeyViolations,
         queueBacklogCount: result.queueBacklogCount,

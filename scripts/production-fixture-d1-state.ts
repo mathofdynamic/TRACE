@@ -90,6 +90,13 @@ export function parseProductionFixtureD1Stage(value: string | undefined): Produc
   );
 }
 
+export type InstallationProvenance = 'connected' | 'reconciled';
+export function parseInstallationProvenance(value: string | undefined): InstallationProvenance {
+  if (value === undefined || value === '' || value === 'connected') return 'connected';
+  if (value === 'reconciled') return value;
+  throw new Error('Installation provenance must be connected or reconciled.');
+}
+
 export function isPostInstallationStage(stage: ProductionFixtureD1Stage) {
   return (
     stage === 'after-installation' || stage === 'after-selection' || stage === 'after-live-issue'
@@ -142,6 +149,7 @@ export function buildProductionFixtureIdentityQuery(
   stage: Exclude<ProductionFixtureD1Stage, 'before-oauth'>,
   installationId?: string,
   now = Date.now(),
+  provenance: InstallationProvenance = 'connected',
 ): { sql: string; params: (string | number)[] } {
   const oauthLink = `(SELECT COUNT(*) FROM users u JOIN accounts a ON a.user_id = u.id JOIN sessions s ON s.user_id = u.id WHERE a.provider_id = 'github' AND lower(a.account_id) = lower(?))`;
   if (stage === 'after-oauth') {
@@ -179,7 +187,7 @@ export function buildProductionFixtureIdentityQuery(
       ],
     } as const;
   }
-  if (!installationId || !/^\d{1,20}$/.test(installationId) || BigInt(installationId) <= 0n) {
+  if (installationId !== '166179374') {
     throw new Error(
       'A valid external installation ID is required for post-install D1 verification.',
     );
@@ -205,7 +213,7 @@ export function buildProductionFixtureIdentityQuery(
       (SELECT COUNT(*) FROM github_installations gi JOIN organizations o ON o.id = gi.organization_id WHERE gi.github_installation_id = ? AND lower(gi.account_login) = lower(?) AND gi.account_type = 'User' AND gi.state = 'active' AND gi.suspended_at IS NULL AND o.slug = ?) AS fixture_installation_links,
       (SELECT COUNT(*) FROM github_repositories r JOIN github_installations gi ON gi.id = r.installation_id JOIN organizations o ON o.id = r.organization_id WHERE r.github_repository_id = ? AND lower(r.owner) = lower(?) AND lower(r.name) = lower(?) AND lower(r.full_name) = lower(?) AND gi.github_installation_id = ? AND gi.organization_id = o.id) AS fixture_repository_links,
       (SELECT COUNT(*) FROM github_installation_repositories ir JOIN github_installations gi ON gi.id = ir.installation_id WHERE ir.github_repository_id = ? AND gi.github_installation_id = ?) AS fixture_installation_repository_links,
-      (SELECT COUNT(*) FROM audit_events ae JOIN github_installations gi ON ae.subject_id = gi.id JOIN organizations o ON o.id = gi.organization_id JOIN accounts a ON a.user_id = ae.actor_user_id WHERE ae.action = 'github.connected' AND ae.subject_type = 'github_installation' AND ae.organization_id = o.id AND ae.subject_id = gi.id AND o.slug = ? AND a.provider_id = 'github' AND lower(a.account_id) = lower(?)) AS fixture_audit_event_links${selectionSql}${issueSql}`,
+      (SELECT COUNT(*) FROM audit_events ae JOIN github_installations gi ON ae.subject_id = gi.id JOIN organizations o ON o.id = gi.organization_id JOIN accounts a ON a.user_id = ae.actor_user_id WHERE ae.action = ? AND ae.subject_type = 'github_installation' AND ae.organization_id = o.id AND ae.subject_id = gi.id AND o.slug = ? AND a.provider_id = 'github' AND lower(a.account_id) = lower(?)) AS fixture_audit_event_links${selectionSql}${issueSql}`,
     params: [
       ...onboarding.params,
       productionFixtureD1State.organizationSlug,
@@ -222,6 +230,7 @@ export function buildProductionFixtureIdentityQuery(
       installationId,
       productionFixtureD1State.repositoryId,
       installationId,
+      `github.${parseInstallationProvenance(provenance)}`,
       productionFixtureD1State.organizationSlug,
       productionFixtureD1State.githubLogin,
       ...(active
@@ -381,6 +390,7 @@ export function formatProductionFixtureD1State(input: {
   foreignKeyViolations: number;
   queueBacklogCount: number;
   onboardingEvidence?: ProductionFixtureOnboardingEvidence;
+  installationProvenance?: InstallationProvenance;
 }) {
   if (input.stage === 'after-onboarding' && !input.onboardingEvidence) {
     throw new Error('Production fixture D1 onboarding evidence is required for report formatting.');
@@ -425,7 +435,7 @@ export function formatProductionFixtureD1State(input: {
           'GITHUB_INSTALLATION=VERIFIED',
           'FIXTURE_REPOSITORY=VERIFIED',
           'INSTALLATION_REPOSITORY_MAPPING=VERIFIED',
-          'GITHUB_CONNECTED_AUDIT_EVENT=VERIFIED',
+          `GITHUB_${parseInstallationProvenance(input.installationProvenance).toUpperCase()}_AUDIT_EVENT=VERIFIED`,
         ]
       : []),
     ...(isPostInstallationStage(input.stage)

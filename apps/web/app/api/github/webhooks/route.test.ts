@@ -114,6 +114,7 @@ describe('GitHub webhook D1 runtime boundary', () => {
     const response = await POST(
       webhookRequest('issues', {
         action: 'opened',
+        installation: { id: 166179374 },
         repository: {
           id: 1378441300,
           owner: { login: 'mathofdynamic' },
@@ -197,7 +198,13 @@ describe('GitHub webhook D1 runtime boundary', () => {
     });
     const request = webhookRequest('issues', {
       action: 'opened',
-      repository: { id: 7, owner: { login: 'other' }, name: 'private-repo' },
+      installation: { id: 166179374 },
+      repository: {
+        id: 7,
+        owner: { login: 'mathofdynamic' },
+        name: 'private-repo',
+        full_name: 'mathofdynamic/private-repo',
+      },
     });
 
     const response = await POST(request);
@@ -206,6 +213,8 @@ describe('GitHub webhook D1 runtime boundary', () => {
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(mocks.createRequestDatabase).not.toHaveBeenCalled();
     expect(mocks.enqueueD1Webhook).not.toHaveBeenCalled();
+    const environment = await mocks.cloudflareEnv();
+    expect(environment?.TRACE_QUEUE.send).not.toHaveBeenCalled();
     expect(mocks.pgBoss).not.toHaveBeenCalled();
   });
 
@@ -237,7 +246,7 @@ describe('GitHub webhook D1 runtime boundary', () => {
         name: 'trace-staging-fixture',
         full_name: 'mathofdynamic/trace-staging-fixture',
       },
-      installation: { id: 42, account: { login: 'mathofdynamic' } },
+      installation: { id: 166179374 },
     });
 
     const response = await POST(request);
