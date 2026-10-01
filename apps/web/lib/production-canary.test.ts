@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AUTHORIZED_FIXTURE_REPOSITORY,
   canaryInstallationSnapshotEligibility,
+  scopeCanaryInstallationSnapshot,
   canaryRepositorySelectionEligibility,
   canaryUserEligibility,
   canaryWebhookRecoveryEligibility,
@@ -30,10 +31,11 @@ const fixtureRepository = () => ({
 
 const snapshot = () => ({
   installation: {
-    id: 42,
+    id: 166179374,
     accountLogin: 'mathofdynamic',
     accountType: 'User',
     suspendedAt: null,
+    repositorySelection: 'selected' as const,
     permissions: { metadata: 'read' },
   },
   repositories: [
@@ -207,6 +209,40 @@ describe('production fixture recovery replay gate', () => {
 });
 
 describe('production fixture installation snapshot gate', () => {
+  it('allows all-repositories metadata but filters to exactly one trusted fixture', () => {
+    const candidate = {
+      ...snapshot(),
+      installation: { ...snapshot().installation, repositorySelection: 'all' as const },
+      repositories: [
+        ...snapshot().repositories,
+        { ...snapshot().repositories[0]!, id: 9, name: 'other', fullName: 'mathofdynamic/other' },
+      ],
+    };
+    expect(canaryInstallationSnapshotEligibility(production(), candidate).allowed).toBe(true);
+    expect(scopeCanaryInstallationSnapshot(production(), candidate).repositories).toEqual(
+      snapshot().repositories,
+    );
+    expect(candidate.repositories).toHaveLength(2);
+    expect(
+      canaryInstallationSnapshotEligibility(production(), {
+        ...candidate,
+        repositories: [candidate.repositories[1]],
+      }).allowed,
+    ).toBe(false);
+  });
+  it.each([
+    { ...snapshot().installation, suspendedAt: '2026-10-01T00:00:00Z' },
+    { ...snapshot().installation, id: 7 },
+    { ...snapshot().installation, accountLogin: 'other' },
+  ])('rejects unsafe all-repositories installations', (installation) => {
+    expect(
+      canaryInstallationSnapshotEligibility(production(), {
+        ...snapshot(),
+        installation: { ...installation, repositorySelection: 'all' },
+      }).allowed,
+    ).toBe(false);
+  });
+
   it('allows exactly the authorized account and repository', () => {
     expect(canaryInstallationSnapshotEligibility(production(), snapshot()).allowed).toBe(true);
   });
@@ -258,7 +294,7 @@ describe('production fixture installation snapshot gate', () => {
 describe('production fixture raw webhook gate', () => {
   const repositoryPayload = {
     repository: fixtureRepository(),
-    installation: { id: 42, account: { login: 'mathofdynamic' } },
+    installation: { id: 166179374, account: { login: 'mathofdynamic' } },
   };
 
   it.each([
@@ -282,7 +318,7 @@ describe('production fixture raw webhook gate', () => {
       'installation',
       {
         action: 'created',
-        installation: { id: 42, account: { login: 'mathofdynamic' } },
+        installation: { id: 166179374, account: { login: 'mathofdynamic' } },
         repositories: [fixtureRepository()],
       },
     ],
@@ -290,7 +326,7 @@ describe('production fixture raw webhook gate', () => {
       'installation_repositories',
       {
         action: 'added',
-        installation: { id: 42, account: { login: 'mathofdynamic' } },
+        installation: { id: 166179374, account: { login: 'mathofdynamic' } },
         repository_selection: 'selected',
         repositories_added: [fixtureRepository()],
         repositories_removed: [],
@@ -320,7 +356,7 @@ describe('production fixture raw webhook gate', () => {
       'mixed repository array',
       'installation_repositories',
       {
-        installation: { id: 42, account: { login: 'mathofdynamic' } },
+        installation: { id: 166179374, account: { login: 'mathofdynamic' } },
         repository_selection: 'selected',
         repositories_added: [fixtureRepository(), { ...fixtureRepository(), id: 7 }],
         repositories_removed: [],
@@ -330,7 +366,7 @@ describe('production fixture raw webhook gate', () => {
       'another installation account',
       'installation',
       {
-        installation: { id: 42, account: { login: 'someone-else' } },
+        installation: { id: 166179374, account: { login: 'someone-else' } },
       },
     ],
     [
@@ -351,7 +387,7 @@ describe('production fixture raw webhook gate', () => {
       'all-repository installation selection',
       'installation_repositories',
       {
-        installation: { id: 42, account: { login: 'mathofdynamic' } },
+        installation: { id: 166179374, account: { login: 'mathofdynamic' } },
         repository_selection: 'all',
         repositories_added: [fixtureRepository()],
         repositories_removed: [],

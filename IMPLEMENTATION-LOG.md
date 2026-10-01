@@ -1728,3 +1728,21 @@
   issuance. Focused/local validation and Linux CI results are recorded in the PR;
   protected evidence will be rerun only after the reviewed fix merges. No runtime,
   workflow, migration, production data, staging, or external App change is included.
+
+### Production fixture scope-policy correction — 2026-10-01
+
+- Accepted the owner's external all-repositories installation policy for the
+  pinned unsuspended installation `166179374` and account `mathofdynamic`.
+- Added trusted-snapshot filtering before both setup and reconciliation persistence;
+  TRACE receives only fixture repository `1378441300` even when GitHub returns many.
+- Preserved rejection before D1 delivery persistence and Queue send for nonfixture
+  repository events; pinned installation identity and supported GitHub's ID-only
+  repository-event installation metadata.
+- Added real SQLite/Drizzle D1 persistence regression coverage, snapshot eligibility
+  and filtering tests, external verifier regressions and explicit connected versus
+  reconciled audit acceptance. Updated protected deployment checks to preserve the
+  already accepted OAuth/onboarding state and support the reviewed existing App.
+- Validation: focused suites and strict operational-script typechecks passed;
+  full check, Cloudflare build and CI verification follow before merge/deployment.
+- No customer cutover. Activation remains pending production deployment and owner
+  browser reconciliation; no production D1 mutation has been made by this fix.

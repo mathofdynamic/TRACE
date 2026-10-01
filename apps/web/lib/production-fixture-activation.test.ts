@@ -31,7 +31,7 @@ function fixture(stage: ProductionFixtureD1Stage) {
     INSERT INTO audit_events (id,actor_user_id,action,subject_type) VALUES ('onboarding','u','workspace.profile.completed','onboarding_profile');
     INSERT INTO organizations (id,slug,name) VALUES ('o','github-user-mathofdynamic','mathofdynamic on GitHub');
     INSERT INTO memberships (id,user_id,organization_id,role) VALUES ('m','u','o','owner');
-    INSERT INTO github_installations (id,organization_id,github_installation_id,account_login,account_type) VALUES ('gi','o','123','mathofdynamic','User');
+    INSERT INTO github_installations (id,organization_id,github_installation_id,account_login,account_type) VALUES ('gi','o','166179374','mathofdynamic','User');
     INSERT INTO github_repositories (id,organization_id,installation_id,github_repository_id,owner,name,full_name,state) VALUES ('r','o','gi','1378441300','mathofdynamic','trace-staging-fixture','mathofdynamic/trace-staging-fixture','available');
     INSERT INTO github_installation_repositories (id,installation_id,github_repository_id,selected) VALUES ('ir','gi','1378441300',0);
     INSERT INTO audit_events (id,organization_id,actor_user_id,action,subject_type,subject_id) VALUES ('connected','o','u','github.connected','github_installation','gi');
@@ -45,7 +45,7 @@ function fixture(stage: ProductionFixtureD1Stage) {
   if (stage === 'after-live-issue')
     db.exec(`
     INSERT INTO github_issues (id,organization_id,repository_id,github_issue_id,number,title,state) VALUES ('i','o','r','456',1,'Synthetic issue','open');
-    INSERT INTO github_webhook_deliveries (id,delivery_id,event_name,action,installation_id,organization_id,repository_id,payload_sha256,status,attempts,processed_at) VALUES ('d','synthetic-guid','issues','opened','123','o','r','synthetic-checksum','processed',1,${now});
+    INSERT INTO github_webhook_deliveries (id,delivery_id,event_name,action,installation_id,organization_id,repository_id,payload_sha256,status,attempts,processed_at) VALUES ('d','synthetic-guid','issues','opened','166179374','o','r','synthetic-checksum','processed',1,${now});
   `);
   return db;
 }
@@ -54,7 +54,7 @@ function assertState(db: DatabaseSync, stage: (typeof postStages)[number]) {
     { results: [db.prepare(buildProductionApplicationCountsSql()).get()] },
   ]);
   assertExpectedProductionFixtureCounts(stage, counts);
-  const query = buildProductionFixtureIdentityQuery(stage, '123', now);
+  const query = buildProductionFixtureIdentityQuery(stage, '166179374', now);
   validateReadOnlySql(query.sql);
   expect(query.params).toHaveLength((query.sql.match(/\?/g) ?? []).length);
   const identity = parseProductionFixtureIdentityResult([
@@ -65,6 +65,30 @@ function assertState(db: DatabaseSync, stage: (typeof postStages)[number]) {
   expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
 }
 describe('production fixture activation acceptance SQL', () => {
+  it('requires explicit reconciled provenance and rejects connected evidence for that path', () => {
+    const db = fixture('after-installation');
+    try {
+      const query = buildProductionFixtureIdentityQuery(
+        'after-installation',
+        '166179374',
+        now,
+        'reconciled',
+      );
+      const read = () =>
+        parseProductionFixtureIdentityResult([
+          { results: [db.prepare(query.sql).get(...query.params)] },
+        ]);
+      expect(() => assertProductionFixtureIdentity('after-installation', read())).toThrow(
+        /fixture_audit/,
+      );
+      db.exec("UPDATE audit_events SET action='github.reconciled' WHERE id='connected'");
+      expect(() => assertProductionFixtureIdentity('after-installation', read())).not.toThrow();
+      expect(() => assertState(db, 'after-installation')).toThrow(/fixture_audit/);
+    } finally {
+      db.close();
+    }
+  });
+
   it.each(postStages)(
     'accepts exact %s state with independent audits and null remote head',
     (stage) => {

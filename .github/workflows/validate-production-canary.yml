@@ -23,6 +23,14 @@ on:
         options:
           - closed
           - fixture
+      d1_baseline_stage:
+        description: Verified existing D1 state to preserve across deployment
+        required: true
+        default: before-oauth
+        type: choice
+        options:
+          - before-oauth
+          - after-onboarding
       confirmation:
         description: Type the confirmation required for the selected deploy runtime mode
         required: false
@@ -47,6 +55,7 @@ jobs:
       TRACE_PRODUCTION_QUEUE_NAME: ${{ vars.TRACE_PRODUCTION_QUEUE_NAME }}
       TRACE_PRODUCTION_WORKER_NAME: ${{ vars.TRACE_PRODUCTION_WORKER_NAME }}
       DEPLOYMENT_ACTION: ${{ inputs.mode }}
+      TRACE_FIXTURE_D1_BASELINE_STAGE: ${{ inputs.d1_baseline_stage }}
       RUNTIME_MODE: ${{ inputs.runtime_mode }}
       EXPECTED_SHA: ${{ inputs.sha }}
       DEPLOY_CONFIRMATION: ${{ inputs.confirmation }}
@@ -210,10 +219,16 @@ jobs:
           TRACE_GITHUB_APP_CLIENT_ID: ${{ vars.TRACE_GITHUB_APP_CLIENT_ID }}
           TRACE_GITHUB_APP_PRIVATE_KEY: ${{ secrets.TRACE_GITHUB_APP_PRIVATE_KEY }}
 
-      - name: Verify GitHub App is uninstalled and webhook configuration is absent
+      - name: Verify authorized existing fixture installation or initial uninstalled App
         if: ${{ inputs.mode == 'deploy' && inputs.runtime_mode == 'fixture' }}
         shell: bash
-        run: pnpm exec tsx scripts/verify-production-github-app-state.ts
+        run: |
+          set -euo pipefail
+          if [[ "$TRACE_FIXTURE_D1_BASELINE_STAGE" == after-onboarding ]]; then
+            pnpm exec tsx scripts/verify-production-github-fixture-installation.ts
+          else
+            pnpm exec tsx scripts/verify-production-github-app-state.ts
+          fi
         env:
           TRACE_GITHUB_APP_ID: ${{ vars.TRACE_GITHUB_APP_ID }}
           TRACE_GITHUB_APP_CLIENT_ID: ${{ vars.TRACE_GITHUB_APP_CLIENT_ID }}

@@ -130,6 +130,8 @@ function fakeCloudflare(
     mode?: 'closed' | 'fixture';
     backlog?: number;
     counts?: Record<string, number>;
+    identity?: Record<string, number>;
+    foreignKeys?: unknown[];
     deploymentId?: string;
     deploymentMessage?: string;
     traffic?: number;
@@ -168,9 +170,15 @@ function fakeCloudflare(
     } else if (url.pathname.endsWith(`/queues/${baseline.queueId}`)) {
       result = { ...queueResponse(), ...overrides.queue };
     } else if (url.pathname.endsWith(`/d1/database/${baseline.d1Id}/query`)) {
+      const sql = JSON.parse(String(init?.body)).sql as string;
       result = [
         {
-          results: [{ ...zeroCountRow(), ...overrides.counts }],
+          results:
+            sql === 'PRAGMA foreign_key_check'
+              ? (overrides.foreignKeys ?? [])
+              : sql.includes('oauth_identity_links')
+                ? [{ ok: 1, ...overrides.identity }]
+                : [{ ...zeroCountRow(), ...overrides.counts }],
         },
       ];
     } else {
@@ -257,6 +265,50 @@ const commonEnvironment = {
 };
 
 describe('production fixture transition state gate', () => {
+  it.each(['before', 'after'] as const)(
+    'preserves and verifies accepted onboarding state %s deployment',
+    async (phase) => {
+      const source = phase === 'before' ? baseline.fixtureSourceSha : 'c'.repeat(40);
+      const identity = Object.fromEntries(
+        [
+          'oauth_identity_links',
+          'active_session_links',
+          'onboarding_profile_links',
+          'onboarding_completed_links',
+          'onboarding_intended_usage_links',
+          'onboarding_execution_mode_links',
+          'onboarding_audit_actor_links',
+          'onboarding_audit_action_links',
+          'onboarding_audit_subject_links',
+          'onboarding_audit_unscoped_links',
+          'onboarding_audit_event_links',
+        ].map((key) => [key, 1]),
+      );
+      const fake = fakeCloudflare(phase, source, {
+        mode: 'fixture',
+        ...(phase === 'before' ? { activeVersionId: baseline.fixtureVersionId } : {}),
+        counts: { users: 1, accounts: 1, sessions: 1, onboarding_profiles: 1, audit_events: 1 },
+        identity,
+      });
+      const input = {
+        phase,
+        environment: { ...commonEnvironment, TRACE_FIXTURE_D1_BASELINE_STAGE: 'after-onboarding' },
+        expectedSourceSha: source,
+        expectedBaselineVersionId: baseline.fixtureVersionId,
+        expectedBaselineMode: 'fixture' as const,
+        fetchImplementation: fake.fetchImplementation,
+        consumerOutput: consumerList,
+      };
+      expect((await verifyProductionFixtureTransitionState(input)).emptyApplicationTableCount).toBe(
+        17,
+      );
+      identity.onboarding_audit_event_links = 0;
+      await expect(verifyProductionFixtureTransitionState(input)).rejects.toThrow(
+        /onboarding_audit/,
+      );
+    },
+  );
+
   it('classifies the closed baseline by immutable version and traffic, not deployment ID', () => {
     const expectedSourceSha = 'c'.repeat(40);
     expect(baseline).not.toHaveProperty('deploymentId');

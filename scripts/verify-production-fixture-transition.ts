@@ -10,6 +10,13 @@ import {
   type ProductionApplicationCounts,
 } from './production-canary-d1.js';
 import {
+  assertExpectedProductionFixtureCounts,
+  assertProductionFixtureIdentity,
+  buildProductionFixtureIdentityQuery,
+  parseProductionFixtureIdentityResult,
+  assertProductionFixtureForeignKeys,
+} from './production-fixture-d1-state.js';
+import {
   productionGitHubRuntimeVariableSources,
   productionWorkerSecretNames,
 } from './production-canary-runtime-config.js';
@@ -597,7 +604,11 @@ function readWranglerConsumerList() {
   }
 }
 
-async function readApplicationCounts(token: string, fetchImplementation: FetchImplementation) {
+async function readApplicationCounts(
+  token: string,
+  fetchImplementation: FetchImplementation,
+  environment: Record<string, string | undefined>,
+) {
   const result = await cloudflareRequest<unknown>(
     `/accounts/${productionFixtureTransitionBaseline.accountId}/d1/database/${productionFixtureTransitionBaseline.d1Id}/query`,
     token,
@@ -605,7 +616,34 @@ async function readApplicationCounts(token: string, fetchImplementation: FetchIm
     { method: 'POST', body: { sql: buildProductionApplicationCountsSql(), params: [] } },
   );
   const counts = parseProductionApplicationCountsResult(result);
-  assertProductionApplicationCountsEmpty(counts);
+  const stage = environment.TRACE_FIXTURE_D1_BASELINE_STAGE ?? 'before-oauth';
+  if (stage === 'before-oauth') assertProductionApplicationCountsEmpty(counts);
+  else if (stage === 'after-onboarding') {
+    assertExpectedProductionFixtureCounts(stage, counts);
+    const query = buildProductionFixtureIdentityQuery(stage);
+    const identity = await cloudflareRequest<unknown>(
+      `/accounts/${productionFixtureTransitionBaseline.accountId}/d1/database/${productionFixtureTransitionBaseline.d1Id}/query`,
+      token,
+      fetchImplementation,
+      { method: 'POST', body: query },
+    );
+    assertProductionFixtureIdentity(stage, parseProductionFixtureIdentityResult(identity));
+    const foreignKeys = await cloudflareRequest<unknown>(
+      `/accounts/${productionFixtureTransitionBaseline.accountId}/d1/database/${productionFixtureTransitionBaseline.d1Id}/query`,
+      token,
+      fetchImplementation,
+      { method: 'POST', body: { sql: 'PRAGMA foreign_key_check', params: [] } },
+    );
+    if (
+      !Array.isArray(foreignKeys) ||
+      foreignKeys.length !== 1 ||
+      !foreignKeys[0] ||
+      typeof foreignKeys[0] !== 'object' ||
+      !('results' in foreignKeys[0])
+    )
+      fail('Foreign-key query result is invalid.');
+    assertProductionFixtureForeignKeys(foreignKeys[0].results);
+  } else fail('Unsupported D1 baseline stage.');
   return counts;
 }
 
@@ -677,6 +715,7 @@ export async function verifyProductionFixtureTransitionState(options: {
   const counts: ProductionApplicationCounts = await readApplicationCounts(
     token,
     fetchImplementation,
+    options.environment,
   );
   const metrics = await readQueueMetrics(token, fetchImplementation);
 
