@@ -1712,3 +1712,19 @@
   installation handoff are pending. No
   production OAuth retry, installation, webhook change, issue, D1 mutation,
   Queue message, Worker deployment, staging change, or customer cutover occurred.
+
+### Production fixture continuation — safe installation rejection evidence
+
+- Date: 2026-10-01. The existing fixture installation verifier rejected the
+  repository-selection requirement before retrieving repositories. Its previous
+  failure output did not distinguish GitHub's `all` value from unavailable
+  metadata, so no new installation or reconciliation was attempted.
+- Added opt-in CLI evidence before restrictive installation validation: expected
+  App identity, reported/list counts, safe installation IDs, account match flags,
+  bounded repository-selection enums, and suspension flags. Unrelated usernames,
+  arbitrary metadata, credentials, and timestamps are omitted. Unsafe or unknown
+  scope still stops before an installation token is minted or repositories read.
+- Regression tests cover safe output and all-repository rejection before token
+  issuance. Focused/local validation and Linux CI results are recorded in the PR;
+  protected evidence will be rerun only after the reviewed fix merges. No runtime,
+  workflow, migration, production data, staging, or external App change is included.

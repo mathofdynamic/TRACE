@@ -228,12 +228,56 @@ function assertNoWebhookUrl(body: unknown) {
   if (body.url.length > 0) fail('The GitHub App webhook URL is configured.');
 }
 
+export function formatProductionFixtureInstallationEvidence(
+  reportedCount: number,
+  installations: AppInstallation[],
+) {
+  const lines = [
+    `APP_ID=${productionGitHubApp.id}`,
+    `APP_NAME=${productionGitHubApp.name}`,
+    `INSTALLATIONS_COUNT=${reportedCount}`,
+    `INSTALLATION_LIST_COUNT=${installations.length}`,
+  ];
+  for (const [index, installation] of installations.entries()) {
+    const prefix = `INSTALLATION_${index + 1}`;
+    const validId =
+      typeof installation.id === 'number' &&
+      Number.isSafeInteger(installation.id) &&
+      installation.id > 0;
+    const accountMatch =
+      typeof installation.account?.login === 'string'
+        ? installation.account.login.toLowerCase() === expectedInstallationLogin
+          ? 'YES'
+          : 'NO'
+        : 'UNAVAILABLE';
+    const selection =
+      installation.repository_selection === 'all' ||
+      installation.repository_selection === 'selected'
+        ? installation.repository_selection
+        : 'UNAVAILABLE';
+    const suspended =
+      installation.suspended_at === null
+        ? 'NO'
+        : typeof installation.suspended_at === 'string' && installation.suspended_at.length > 0
+          ? 'YES'
+          : 'UNAVAILABLE';
+    lines.push(
+      `${prefix}_ID=${validId ? installation.id : 'UNAVAILABLE'}`,
+      `${prefix}_ACCOUNT_MATCH=${accountMatch}`,
+      `${prefix}_REPOSITORY_SELECTION=${selection}`,
+      `${prefix}_SUSPENDED=${suspended}`,
+    );
+  }
+  return lines.join('\n');
+}
+
 export async function readProductionGitHubFixtureInstallation(
   appId: string | undefined,
   appClientId: string | undefined,
   privateKeyPem: string | undefined,
   fetchImplementation: typeof fetch = fetch,
   allowProductionWebhook = false,
+  reportEvidence?: (evidence: string) => void,
 ): Promise<ProductionGitHubFixtureInstallationState> {
   if (appId !== productionGitHubApp.id) fail('The configured App ID is not the production App.');
   if (typeof appClientId !== 'string' || appClientId.trim().length === 0) {
@@ -283,6 +327,9 @@ export async function readProductionGitHubFixtureInstallation(
     page += 1;
     url = next;
   }
+  reportEvidence?.(
+    formatProductionFixtureInstallationEvidence(app.installations_count, installations),
+  );
   if (app.installations_count !== installations.length) {
     fail('App installations_count does not match the paginated installation list.');
   }
@@ -410,6 +457,9 @@ async function main() {
       process.env.TRACE_GITHUB_APP_ID,
       process.env.TRACE_GITHUB_APP_CLIENT_ID,
       process.env.TRACE_GITHUB_APP_PRIVATE_KEY,
+      fetch,
+      false,
+      (evidence) => console.log(evidence),
     );
     console.log(formatProductionGitHubFixtureInstallation(state));
     console.log('PRODUCTION_FIXTURE_INSTALLATION=VERIFIED');
