@@ -18,6 +18,14 @@ on:
           - after-installation
           - after-selection
           - after-live-issue
+      installation_provenance:
+        description: Exact audit provenance for installation persistence
+        required: true
+        default: connected
+        type: choice
+        options:
+          - connected
+          - reconciled
       installation_id:
         description: External installation ID from the protected App verifier (post-install only)
         required: false
@@ -39,6 +47,7 @@ jobs:
     env:
       EXPECTED_SHA: ${{ inputs.sha }}
       FIXTURE_D1_STAGE: ${{ inputs.stage }}
+      FIXTURE_INSTALLATION_PROVENANCE: ${{ inputs.installation_provenance }}
       FIXTURE_INSTALLATION_ID: ${{ inputs.installation_id }}
     steps:
       - name: Validate exact feature-ref source SHA
@@ -57,7 +66,7 @@ jobs:
             before-oauth|after-oauth|after-onboarding|after-installation|after-selection|after-live-issue) ;;
             *) echo "Unsupported production fixture D1 stage." >&2; exit 1 ;;
           esac
-          if [[ "$FIXTURE_D1_STAGE" == after-* && "$FIXTURE_D1_STAGE" != "after-oauth" && "$FIXTURE_D1_STAGE" != "after-onboarding" && ! "$FIXTURE_INSTALLATION_ID" =~ ^[1-9][0-9]{0,19}$ ]]; then
+          if [[ "$FIXTURE_D1_STAGE" == after-* && "$FIXTURE_D1_STAGE" != "after-oauth" && "$FIXTURE_D1_STAGE" != "after-onboarding" && "$FIXTURE_INSTALLATION_ID" != "166179374" ]]; then
             echo "Post-install verification requires the external installation ID." >&2
             exit 1
           fi
