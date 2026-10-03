@@ -1,5 +1,13 @@
 # Production architecture
 
+Current owner production is operational at
+`https://trace-production.mathofdynamic2.workers.dev` with D1 and Cloudflare Queue,
+no Hyperdrive, explicit owner mode, and only owner-selected repositories eligible
+for business processing. Public customer cutover remains NO. See
+[the current release evidence](production-canary.md#owner-production-operational--2026-10-03)
+for exact source/version, App/installation, acceptance and rollback. The CF4.9
+planning sections below retain their historical context.
+
 ## Current reference topology
 
 The historical production topology remains available only as a rollback and

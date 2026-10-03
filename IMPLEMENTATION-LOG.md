@@ -1848,3 +1848,34 @@
 - Validation: focused owner/route/persistence/transition tests, full `pnpm check`,
   Cloudflare build and diff checks passed locally. Linux CI/E2E runs before merge
   and protected owner deployment. CLI now defaults to the production Worker URL.
+
+### Owner production acceptance and main integration — 2026-10-03
+
+- Owner implementation PR #57 passed CI/E2E `37101982334` and merged at feature
+  `29a306543a54feccace5edc59b27dc37942f01e0`. Protected workflow registration
+  PR #58 was merged before dispatch.
+- Guarded deployment `37102353601` deployed exact reviewed source
+  `72f71ff4f597c0a18abaa2eaec837ff4892266d0`, Worker
+  `a118f111-0bcb-4662-b864-c8587ca29567`, deployment
+  `4deb6a70-45ec-43ac-afbb-1cf3ff87464d`, at 100% owner/D1/Queue traffic.
+  Preserved fixture evidence and production identities; no Hyperdrive/runtime
+  secret copying, source upload, synthetic Queue probe or acceptance-only TRACE issue.
+- Owner browser reconciliation/selection/open-project completed. Protected active
+  acceptance `37105832530` verified approved all-selection installation `166179374`,
+  91 trusted repositories, 89 available/unselected and active TRACE (`1322932802`)
+  plus fixture. FK=0, Queue backlog=0, health=200. Exact-version bounded tail
+  `37105850619` found zero error events.
+- Normal owner CLI device authorization succeeded. Production `whoami` resolved
+  the owner workspace and two active repositories; `connect` bound TRACE normally.
+  Stored the scoped credential outside the checkout with owner-only permissions.
+- Reviewed the feature/main delta and conflict-free merge tree. PR #59 passed full
+  CI/E2E `37105971400` and merged at main
+  `94daaaa33f2b94e4b569bf74f90b74f09cfd4e40`. Entire tracked tree matches the
+  deployed reviewed source (`git diff --exit-code` empty), so no redeployment.
+- Final main protected read-only owner acceptance: `37111292984`. Recorded current
+  architecture, owner CLI path, source/merge relationship, selection/webhook policy,
+  preserved canary and rollback in one final documentation update.
+- FIXTURE CANARY=PASS; OWNER PRODUCTION OPERATIONAL=YES;
+  PUBLIC CUSTOMER CUTOVER=NO. Final main protected acceptance awaits owner
+  addition of main to the production-canary deployment branch allowlist; the
+  injected integration policy-edit request received HTTP 403.
