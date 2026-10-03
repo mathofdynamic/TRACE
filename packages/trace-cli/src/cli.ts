@@ -569,9 +569,13 @@ export async function main(args: string[]): Promise<CliResult> {
   };
 }
 
-const invokedDirectly = process.argv[1]
-  ? (await realpath(process.argv[1]).catch(() => '')) === fileURLToPath(import.meta.url)
-  : false;
+const invokedPath = process.argv[1] ? await realpath(process.argv[1]).catch(() => '') : '';
+const modulePath = fileURLToPath(import.meta.url);
+// Windows resolves drive letters/path casing differently between npm shims and file URLs.
+const invokedDirectly =
+  process.platform === 'win32'
+    ? invokedPath.toLowerCase() === modulePath.toLowerCase()
+    : invokedPath === modulePath;
 if (invokedDirectly) {
   try {
     const result = await main(process.argv.slice(2));
