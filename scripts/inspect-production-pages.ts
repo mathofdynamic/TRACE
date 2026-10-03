@@ -11,10 +11,12 @@ async function main() {
   );
   const body = (await response.json()) as {
     success: boolean;
+    errors?: { code?: number }[];
     result: {
       name: string;
       subdomain: string;
-      production_branch: string;
+      production_branch?: string;
+      source?: { type?: string; config?: { production_branch?: string } };
       canonical_deployment?: {
         id: string;
         url: string;
@@ -22,12 +24,15 @@ async function main() {
       };
     };
   };
+  console.log(
+    `PAGES_INSPECTION=${JSON.stringify({ httpStatus: response.status, success: body.success, errorCodes: body.errors?.map((e) => e.code), name: body.result?.name, subdomain: body.result?.subdomain, productionBranch: body.result?.production_branch, sourceType: body.result?.source?.type, sourceProductionBranch: body.result?.source?.config?.production_branch })}`,
+  );
   if (
     !response.ok ||
     !body.success ||
     body.result.name !== 'trace-code' ||
     body.result.subdomain !== 'trace-code.pages.dev' ||
-    body.result.production_branch !== 'main'
+    (body.result.production_branch ?? body.result.source?.config?.production_branch) !== 'main'
   )
     throw new Error('Existing fixed Pages project is inaccessible or mismatched.');
   const deployed = body.result.canonical_deployment;
