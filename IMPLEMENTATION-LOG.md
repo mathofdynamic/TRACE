@@ -1793,3 +1793,13 @@
   protected fixture inspection set. They remain ineligible for redelivery.
 - Accepted administration events, wrong installation IDs, and null-scope business
   events still stop activation. The runtime gate and persistence are unchanged.
+
+### Historical pre-secret nonfixture delivery rejection — 2026-10-03
+
+- Protected run `37097972981` identified a historical nonfixture push for the
+  pinned installation rejected with HTTP 401 before secret configuration.
+- Inspection excludes HTTP 401 as well as 403 only under the same narrow
+  nonfixture/administrative scope rules. Accepted nonfixture events still stop
+  activation; excluded events cannot be selected for redelivery.
+- Regression tests exercise both rejection statuses and wrong-installation
+  rejection. No production runtime or persistence behavior changes.
