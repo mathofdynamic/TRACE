@@ -1,10 +1,10 @@
 # TRACE production canary runbook
 
-This runbook records the staged production-canary plan and its actual outcomes.
-As of CF4.17, the dedicated production D1, Queue, and closed Worker exist, and
-separate production GitHub App and OAuth registrations have been created. No
-production GitHub installation, OAuth authorization, webhook delivery, or
-customer traffic is enabled. The latest execution status is recorded below.
+This runbook records the production rollout and its actual outcomes. The current
+release is owner-only production on Cloudflare D1 and Queue: **OWNER PRODUCTION
+OPERATIONAL=YES**, **PUBLIC CUSTOMER CUTOVER=NO**. The fixture canary passed and
+remains preserved. Historical stages below describe their state at execution; the
+current owner release and acceptance evidence appear at the end.
 
 ## Initial resource proposal (CF4.12)
 
@@ -1207,3 +1207,122 @@ error events. It sent no signed/synthetic webhook or Queue probe.
 **TRACE FIXTURE OPERATIONAL=YES**. **CUSTOMER CUTOVER=NO**. The external App's
 all-repositories scope remains approved; TRACE's production canary retains only
 the fixture repository and its controlled issue/delivery.
+
+## Owner production operational — 2026-10-03
+
+**OWNER PRODUCTION OPERATIONAL=YES**. **PUBLIC CUSTOMER CUTOVER=NO**.
+The owner completed normal browser reconciliation, explicit selection and opening
+of `mathofdynamic/TRACE`. Empty intelligence before a local artifact sync is valid;
+this acceptance did not upload source or claim synced analysis.
+
+| Release identity               | Verified value                                                                                        |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| Production URL                 | `https://trace-production.mathofdynamic2.workers.dev`                                                 |
+| Reviewed/deployed owner source | `72f71ff4f597c0a18abaa2eaec837ff4892266d0`                                                            |
+| Worker version                 | `a118f111-0bcb-4662-b864-c8587ca29567`                                                                |
+| Deployment                     | `4deb6a70-45ec-43ac-afbb-1cf3ff87464d`                                                                |
+| Traffic / runtime              | 100% / production, D1, explicit owner mode                                                            |
+| Feature merge                  | `29a306543a54feccace5edc59b27dc37942f01e0` ([PR #57](https://github.com/mathofdynamic/TRACE/pull/57)) |
+| Main integration merge         | `94daaaa33f2b94e4b569bf74f90b74f09cfd4e40` ([PR #59](https://github.com/mathofdynamic/TRACE/pull/59)) |
+
+`git diff --exit-code` between the deployed source and the main integration merge
+passed with an empty diff across the complete tracked tree. Their commit IDs
+represent review/integration history; main contains the identical runtime and
+configuration. No redeployment was performed merely to change a merge SHA.
+Workflow registration [PR #58](https://github.com/mathofdynamic/TRACE/pull/58)
+registered the protected owner tools before deployment. Subsequent documentation
+changes do not alter the serving runtime.
+
+### Owner catalog, selection, and event boundaries
+
+The existing production App is `5082884 / TRACE Production Integration`,
+installation `166179374`, account `mathofdynamic`, unsuspended. Its external
+`repository_selection=all` remains explicitly approved. It was neither reinstalled
+nor restricted to selected-only. Final trusted discovery contains **91** repositories:
+**89 available/unselected**, plus active `mathofdynamic/TRACE` (GitHub repository
+ID `1322932802`) and active `mathofdynamic/trace-staging-fixture` (`1378441300`).
+Catalog size is a measured snapshot, not a permanent acceptance constant.
+
+Owner reconciliation persists only trusted metadata for the pinned owner and
+installation, with new repositories available/unselected. Existing explicit
+selection survives reconciliation; removed access revokes selection. Selection
+requires the authenticated owner, persisted session, browser-origin checks,
+current workspace, trusted installation mapping and consistent repository identity.
+No catalog discovery or administration event automatically activates a repository.
+
+Signed, identity-valid events for unselected repositories return a successful
+no-op before D1 delivery persistence or Queue send. Selected events use the normal
+idempotent webhook/Queue path. Queue consumption and recovery recheck current
+selection and tenant/installation scope. Administrative notifications may suspend
+processing or revoke removed access, but do not create delivery rows or enqueue
+business processing. Unknown/malformed production modes fail closed. The exact
+fixture restriction remains confined to explicit fixture mode; closed mode stays
+closed. Owner runtime variables contain no fixture ID/name requirements and no
+Hyperdrive binding.
+
+Regression coverage exercises owner identity and trusted catalog validation,
+foreign-workspace/installation rejection, available-only persistence, explicit
+selection/revocation, signed unselected no-op with zero delivery/Queue writes,
+selected processing, administration boundaries, Queue selection rechecks,
+recovery gates, and retained closed/fixture behavior. No acceptance-only issue or
+source mutation was created on TRACE; the integration PR and its merge are normal
+implementation work.
+
+### Validation and live acceptance
+
+- Local `pnpm check`, `pnpm cf:build`, strict operational script typechecks and
+  diff checks passed. Implementation CI
+  [37101982334](https://github.com/mathofdynamic/TRACE/actions/runs/37101982334)
+  passed, including browser E2E.
+- Protected owner deployment
+  [37102353601](https://github.com/mathofdynamic/TRACE/actions/runs/37102353601)
+  checked the approved App/installation and deployed the exact reviewed source
+  with distinct `DEPLOY_TRACE_PRODUCTION_OWNER` confirmation. Before/after checks
+  preserved the accepted fixture records, confirmed D1/Queue bindings without
+  Hyperdrive, exact version/source, 100% traffic, health 200 and error tail 0.
+- Protected active acceptance
+  [37105832530](https://github.com/mathofdynamic/TRACE/actions/runs/37105832530)
+  compared persisted catalog metadata to trusted installation access, verified
+  owner/account/workspace linkage, active TRACE, no delivery rows for unrelated
+  inactive repositories, foreign-key violations 0, Queue backlog 0 and health 200.
+- Exact deployed-version tail
+  [37105850619](https://github.com/mathofdynamic/TRACE/actions/runs/37105850619)
+  reported zero error events and passing health/unauthenticated-route guards.
+- The owner completed the normal production CLI device approval. `trace whoami`
+  returned the owner workspace and only the two active repositories; `trace connect`
+  successfully bound this TRACE checkout to production. Credentials are stored
+  outside the repository with owner-only permissions; no runtime secret, browser
+  cookie, source code or CLI token entered logs/source control.
+- Main integration CI
+  [37105971400](https://github.com/mathofdynamic/TRACE/actions/runs/37105971400)
+  passed full checks and browser E2E before PR #59 merged. A merge-tree review
+  found no integration conflicts. Main is now the integration frontier.
+- Final protected acceptance from exact main integration source
+  [37111292984](https://github.com/mathofdynamic/TRACE/actions/runs/37111292984)
+  passed after the owner added `main` to the existing environment branch allowlist.
+  It again verified installation/account, 91 trusted repositories, 89 available,
+  active TRACE and fixture, foreign-key violations 0, Queue backlog 0 and health 200.
+
+### Operations and rollback
+
+Normal owner use is production sign-in, repository access refresh, explicit
+activation/deactivation, open project, then local `trace login`, `trace connect`,
+analysis and reviewed source-free artifact sync as needed. Customer access remains
+closed; the empty pre-sync intelligence view is expected.
+
+Retain the existing production credentials in protected Actions and Worker
+bindings. Do not copy them into Codex Cloud. The verified fixture rollback version
+is `14e30410-d83b-4de6-90cc-6ba0356957ed`, source
+`1498dcd2da74d1952ba97c61e6cd0c77811784eb`; fixture mode again processes only
+`1378441300`. Closed-mode deployment uses its distinct guarded confirmation.
+Rollback changes the reviewed Worker version/traffic only: preserve owner sessions,
+workspace, installation, catalog, selection, audit and historical fixture evidence.
+Do not rerun old empty/fixture-only D1 baseline assertions against the expanded
+owner catalog or delete records to satisfy them. Use owner-state acceptance for
+this release and the historical fixture evidence for the already-passed canary.
+
+The owner added `main` alongside the existing feature branch in the protected
+`production-canary` deployment allowlist; no runtime credentials or other
+protections changed. Final main acceptance passed. No remaining human action or
+external blocker was identified. Fixture canary **PASS**, owner production **YES**,
+public customer cutover **NO**.

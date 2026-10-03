@@ -24,6 +24,27 @@ trace sync
 
 `trace sync` negotiates the manifest, uploads only missing artifacts, and asks the server to promote the complete snapshot. Interrupted uploads remain staged and invisible. Repeating the same manifest is idempotent and resumes missing uploads. Each new manifest carries the last dashboard operation acknowledged by this checkout. A stale device cannot overwrite a newer snapshot silently.
 
+## Owner production target
+
+The CLI defaults to `https://trace-production.mathofdynamic2.workers.dev`.
+Production access is currently limited to GitHub user `mathofdynamic` and its
+approved installation `166179374`; public customer cutover remains disabled.
+Select the real repository in production Dashboard → Repositories before connecting.
+Newly discovered repositories are available metadata until explicitly selected.
+
+```text
+trace login --server https://trace-production.mathofdynamic2.workers.dev
+trace whoami
+trace connect
+```
+
+Complete normal browser device approval for the owner workspace. `trace whoami`
+shows only active repositories. `trace connect` binds the matching GitHub remote;
+it does not upload source. Analysis remains local, and syncing retains the reviewed
+source-free artifact contract above. An empty project view before sync is valid.
+Production uses D1 and Cloudflare Queue; the CLI requires no local PostgreSQL.
+Clear staging/custom target overrides before using the production default.
+
 ## Targeting staging safely
 
 For a staging run, set both variables in the same shell:
