@@ -66,9 +66,7 @@ const fixtureTailWorkflow = readFileSync(
 describe('production fixture read-only error tail wrapper', () => {
   it('reuses the existing harness at the immutable live version behind exact-SHA protection', () => {
     expect(fixtureTailWorkflow).toContain('workflow_dispatch:');
-    expect(fixtureTailWorkflow).toContain(
-      "github.ref == 'refs/heads/feat/cloudflare-native-runtime'",
-    );
+    expect(fixtureTailWorkflow).toContain("github.ref == 'refs/heads/main'");
     expect(fixtureTailWorkflow).toContain('environment: production-canary');
     expect(fixtureTailWorkflow).toContain('permissions:\n  contents: read');
     expect(fixtureTailWorkflow).toContain('"${EXPECTED_SHA,,}" != "${GITHUB_SHA,,}"');
