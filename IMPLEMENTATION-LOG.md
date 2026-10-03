@@ -1759,3 +1759,18 @@
   credentials. Regression coverage exercises transport status zero and redaction.
 - No controlled fixture issue has been created; live processing proof is pending.
   Validation and CI outcomes are recorded in the focused PR before merge.
+
+### Exact protected webhook delivery identifiers — 2026-10-03
+
+- Protected diagnostics isolated rejection to delivery ID validation; GUID,
+  timestamp, redelivery flag and HTTP status metadata were valid.
+- Preserve opaque decimal IDs, including JSON int64 values, before parsing can
+  round them. Discovery, detail verification and redelivery use the same exact
+  string; unsafe numeric identifiers remain rejected. Workflow input accepts
+  bounded 20-digit IDs without numeric conversion.
+- Exclude verified HTTP 403 deliveries outside the fixture from the inspection
+  and redelivery set for the approved external all-repositories installation.
+  Accepted nonfixture deliveries and wrong installation identities still fail.
+- Regression tests cover exact large-ID discovery/redelivery, arbitrary-string
+  preservation, endpoint mismatch rejection and nonfixture exclusion. No Worker
+  deployment or business-processing gate change is included.
