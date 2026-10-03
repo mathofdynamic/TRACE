@@ -101,6 +101,44 @@ describe('GitHub webhook D1 runtime boundary', () => {
     });
   });
 
+  it('owner mode acknowledges signed unselected work and still rejects wrong installation/signature', async () => {
+    const environment = { ...fixtureCanaryEnvironment(), TRACE_CANARY_MODE: 'owner' };
+    mocks.cloudflareEnv.mockResolvedValue(environment);
+    mocks.createRequestDatabase.mockResolvedValue({
+      db: {},
+      client: { end: vi.fn(async () => undefined) },
+    });
+    mocks.enqueueD1Webhook.mockResolvedValue({
+      accepted: true,
+      ignored: true,
+      queued: false,
+      normalized: true,
+    });
+    const payload = {
+      action: 'opened',
+      installation: { id: 166179374 },
+      repository: {
+        id: 9,
+        owner: { login: 'mathofdynamic' },
+        name: 'TRACE',
+        full_name: 'mathofdynamic/TRACE',
+      },
+    };
+    expect((await POST(webhookRequest('issues', payload))).status).toBe(200);
+    expect(mocks.enqueueD1Webhook).toHaveBeenCalledWith(
+      expect.objectContaining({ ownerMode: true }),
+    );
+    expect(environment.queueSend).not.toHaveBeenCalled();
+    mocks.createRequestDatabase.mockClear();
+    mocks.enqueueD1Webhook.mockClear();
+    expect(
+      (await POST(webhookRequest('issues', { ...payload, installation: { id: 9 } }))).status,
+    ).toBe(403);
+    expect((await POST(webhookRequest('issues', payload, false))).status).toBe(401);
+    expect(mocks.createRequestDatabase).not.toHaveBeenCalled();
+    expect(mocks.enqueueD1Webhook).not.toHaveBeenCalled();
+  });
+
   it('returns 503 without entering PostgreSQL or pg-boss when production D1 is absent', async () => {
     mocks.cloudflareEnv.mockResolvedValue({
       TRACE_DEPLOYMENT_ENV: 'production',

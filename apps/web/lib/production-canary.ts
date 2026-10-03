@@ -20,7 +20,7 @@ export type ProductionCanaryRuntime = {
 export type ProductionCanaryVariableConfiguration = {
   deploymentEnv: string;
   databaseDriver: string;
-  canaryMode: 'closed' | 'fixture';
+  canaryMode: 'closed' | 'fixture' | 'owner';
   fixtureCanaryEnvironment: {
     owner: string;
     repository: string;
@@ -31,6 +31,7 @@ export type ProductionCanaryVariableConfiguration = {
 export type ProductionCanaryMode =
   | { kind: 'non-production' }
   | { kind: 'closed' }
+  | { kind: 'owner'; owner: 'mathofdynamic'; installationId: 166179374 }
   | {
       kind: 'fixture';
       fixture: typeof AUTHORIZED_FIXTURE_REPOSITORY;
@@ -46,7 +47,8 @@ export type CanaryEligibility =
         | 'fixture-repository'
         | 'fixture-recovery'
         | 'fixture-installation'
-        | 'fixture-webhook';
+        | 'fixture-webhook'
+        | 'owner-scope';
     };
 
 type GitHubUserIdentity = { githubLogin?: unknown } | null | undefined;
@@ -88,6 +90,8 @@ export function resolveProductionCanaryMode(
   env: ProductionCanaryRuntime | null | undefined,
 ): ProductionCanaryMode {
   if (env?.TRACE_DEPLOYMENT_ENV !== 'production') return { kind: 'non-production' };
+  if (env.TRACE_CANARY_MODE === 'owner')
+    return { kind: 'owner', owner: 'mathofdynamic', installationId: 166179374 };
   if (env.TRACE_CANARY_MODE === 'closed') return { kind: 'closed' };
   if (env.TRACE_CANARY_MODE !== 'fixture') return { kind: 'closed' };
 
@@ -112,7 +116,8 @@ export function buildProductionCanaryRuntimeVariables(
     TRACE_DATABASE_DRIVER: configuration.databaseDriver,
     TRACE_CANARY_MODE: configuration.canaryMode,
   };
-  if (configuration.canaryMode === 'closed') return variables;
+  if (configuration.canaryMode === 'closed' || configuration.canaryMode === 'owner')
+    return variables;
 
   const owner = environment[configuration.fixtureCanaryEnvironment.owner];
   const repository = environment[configuration.fixtureCanaryEnvironment.repository];
@@ -162,11 +167,11 @@ export function canaryUserEligibility(
   user: GitHubUserIdentity,
 ): CanaryEligibility {
   const mode = resolveProductionCanaryMode(env);
-  if (mode.kind !== 'fixture') return eligibilityForMode(mode);
+  if (mode.kind !== 'fixture' && mode.kind !== 'owner') return eligibilityForMode(mode);
   const login = normalizeGitHubIdentity(user?.githubLogin, githubLoginPattern);
-  return login === mode.fixture.owner
+  return login === (mode.kind === 'owner' ? mode.owner : mode.fixture.owner)
     ? { allowed: true }
-    : { allowed: false, reason: 'fixture-user' };
+    : { allowed: false, reason: mode.kind === 'owner' ? 'owner-scope' : 'fixture-user' };
 }
 
 function repositoryIdMatches(value: unknown, expected: number) {
@@ -192,6 +197,21 @@ export function canaryRepositorySelectionEligibility(
   value: unknown,
 ): CanaryEligibility {
   const mode = resolveProductionCanaryMode(env);
+  if (mode.kind === 'owner')
+    return Array.isArray(value) &&
+      value.every(
+        (repository) =>
+          isRecord(repository) &&
+          ownerRepositoryRecordMatches(repository) &&
+          repository.installationState === 'active' &&
+          typeof repository.organizationId === 'string' &&
+          repository.organizationId.length > 0 &&
+          repository.organizationId === repository.installationOrganizationId &&
+          repositoryIdMatches(repository.githubInstallationId, mode.installationId) &&
+          matchesExact(repository.installationAccountLogin, mode.owner, githubLoginPattern),
+      )
+      ? { allowed: true }
+      : { allowed: false, reason: 'owner-scope' };
   if (mode.kind !== 'fixture') return eligibilityForMode(mode);
   if (
     !Array.isArray(value) ||
@@ -210,7 +230,7 @@ export function canaryWebhookRecoveryEligibility(
   value: unknown,
 ): CanaryEligibility {
   const mode = resolveProductionCanaryMode(env);
-  if (mode.kind !== 'fixture') return eligibilityForMode(mode);
+  if (mode.kind !== 'fixture' && mode.kind !== 'owner') return eligibilityForMode(mode);
   const repository = isRecord(value) ? value.repository : null;
   const installation = isRecord(value) ? value.installation : null;
   if (
@@ -229,7 +249,7 @@ export function canaryWebhookRecoveryEligibility(
       installation.providerId,
     ].every((reference) => typeof reference === 'string' && reference.length > 0)
   ) {
-    return { allowed: false, reason: 'fixture-recovery' };
+    return { allowed: false, reason: mode.kind === 'owner' ? 'owner-scope' : 'fixture-recovery' };
   }
 
   if (
@@ -238,10 +258,15 @@ export function canaryWebhookRecoveryEligibility(
     value.deliveryOrganizationId !== installation.organizationId ||
     repository.installationId !== installation.recordId ||
     value.deliveryInstallationId !== installation.providerId ||
-    !matchesExact(installation.accountLogin, mode.fixture.owner, githubLoginPattern) ||
-    !fixtureRepositoryRecordMatches(repository, mode.fixture)
+    !matchesExact(installation.accountLogin, 'mathofdynamic', githubLoginPattern) ||
+    (mode.kind === 'owner'
+      ? !repositoryIdMatches(installation.providerId, mode.installationId) ||
+        !ownerRepositoryRecordMatches(repository) ||
+        repository.state !== 'active' ||
+        repository.selected !== true
+      : !fixtureRepositoryRecordMatches(repository, mode.fixture))
   ) {
-    return { allowed: false, reason: 'fixture-recovery' };
+    return { allowed: false, reason: mode.kind === 'owner' ? 'owner-scope' : 'fixture-recovery' };
   }
   return { allowed: true };
 }
@@ -332,6 +357,31 @@ export function canaryInstallationSnapshotEligibility(
   value: unknown,
 ): CanaryEligibility {
   const mode = resolveProductionCanaryMode(env);
+  if (mode.kind === 'owner') {
+    const installation = isRecord(value) ? value.installation : null;
+    return isRecord(value) &&
+      isRecord(installation) &&
+      installation.id === mode.installationId &&
+      installation.suspendedAt === null &&
+      ['all', 'selected'].includes(String(installation.repositorySelection)) &&
+      installation.accountType === 'User' &&
+      matchesExact(installation.accountLogin, mode.owner, githubLoginPattern) &&
+      Array.isArray(value.repositories) &&
+      new Set(value.repositories.map((r) => (isRecord(r) ? r.id : null))).size ===
+        value.repositories.length &&
+      value.repositories.every(
+        (r) =>
+          isRecord(r) &&
+          ownerRepositoryRecordMatches({
+            githubRepositoryId: r.id,
+            owner: r.owner,
+            name: r.name,
+            fullName: r.fullName,
+          }),
+      )
+      ? { allowed: true }
+      : { allowed: false, reason: 'owner-scope' };
+  }
   if (mode.kind !== 'fixture') return eligibilityForMode(mode);
 
   if (!isRecord(value) || !isRecord(value.installation) || !Array.isArray(value.repositories)) {
@@ -392,6 +442,40 @@ export function canaryWebhookPayloadEligibility(
   value: unknown,
 ): CanaryEligibility {
   const mode = resolveProductionCanaryMode(env);
+  if (mode.kind === 'owner') {
+    if (
+      !isRecord(value) ||
+      !isRecord(value.installation) ||
+      value.installation.id !== mode.installationId ||
+      (Object.hasOwn(value.installation, 'account') &&
+        !installationAccountMatches(value.installation, mode.owner))
+    )
+      return { allowed: false, reason: 'owner-scope' };
+    if (eventName === 'installation' || eventName === 'installation_repositories')
+      return installationAccountMatches(value.installation, mode.owner) &&
+        ['repositories', 'repositories_added', 'repositories_removed'].every(
+          (key) =>
+            value[key] === undefined ||
+            (Array.isArray(value[key]) &&
+              value[key].length <= 500 &&
+              value[key].every(
+                (r) => isRecord(r) && Number.isSafeInteger(r.id) && (r.id as number) > 0,
+              )),
+        )
+        ? { allowed: true }
+        : { allowed: false, reason: 'owner-scope' };
+    const repository = value.repository;
+    return isRecord(repository) &&
+      isRecord(repository.owner) &&
+      ownerRepositoryRecordMatches({
+        githubRepositoryId: repository.id,
+        owner: repository.owner.login,
+        name: repository.name,
+        fullName: repository.full_name,
+      })
+      ? { allowed: true }
+      : { allowed: false, reason: 'owner-scope' };
+  }
   if (mode.kind !== 'fixture') return eligibilityForMode(mode);
   if (!isRecord(value)) return { allowed: false, reason: 'fixture-webhook' };
 
@@ -465,6 +549,11 @@ export function canaryWebhookPayloadEligibility(
 export function productionCanaryGateResponse(eligibility: CanaryEligibility) {
   if (eligibility.allowed) throw new Error('An allowed canary decision has no denial response.');
   if (eligibility.reason === 'closed') return productionCanaryClosedResponse();
+  if (eligibility.reason === 'owner-scope')
+    return Response.json(
+      { error: 'This activity is not authorized for the production owner or repository.' },
+      { status: 403, headers: { 'cache-control': 'no-store' } },
+    );
   return Response.json(
     { error: 'This activity is not allowed during the production fixture canary.' },
     { status: 403, headers: { 'cache-control': 'no-store' } },
@@ -475,5 +564,22 @@ export function productionCanaryClosedResponse() {
   return Response.json(
     { error: 'GitHub integration is disabled during the closed production canary.' },
     { status: 503, headers: { 'cache-control': 'no-store' } },
+  );
+}
+
+export function ownerRepositoryRecordMatches(value: unknown) {
+  if (!isRecord(value)) return false;
+  const id =
+    typeof value.githubRepositoryId === 'string' &&
+    /^[1-9][0-9]{0,15}$/.test(value.githubRepositoryId)
+      ? Number(value.githubRepositoryId)
+      : value.githubRepositoryId;
+  const name = normalizeGitHubIdentity(value.name, repositoryNamePattern);
+  return (
+    Number.isSafeInteger(id) &&
+    (id as number) > 0 &&
+    name !== null &&
+    matchesExact(value.owner, 'mathofdynamic', githubLoginPattern) &&
+    matchesExact(value.fullName, `mathofdynamic/${name}`, /^[a-z0-9_.-]+\/[a-z0-9_.-]+$/i)
   );
 }

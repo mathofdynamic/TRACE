@@ -25,6 +25,8 @@ export {
   markD1WebhookDeliveryFailure,
   requestD1WebhookReplay,
   resolveD1WebhookScope,
+  isD1SelectedOwnerWebhookEvent,
+  applyD1OwnerInstallationBoundary,
   sanitizeWebhookError,
 } from './webhook-recovery.js';
 export type { D1WebhookRecoveryDelivery, D1WebhookRecoveryStatus } from './webhook-recovery.js';

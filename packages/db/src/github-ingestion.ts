@@ -283,7 +283,6 @@ function createD1Store(db: TraceD1Database): GitHubIngestionStore {
             fullName: event.fullName,
             ...(event.defaultBranch !== undefined ? { defaultBranch: event.defaultBranch } : {}),
             ...(event.visibility !== undefined ? { visibility: event.visibility } : {}),
-            state: 'available',
             disconnectedAt: null,
             updatedAt: now,
           })

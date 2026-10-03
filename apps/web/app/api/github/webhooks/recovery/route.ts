@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import {
   D1WebhookRecoveryError,
   d1Schema,
@@ -86,7 +86,7 @@ export async function POST(request: Request) {
         { status: 501 },
       );
     }
-    if (resolveProductionCanaryMode(cloudflareEnv).kind === 'fixture') {
+    if (['fixture', 'owner'].includes(resolveProductionCanaryMode(cloudflareEnv).kind)) {
       const d1 = db as unknown as TraceD1Database;
       const [scope] = await d1
         .select({
@@ -99,6 +99,8 @@ export async function POST(request: Request) {
           githubRepositoryId: d1Schema.githubRepositories.githubRepositoryId,
           repositoryOwner: d1Schema.githubRepositories.owner,
           repositoryName: d1Schema.githubRepositories.name,
+          repositoryState: d1Schema.githubRepositories.state,
+          repositorySelected: d1Schema.githubInstallationRepositories.selected,
           repositoryFullName: d1Schema.githubRepositories.fullName,
           installationRecordId: d1Schema.githubInstallations.id,
           installationOrganizationId: d1Schema.githubInstallations.organizationId,
@@ -114,6 +116,19 @@ export async function POST(request: Request) {
           d1Schema.githubInstallations,
           eq(d1Schema.githubRepositories.installationId, d1Schema.githubInstallations.id),
         )
+        .leftJoin(
+          d1Schema.githubInstallationRepositories,
+          and(
+            eq(
+              d1Schema.githubInstallationRepositories.installationId,
+              d1Schema.githubInstallations.id,
+            ),
+            eq(
+              d1Schema.githubInstallationRepositories.githubRepositoryId,
+              d1Schema.githubRepositories.githubRepositoryId,
+            ),
+          ),
+        )
         .where(eq(d1Schema.githubWebhookDeliveries.deliveryId, body.deliveryId))
         .limit(1);
 
@@ -128,6 +143,8 @@ export async function POST(request: Request) {
           githubRepositoryId: scope?.githubRepositoryId,
           owner: scope?.repositoryOwner,
           name: scope?.repositoryName,
+          state: scope?.repositoryState,
+          selected: scope?.repositorySelected,
           fullName: scope?.repositoryFullName,
         },
         installation: {

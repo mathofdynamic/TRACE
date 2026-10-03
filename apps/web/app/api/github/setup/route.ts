@@ -21,6 +21,7 @@ import {
 } from '../../../../lib/request-database';
 import {
   canaryInstallationSnapshotEligibility,
+  resolveProductionCanaryMode,
   scopeCanaryInstallationSnapshot,
   canaryUserEligibility,
   productionCanaryGateResponse,
@@ -173,6 +174,7 @@ async function reconcileExistingInstallation(
         db,
         user: session.user,
         snapshot: scopeCanaryInstallationSnapshot(cloudflareEnv, snapshot),
+        ownerMode: resolveProductionCanaryMode(cloudflareEnv).kind === 'owner',
         action: 'github.reconciled',
       });
     } finally {
@@ -240,6 +242,7 @@ export async function GET(request: Request) {
         db,
         user: session.user,
         snapshot: scopeCanaryInstallationSnapshot(cloudflareEnv, snapshot),
+        ownerMode: resolveProductionCanaryMode(cloudflareEnv).kind === 'owner',
         action: 'github.connected',
       });
     } finally {

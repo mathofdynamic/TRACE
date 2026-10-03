@@ -108,6 +108,44 @@ function read(fetchImplementation: typeof fetch) {
 }
 
 describe('production GitHub fixture installation verifier', () => {
+  it('owner policy accepts a trusted catalog without the fixture and does not require count one', async () => {
+    const fake = makeFetch(
+      validResponses({
+        installations: [{ ...installation, repository_selection: 'all' }],
+        repositories: {
+          total_count: 2,
+          repositories: [
+            {
+              id: 9,
+              owner: { login: 'mathofdynamic' },
+              name: 'TRACE',
+              full_name: 'mathofdynamic/TRACE',
+            },
+            {
+              id: 10,
+              owner: { login: 'mathofdynamic' },
+              name: 'other',
+              full_name: 'mathofdynamic/other',
+            },
+          ],
+        },
+      }),
+    );
+    const state = await readProductionGitHubFixtureInstallation(
+      '5082884',
+      'production-client-id',
+      privateKeyPem,
+      fake.fetchImplementation,
+      true,
+      undefined,
+      'owner',
+    );
+    expect(state.catalog).toEqual([
+      { id: 9, fullName: 'mathofdynamic/TRACE' },
+      { id: 10, fullName: 'mathofdynamic/other' },
+    ]);
+  });
+
   it('accepts all repositories with the fixture among many without disclosing other identities', async () => {
     const fake = makeFetch(
       validResponses({

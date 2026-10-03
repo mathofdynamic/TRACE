@@ -1827,3 +1827,24 @@
   D1 mutation or synthetic Queue probe, and no customer/staging repository change.
 - Final exact-version bounded tail `37098658908` passed with zero errors.
   TRACE FIXTURE OPERATIONAL=YES; CUSTOMER CUTOVER=NO.
+
+### Explicit owner production implementation — 2026-10-03
+
+- Added an explicit owner mode for mathofdynamic and installation `166179374`,
+  preserving closed and exact-fixture modes. Owner discovery uses trusted GitHub
+  metadata; new repositories remain available/unselected, and stale access can
+  revoke selection without automatic activation.
+- Owner selection validates installation/account and workspace linkage. Signed
+  unselected repository events are successful no-ops before delivery persistence
+  or Queue send. Queue consumption rechecks current selection. Administrative
+  notifications can revoke access/suspend processing but never activate or queue.
+- Preserved authenticated persisted-session/browser-origin boundaries, added
+  owner CLI credential checks, and required active selected recovery scope.
+- Protected deployment supports owner confirmation, preserves accepted fixture
+  data and pins the verified fixture rollback baseline. Added read-only trusted
+  owner catalog/D1/Queue acceptance. Live owner acceptance follows CI/deployment
+  and the existing authenticated browser session; customer cutover remains NO.
+
+- Validation: focused owner/route/persistence/transition tests, full `pnpm check`,
+  Cloudflare build and diff checks passed locally. Linux CI/E2E runs before merge
+  and protected owner deployment. CLI now defaults to the production Worker URL.
