@@ -89,6 +89,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    concurrency:
+      group: trace-cli-release-publication-${{ github.repository }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -109,6 +112,16 @@ jobs:
             node -e "if (!require(process.argv[1]).isDraft) throw new Error('Refusing to overwrite a published CLI release')" "$RUNNER_TEMP/trace-release.json"
           else
             gh release create "$tag" --repo "$GITHUB_REPOSITORY" --draft --target "$GITHUB_SHA" --title "TRACE CLI ${version}" --notes 'CLI distribution acceptance complete; assets uploading.'
+          fi
+          # A resumed draft may already have a tag; --target cannot move that tag.
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" > "$RUNNER_TEMP/trace-release-tag.json"; then
+            tag_commit="$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq .sha)"
+            if [[ "$tag_commit" != "$GITHUB_SHA" ]]; then
+              echo 'Refusing to publish an archive under a tag for a different source commit.' >&2
+              exit 1
+            fi
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$tag" -f "sha=$GITHUB_SHA" > "$RUNNER_TEMP/trace-release-tag.json"
           fi
           gh release upload "$tag" "$archive" release/SHA256SUMS --repo "$GITHUB_REPOSITORY" --clobber
           cp packages/trace-cli/README.md "$RUNNER_TEMP/trace-cli-release-notes.md"

@@ -2041,3 +2041,4 @@
 - Cloud-side GitHub asset uploads returned HTTP 400 `Bad Content-Length` with both gh and a direct upload. Use the existing distribution workflow to publish from GitHub's runner after the exact archive passes both Windows and Linux acceptance.
 - Publication is manual, main-only, and has contents-write permission only on its dedicated job. Ordinary PR/main checks and existing-release verification retain read permission. Refuse to overwrite published releases; allow resuming the empty draft left by the failed upload.
 - This publishes GitHub CLI assets only; no production/staging runtime workflow or credential configuration changes.
+- Publication review: serialize all CLI publishers without canceling a running upload; verify existing tags resolve to the tested source commit and create missing tags explicitly. Never silently retarget a release.
