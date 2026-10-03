@@ -4,7 +4,9 @@ This runbook records the production rollout and its actual outcomes. The current
 release is owner-only production on Cloudflare D1 and Queue: **OWNER PRODUCTION
 OPERATIONAL=YES**, **PUBLIC CUSTOMER CUTOVER=NO**. The fixture canary passed and
 remains preserved. Historical stages below describe their state at execution; the
-current owner release and acceptance evidence appear at the end.
+current owner release and acceptance evidence appear at the end. The canonical
+browser website is now **https://trace-code.pages.dev**; the production Worker
+remains the direct webhook/CLI backend. **CANONICAL ORIGIN MIGRATION=PASS**.
 
 ## Initial resource proposal (CF4.12)
 
@@ -1326,3 +1328,76 @@ The owner added `main` alongside the existing feature branch in the protected
 protections changed. Final main acceptance passed. No remaining human action or
 external blocker was identified. Fixture canary **PASS**, owner production **YES**,
 public customer cutover **NO**.
+
+## Canonical owner-production origin acceptance — 2026-10-03
+
+Completed at 16:21 Asia/Tehran. Browser production is
+`https://trace-code.pages.dev`; staging is exclusively
+`https://trace-test-staging.mathofdynamic2.workers.dev`. Production backend,
+D1 and Queue remain on the existing `trace-production` Worker.
+
+| Release identity                                  | Verified value                                                                                                      |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Focused implementation                            | PR #61, reviewed head `527f2e3a6cb7631ff3baaa32bee322b843e0745c`, merged `19ffae0e570578ab7e5e921dfc4f76a983f59865` |
+| Serving Pages/Worker source                       | `22b98cf2224a31403c9ea403e34137562f7076d8`                                                                          |
+| Bootstrap correction                              | `f7c4616a0e3349a68d7cda1c0884460bca6fb338` isolates origin constants from application build dependencies            |
+| Pages deployment                                  | `316e3060-5644-4b0a-a7ef-006f9eae8dd1`                                                                              |
+| Worker version                                    | `550a5214-4e46-4023-a330-7d042be4ea7c`                                                                              |
+| Worker deployment                                 | `8672dcf2-d996-40f0-b4d5-99ae383fa98e`, 100% owner traffic                                                          |
+| OAuth callback                                    | `https://trace-code.pages.dev/api/auth/github/callback`                                                             |
+| GitHub App callback / protected callback variable | `https://trace-code.pages.dev/api/github/setup`                                                                     |
+| Direct signed webhook                             | `https://trace-production.mathofdynamic2.workers.dev/api/github/webhooks`                                           |
+| CLI server                                        | `https://trace-production.mathofdynamic2.workers.dev`                                                               |
+
+PR #61 CI/E2E `37117200145` and serving-source CI/E2E `37117781488`
+passed. Pages read preflight `37122384813` passed after the owner corrected
+Cloudflare Pages permission on the existing protected credential. Deployment
+`37122633497` accepted the exact source, but its immediate post-deployment
+route assertion ran before propagation and failed to see the proxy header.
+Subsequent live checks passed: health/sign-in 200 and anonymous app 307, all
+with the fixed production upstream header. No callback was changed until
+those deployment and route checks passed.
+
+The first Worker attempt `37122981502` stopped before deployment because the
+protected callback variable still used the Worker URL. After the owner saved
+the existing variable, guarded deployment `37123846606` passed build,
+preflight, installation/baseline verification, binding/source/100% traffic
+verification, route checks and bounded error tail. No runtime secrets were
+copied into Codex Cloud and no production D1 migration was performed.
+
+Live Pages `/`, sign-in and health returned 200; OAuth start emitted the Pages
+callback. Direct Worker sign-in, app and OAuth start redirected to Pages with
+307 before state cookies were created. Direct Worker and staging health
+returned 200. Forwarded routing headers grant no authentication; production
+browser mutations still require the Pages origin and authenticated owner session.
+
+The owner completed a fresh Pages login and confirmed the TRACE project opens.
+Protected acceptance `37124195211` verified the fresh-session timestamp boundary:
+2 valid active owner sessions, including 1 newly created session. Existing
+owner identity, completed onboarding and workspace were preserved. Installation
+`166179374` remained unsuspended for `mathofdynamic`, with authorized external
+`repository_selection=all`: 91 trusted repositories, 89 available/unselected,
+and active TRACE (`1322932802`) plus fixture (`1378441300`). Selection gates
+remain authoritative; unselected events are ignored before delivery/Queue writes.
+
+D1 acceptance found 0 foreign-key violations; Queue backlog was 0; health was 200. The direct App webhook configuration was verified with JSON content and
+TLS enabled. The existing signed fixture issue/delivery/idempotency evidence
+remained preserved; no extra fixture issue or synthetic Queue probe was created.
+Final exact-version tail `37124196804` passed with `TAIL_ERROR_EVENTS=0` in its
+bounded observation window. Existing legitimate CLI credential `whoami` and
+`connect` passed against the direct production Worker and resolved TRACE in the
+owner workspace; no source upload or PostgreSQL was required.
+
+Rollback was not used. Verified pre-cutover rollback identities are Worker
+`a118f111-0bcb-4662-b864-c8587ca29567`, source
+`72f71ff4f597c0a18abaa2eaec837ff4892266d0`, deployment
+`4deb6a70-45ec-43ac-afbb-1cf3ff87464d`, and Pages
+`2828841e-cf92-48b7-9474-edd2edfc11fa`, source
+`4ffd1ff04c34719d4801559708e86e4861704e5e` (prior staging proxy).
+A full origin rollback would also require restoring the matching external
+callback registrations and protected nonsecret callback metadata. Preserve D1,
+Queue, users, onboarding and sessions; do not reinstall the App. This final
+update changes documentation only and does not require redeploying the serving source.
+
+**CANONICAL ORIGIN MIGRATION=PASS; OWNER PRODUCTION OPERATIONAL=YES;
+PUBLIC CUSTOMER CUTOVER=NO.** No remaining human action or external blocker.

@@ -1,12 +1,17 @@
 # Production architecture
 
-Current owner production is operational at
-`https://trace-production.mathofdynamic2.workers.dev` with D1 and Cloudflare Queue,
+Current owner production browser website is `https://trace-code.pages.dev`.
+Its fixed Pages proxy forwards to `https://trace-production.mathofdynamic2.workers.dev`
+with D1 and Cloudflare Queue,
 no Hyperdrive, explicit owner mode, and only owner-selected repositories eligible
 for business processing. Public customer cutover remains NO. See
-[the current release evidence](production-canary.md#owner-production-operational--2026-10-03)
+[the current release evidence](production-canary.md#canonical-owner-production-origin-acceptance--2026-10-03)
 for exact source/version, App/installation, acceptance and rollback. The CF4.9
 planning sections below retain their historical context.
+
+Browser OAuth and GitHub App callbacks use Pages. Signed webhooks and CLI APIs
+use the direct production Worker. Staging uses only
+`https://trace-test-staging.mathofdynamic2.workers.dev`; Pages is production.
 
 ## Current reference topology
 

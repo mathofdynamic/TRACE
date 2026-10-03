@@ -1899,3 +1899,26 @@
 - Validation: full local pnpm check, pnpm cf:build, 52 focused proxy/origin/transition
   tests, strict operational script typechecks and diff checks passed. Linux CI/E2E
   and live protected cutover acceptance follow the implementation PR.
+
+### Canonical owner-production live acceptance — 2026-10-03
+
+- PR #61 merged; serving Pages/Worker source is `22b98cf2224a31403c9ea403e34137562f7076d8`
+  after clean diagnostic/bootstrap corrections. Implementation and serving-source
+  CI/E2E passed. Protected Pages read preflight passed after the owner's credential
+  permission update. Deployment succeeded; immediate route assertion hit propagation,
+  then live production proxy health/sign-in/app checks passed before callback changes.
+- Protected deployment `37123846606` passed after the owner corrected existing callback
+  metadata. Worker `550a5214-4e46-4023-a330-7d042be4ea7c`, deployment
+  `8672dcf2-d996-40f0-b4d5-99ae383fa98e`, serves 100% owner traffic. Pages and
+  direct Worker health 200; human Worker routes redirect to Pages before OAuth state.
+- Owner confirmed fresh Pages login and TRACE project loading. Protected acceptance
+  `37124195211` verified owner/onboarding/workspace, fresh session, installation,
+  active TRACE/fixture, 91 catalog/89 available, direct webhook configuration,
+  preserved fixture proof, FK=0 and Queue=0. Exact-version bounded tail
+  `37124196804` passed with error events=0; existing CLI whoami/connect passed
+  against the direct Worker. Staging Worker health=200; staging was not redeployed.
+- One final documentation update records current origin ownership, callback/webhook/
+  CLI separation, exact release/rollback identities and honest propagation/preflight
+  history. No synthetic Queue probe, extra fixture issue, copied runtime secrets,
+  source upload, customer cutover or rollback. CANONICAL ORIGIN MIGRATION=PASS;
+  OWNER PRODUCTION OPERATIONAL=YES; PUBLIC CUSTOMER CUTOVER=NO.
