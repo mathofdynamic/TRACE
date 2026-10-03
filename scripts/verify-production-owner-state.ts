@@ -1,4 +1,6 @@
 import path from 'node:path';
+import { createProductionGitHubAppJwt } from './production-github-app-jwt.js';
+import { PRODUCTION_BACKEND_ORIGIN } from '../apps/web/lib/browser-origin.js';
 import { fileURLToPath } from 'node:url';
 import { readProductionGitHubFixtureInstallation } from './verify-production-github-fixture-installation.js';
 import { productionFixtureTransitionBaseline as target } from './verify-production-fixture-transition.js';
@@ -15,6 +17,18 @@ type CatalogRow = {
   installation_state: string;
   suspended_at: unknown;
 };
+export function assertDirectProductionWebhook(config: {
+  url?: string;
+  content_type?: string;
+  insecure_ssl?: string;
+}) {
+  if (
+    config.url !== `${PRODUCTION_BACKEND_ORIGIN}/api/github/webhooks` ||
+    config.content_type !== 'json' ||
+    config.insecure_ssl !== '0'
+  )
+    throw new Error('Production webhook must remain direct Worker JSON with TLS verification.');
+}
 export type OwnerLoginState = {
   users_count: number;
   unexpected_accounts: number;
@@ -92,6 +106,20 @@ export async function verifyOwnerState(
     undefined,
     'owner',
   );
+  const hook = await fetcher('https://api.github.com/app/hook/config', {
+    redirect: 'error',
+    headers: {
+      authorization: `Bearer ${createProductionGitHubAppJwt(environment.TRACE_GITHUB_APP_ID, environment.TRACE_GITHUB_APP_PRIVATE_KEY)}`,
+      accept: 'application/vnd.github+json',
+      'x-github-api-version': '2022-11-28',
+    },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!hook.ok)
+    throw new Error(
+      `Protected read-only webhook configuration request failed (HTTP ${hook.status}).`,
+    );
+  assertDirectProductionWebhook(await hook.json());
   async function api(endpoint: string, sql?: string) {
     const response = await fetcher(
       `https://api.cloudflare.com/client/v4/accounts/${target.accountId}/${endpoint}`,
@@ -163,7 +191,7 @@ export async function verifyOwnerState(
     signal: AbortSignal.timeout(15000),
   });
   if (health.status !== 200) throw new Error('Production owner health failed.');
-  return `OWNER_INSTALLATION=166179374 VERIFIED\nEXTERNAL_REPOSITORIES=${installation.repositoryCount}\nAVAILABLE_REPOSITORIES=${catalog.available}\nACTIVE_REPOSITORIES=${catalog.active.join(',')}\nTRACE_REPOSITORY_ID=${catalog.traceId}\nTRACE_REPOSITORY=${environment.OWNER_ACCEPTANCE_STAGE === 'active' ? 'ACTIVE' : 'CATALOGUED'}\nOWNER_IDENTITY=VERIFIED\nACTIVE_OWNER_SESSIONS=${login.active_sessions}\nFRESH_OWNER_SESSIONS=${login.fresh_sessions}\nFIXTURE_PROOF=PRESERVED\nUNSELECTED_DELIVERIES=0\nFOREIGN_KEY_VIOLATIONS=0\nQUEUE_BACKLOG=0\nHEALTH=200`;
+  return `OWNER_INSTALLATION=166179374 VERIFIED\nEXTERNAL_REPOSITORIES=${installation.repositoryCount}\nAVAILABLE_REPOSITORIES=${catalog.available}\nACTIVE_REPOSITORIES=${catalog.active.join(',')}\nTRACE_REPOSITORY_ID=${catalog.traceId}\nTRACE_REPOSITORY=${environment.OWNER_ACCEPTANCE_STAGE === 'active' ? 'ACTIVE' : 'CATALOGUED'}\nOWNER_IDENTITY=VERIFIED\nACTIVE_OWNER_SESSIONS=${login.active_sessions}\nFRESH_OWNER_SESSIONS=${login.fresh_sessions}\nFIXTURE_PROOF=PRESERVED\nWEBHOOK=WORKER_DIRECT_VERIFIED\nUNSELECTED_DELIVERIES=0\nFOREIGN_KEY_VIOLATIONS=0\nQUEUE_BACKLOG=0\nHEALTH=200`;
 }
 if (
   process.argv[1] &&

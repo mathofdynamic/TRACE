@@ -23,14 +23,14 @@ concurrency:
 
 jobs:
   check:
-    if: ${{ github.ref == 'refs/heads/feat/cloudflare-native-runtime' }}
+    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment: production-canary
     env:
       EXPECTED_SHA: ${{ inputs.sha }}
     steps:
-      - name: Validate exact feature-ref source SHA
+      - name: Validate exact main-ref source SHA
         shell: bash
         run: |
           set -euo pipefail
@@ -39,11 +39,11 @@ jobs:
             exit 1
           fi
           if [[ "${EXPECTED_SHA,,}" != "${GITHUB_SHA,,}" ]]; then
-            echo "The requested SHA must match the feature-ref dispatch SHA." >&2
+            echo "The requested SHA must match the main-ref dispatch SHA." >&2
             exit 1
           fi
 
-      - name: Check out the exact feature-ref source
+      - name: Check out the exact main-ref source
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}

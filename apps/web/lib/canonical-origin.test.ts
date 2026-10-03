@@ -7,7 +7,10 @@ import {
   PRODUCTION_BACKEND_ORIGIN as backend,
   STAGING_ORIGIN,
 } from './browser-origin';
-import { assertOwnerLoginState } from '../../../scripts/verify-production-owner-state';
+import {
+  assertDirectProductionWebhook,
+  assertOwnerLoginState,
+} from '../../../scripts/verify-production-owner-state';
 import { cookieAttributes, getTracePublicUrl } from '@trace/auth';
 import manifest from '../production-canary.json';
 import { readFileSync } from 'node:fs';
@@ -151,6 +154,18 @@ describe('canonical browser versus operational backend', () => {
         'utf8',
       ),
     ).toContain(`TRACE_STAGING_URL: ${STAGING_ORIGIN}`);
+  });
+  it('requires the configured webhook to stay direct Worker with TLS verification', () => {
+    const config = {
+      url: `${backend}/api/github/webhooks`,
+      content_type: 'json',
+      insecure_ssl: '0',
+    };
+    expect(() => assertDirectProductionWebhook(config)).not.toThrow();
+    expect(() =>
+      assertDirectProductionWebhook({ ...config, url: `${pages}/api/github/webhooks` }),
+    ).toThrow();
+    expect(() => assertDirectProductionWebhook({ ...config, insecure_ssl: '1' })).toThrow();
   });
   it('allows preserved and newly created active sessions without exact historic counts', () => {
     for (const count of [1, 2, 5])
