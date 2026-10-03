@@ -1774,3 +1774,11 @@
 - Regression tests cover exact large-ID discovery/redelivery, arbitrary-string
   preservation, endpoint mismatch rejection and nonfixture exclusion. No Worker
   deployment or business-processing gate change is included.
+
+### Bounded rejected webhook event identity — 2026-10-03
+
+- Exact-ID inspection exposed a further event outside the authorized fixture
+  issue/ping set. Added bounded event/action and validated numeric scope metadata
+  to the fail-closed diagnostic; payloads and arbitrary strings remain excluded.
+- No processing or redelivery eligibility changed. No issue has been created.
+- Focused tests cover diagnostic scope and arbitrary metadata redaction.

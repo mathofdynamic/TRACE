@@ -146,7 +146,23 @@ export function selectSafeDeliveries(body: unknown, installationId: number): Saf
           (entry.repository_id === null &&
             (entry.event === 'installation' || entry.event === 'installation_repositories')));
       if (rejectedOutsideFixture) return [];
-      fail('Unexpected event or nonfixture delivery; stop activation.');
+      fail(
+        `Unexpected event or nonfixture delivery; stop activation (${JSON.stringify({
+          event:
+            typeof entry.event === 'string' && /^[a-z_]{1,40}$/.test(entry.event)
+              ? entry.event
+              : 'invalid',
+          action:
+            entry.action === null
+              ? null
+              : typeof entry.action === 'string' && /^[a-z_]{1,40}$/.test(entry.action)
+                ? entry.action
+                : 'invalid',
+          installationId: exactDeliveryId(entry.installation_id) ?? null,
+          repositoryId: exactDeliveryId(entry.repository_id) ?? null,
+          statusCode: entry.status_code,
+        })}).`,
+      );
     }
     return {
       id: exactDeliveryId(entry.id)!,
