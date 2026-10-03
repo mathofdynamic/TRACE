@@ -1041,16 +1041,18 @@ customer cutover.
 
 ## CF4.18F.2 consolidated fixture activation harness
 
-The existing production version `16055223-3a33-43a3-8d09-fafddb8abe72` remains
-unchanged. Preparation adds verification and protected GitHub App control;
-it does not deploy the Worker or apply production migrations.
+At the preparation checkpoint, production version
+`16055223-3a33-43a3-8d09-fafddb8abe72` was unchanged. Preparation added verification
+and protected GitHub App control without deploying the Worker or applying
+production migrations. The subsequent runtime and live acceptance are recorded below.
 
 The fixed D1 checkpoints preserve one accepted user, GitHub OAuth account,
 active session, and completed onboarding profile. `after-installation` requires
 one fixture workspace, owner membership, active installation, repository, and
 installation mapping, with exactly two independently verified audit events:
 `workspace.profile.completed` (unscoped onboarding profile, expected actor) and
-`github.connected` (fixture installation/workspace, expected actor).
+`github.connected` or `github.reconciled` according to the explicitly selected
+installation provenance (fixture installation/workspace, expected actor).
 `after-selection` additionally requires an active repository, selected mapping,
 and the third independent `repositories.selection.updated` audit event.
 `after-live-issue` requires those same links plus one fixture issue and one
@@ -1062,8 +1064,10 @@ key violations, zero Queue backlog, and health 200.
 The manual `production-github-webhook-control.yml` workflow runs only on
 `feat/cloudflare-native-runtime`, validates the requested exact SHA, and uses
 `production-canary`. App identity `5082884 / TRACE Production Integration` and
-exactly one unsuspended `mathofdynamic` selected-only installation exposing only
+exactly one unsuspended `mathofdynamic` installation with access to
 `mathofdynamic/trace-staging-fixture / 1378441300` are prerequisites for control.
+The approved external installation may use `repository_selection=all`; TRACE
+persistence and business processing remain scoped to the single fixture.
 `configure` PATCHes only `/app/hook/config` with the fixed production webhook URL,
 JSON, verified TLS, and the existing protected webhook secret. An endpoint-specific
 404 directs the owner to the Active UI handoff; no alternate API is invented.
@@ -1080,11 +1084,12 @@ and successful deliveries do not independently prove its UI state. Installation
 and TRACE repository selection must use the existing completed-onboarding browser
 session. Protected after-onboarding/App-state prechecks must pass before that
 handoff. Production remains fixture-only; customer cutover, staging changes, and
-unrelated repositories are excluded. Live activation evidence is not yet recorded.
+unrelated repositories are excluded. The live acceptance evidence below supersedes
+the preparation checkpoint.
 
 The protected manual `production-fixture-error-tail-check.yml` wrapper reuses the
-existing bounded fixture-tail harness, pins the deployed version
-`16055223-3a33-43a3-8d09-fafddb8abe72`, and validates the exact feature dispatch
+existing bounded fixture-tail harness, pins the deployed version supplied explicitly
+as `worker_version_id`, and validates the exact feature dispatch
 SHA. It performs only the established unauthenticated route probes once tail
 readiness is confirmed; it sends no signed/synthetic webhook or Queue probe and
 does not deploy or roll back. The older closed-baseline tail workflow is not used
@@ -1113,5 +1118,92 @@ counts, foreign keys and empty Queue before and after deployment. It preserves
 existing credentials through the protected deployment workflow. Error-tail checks
 use the exact Worker version captured by deployment acceptance.
 
-Customer cutover remains **NO**. Live activation evidence is pending authenticated
-owner reconciliation and the subsequent controlled fixture issue round trip.
+Customer cutover remains **NO**. The owner completed authenticated reconciliation,
+fixture activation and the GitHub Webhook Active UI operation. Protected checks
+below verify the resulting state and the controlled fixture issue round trip.
+
+### Production fixture live acceptance — 2026-10-03
+
+The deployed runtime source is `1498dcd2da74d1952ba97c61e6cd0c77811784eb`,
+Worker version `14e30410-d83b-4de6-90cc-6ba0356957ed`, deployment
+`cff2ae8a-5520-4a44-9052-4545eb116519`, at 100% traffic in production
+D1/fixture mode. Guarded deployment run
+[36825993154](https://github.com/mathofdynamic/TRACE/actions/runs/36825993154)
+passed. Subsequent verifier fixes change only protected operational scripts/tests;
+they require no Worker redeployment.
+
+Installation `166179374` remains unsuspended for `mathofdynamic`, with external
+`repository_selection=all` and 89 accessible repositories. TRACE contains exactly
+one installation, one repository (`1378441300`), and one selected mapping. The
+fixture is active. Reconciliation and selection preserve the onboarding identity
+and three expected audit events; all unrelated business tables remain empty.
+
+Protected webhook configuration run
+[37096013712](https://github.com/mathofdynamic/TRACE/actions/runs/37096013712)
+verified the exact production URL, JSON content type, TLS verification and the
+existing protected secret. No runtime credentials entered Codex Cloud.
+
+GitHub delivery IDs are opaque decimal strings, preserved before JSON int64
+parsing can round them. Inspection excludes narrowly scoped rejected 401/403
+nonfixture/administrative notifications; they cannot be redelivered. Accepted
+nonfixture events, wrong installations and null-scope business events stop
+activation. Protected inspection
+[37098282461](https://github.com/mathofdynamic/TRACE/actions/runs/37098282461)
+excluded 34 rejected notifications before the controlled issue was created.
+
+The original pre-secret ping `3846140971871895552` received 401. One authorized
+recovery request in
+[37098338429](https://github.com/mathofdynamic/TRACE/actions/runs/37098338429)
+produced delivery `3846150915184705536`, GUID
+`78786caa-bedc-11f1-8400-e76f7aa8b610`, HTTP 200. Verification
+[37098388520](https://github.com/mathofdynamic/TRACE/actions/runs/37098388520)
+confirmed that signed ping; D1 check
+[37098391361](https://github.com/mathofdynamic/TRACE/actions/runs/37098391361)
+still found zero delivery rows and Queue backlog 0, proving stateless ping handling.
+
+Exactly one controlled fixture issue,
+[#3](https://github.com/mathofdynamic/trace-staging-fixture/issues/3), GitHub issue
+ID `5686722719`, was created at 05:01:33 UTC (08:31:33 Asia/Tehran).
+Delivery `3846151153253351424`, GUID
+`81b8a02c-bee7-11f1-89b0-776168eff2c6`, was accepted with HTTP 202 for
+`issues.opened`, installation `166179374`, repository `1378441300`.
+Inspection
+[37098475355](https://github.com/mathofdynamic/TRACE/actions/runs/37098475355)
+and D1 acceptance
+[37098478158](https://github.com/mathofdynamic/TRACE/actions/runs/37098478158)
+passed: one fixture issue, one processed delivery, at least one processing attempt,
+no last error, processed timestamp present, foreign-key violations 0, Queue backlog
+0 and health 200. Existing fixture issues #1 and #2 were not modified.
+
+Exactly one issue redelivery was requested in
+[37098549152](https://github.com/mathofdynamic/TRACE/actions/runs/37098549152).
+Attempt `3846151474008571904` retained GUID
+`81b8a02c-bee7-11f1-89b0-776168eff2c6` and returned HTTP 202 with
+`redelivery=true`, verified by
+[37098658864](https://github.com/mathofdynamic/TRACE/actions/runs/37098658864).
+Post-redelivery D1 acceptance
+[37098658849](https://github.com/mathofdynamic/TRACE/actions/runs/37098658849)
+again found exactly one repository, one issue and one processed delivery, no last
+error, foreign-key violations 0, Queue backlog 0 and health 200. The second
+transport attempt created no duplicate persisted issue or delivery row.
+
+The scope-policy implementation passed `pnpm check`, `pnpm cf:build`, and CI
+[36825311032](https://github.com/mathofdynamic/TRACE/actions/runs/36825311032).
+Regression coverage proves all-selection eligibility requires the fixture,
+wrong/suspended accounts fail, trusted snapshots filter to exactly one fixture,
+D1 receives no nonfixture repository, and rejected nonfixture webhooks create no
+delivery row or Queue message while fixture webhooks pass. Subsequent operational
+fixes passed strict script typechecks, full checks and CI; the final verifier
+suite has 47 focused tests. Final verifier CI
+[37098054880](https://github.com/mathofdynamic/TRACE/actions/runs/37098054880)
+passed, including the normal browser suite. The matching workflow registration
+was merged to main in [PR #52](https://github.com/mathofdynamic/TRACE/pull/52).
+
+Final bounded exact-version tail run
+[37098658908](https://github.com/mathofdynamic/TRACE/actions/runs/37098658908)
+confirmed Worker `14e30410-d83b-4de6-90cc-6ba0356957ed`, health 200 and zero
+error events. It sent no signed/synthetic webhook or Queue probe.
+
+**TRACE FIXTURE OPERATIONAL=YES**. **CUSTOMER CUTOVER=NO**. The external App's
+all-repositories scope remains approved; TRACE's production canary retains only
+the fixture repository and its controlled issue/delivery.
