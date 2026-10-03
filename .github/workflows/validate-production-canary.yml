@@ -23,6 +23,7 @@ on:
         options:
           - closed
           - fixture
+          - owner
       d1_baseline_stage:
         description: Verified existing D1 state to preserve across deployment
         required: true
@@ -31,6 +32,7 @@ on:
         options:
           - before-oauth
           - after-onboarding
+          - after-live-issue
       confirmation:
         description: Type the confirmation required for the selected deploy runtime mode
         required: false
@@ -45,7 +47,7 @@ concurrency:
 
 jobs:
   canary:
-    if: ${{ github.ref == 'refs/heads/feat/cloudflare-native-runtime' }}
+    if: ${{ github.ref == 'refs/heads/feat/cloudflare-native-runtime' || github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
     environment: production-canary
@@ -57,6 +59,7 @@ jobs:
       DEPLOYMENT_ACTION: ${{ inputs.mode }}
       TRACE_FIXTURE_D1_BASELINE_STAGE: ${{ inputs.d1_baseline_stage }}
       RUNTIME_MODE: ${{ inputs.runtime_mode }}
+      PRODUCTION_INSTALLATION_POLICY: ${{ inputs.runtime_mode }}
       EXPECTED_SHA: ${{ inputs.sha }}
       DEPLOY_CONFIRMATION: ${{ inputs.confirmation }}
     steps:
@@ -76,7 +79,7 @@ jobs:
               ;;
           esac
           case "$RUNTIME_MODE" in
-            closed|fixture) ;;
+            closed|fixture|owner) ;;
             *)
               echo "Unsupported production runtime mode." >&2
               exit 1
@@ -220,11 +223,11 @@ jobs:
           TRACE_GITHUB_APP_PRIVATE_KEY: ${{ secrets.TRACE_GITHUB_APP_PRIVATE_KEY }}
 
       - name: Verify authorized existing fixture installation or initial uninstalled App
-        if: ${{ inputs.mode == 'deploy' && inputs.runtime_mode == 'fixture' }}
+        if: ${{ inputs.mode == 'deploy' && (inputs.runtime_mode == 'fixture' || inputs.runtime_mode == 'owner') }}
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "$TRACE_FIXTURE_D1_BASELINE_STAGE" == after-onboarding ]]; then
+          if [[ "$TRACE_FIXTURE_D1_BASELINE_STAGE" == after-onboarding || "$TRACE_FIXTURE_D1_BASELINE_STAGE" == after-live-issue ]]; then
             pnpm exec tsx scripts/verify-production-github-fixture-installation.ts
           else
             pnpm exec tsx scripts/verify-production-github-app-state.ts
@@ -235,7 +238,7 @@ jobs:
           TRACE_GITHUB_APP_PRIVATE_KEY: ${{ secrets.TRACE_GITHUB_APP_PRIVATE_KEY }}
 
       - name: Capture verified production baseline before fixture deployment
-        if: ${{ inputs.mode == 'deploy' && inputs.runtime_mode == 'fixture' }}
+        if: ${{ inputs.mode == 'deploy' && (inputs.runtime_mode == 'fixture' || inputs.runtime_mode == 'owner') }}
         id: capture_transition_baseline
         shell: bash
         run: pnpm exec tsx scripts/verify-production-fixture-transition.ts before --capture-baseline-outputs
@@ -342,7 +345,7 @@ jobs:
             --message "TRACE production canary $DEPLOY_SHA"
 
       - name: Capture deployed fixture identity before acceptance probes
-        if: ${{ inputs.mode == 'deploy' && inputs.runtime_mode == 'fixture' }}
+        if: ${{ inputs.mode == 'deploy' && (inputs.runtime_mode == 'fixture' || inputs.runtime_mode == 'owner') }}
         id: capture_fixture_identity
         shell: bash
         run: pnpm exec tsx scripts/verify-production-fixture-transition.ts after --capture-deployment-outputs
@@ -378,7 +381,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Record Wrangler version for bounded tail diagnostics
-        if: ${{ inputs.mode == 'deploy' && inputs.runtime_mode == 'fixture' }}
+        if: ${{ inputs.mode == 'deploy' && (inputs.runtime_mode == 'fixture' || inputs.runtime_mode == 'owner') }}
         id: tail_wrangler_version
         shell: bash
         run: |
@@ -388,7 +391,7 @@ jobs:
           printf 'WRANGLER_VERSION=%s\n' "$version"
 
       - name: Verify fixture routes and bounded production error tail
-        if: ${{ inputs.mode == 'deploy' && inputs.runtime_mode == 'fixture' }}
+        if: ${{ inputs.mode == 'deploy' && (inputs.runtime_mode == 'fixture' || inputs.runtime_mode == 'owner') }}
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -399,7 +402,7 @@ jobs:
         run: pnpm exec tsx scripts/production-fixture-tail-acceptance.ts
 
       - name: Verify fixture transition side effects after acceptance probes
-        if: ${{ inputs.mode == 'deploy' && inputs.runtime_mode == 'fixture' }}
+        if: ${{ inputs.mode == 'deploy' && (inputs.runtime_mode == 'fixture' || inputs.runtime_mode == 'owner') }}
         shell: bash
         run: pnpm exec tsx scripts/verify-production-fixture-transition.ts after
         env:
@@ -415,7 +418,7 @@ jobs:
           TRACE_GITHUB_OAUTH_CLIENT_ID: ${{ vars.TRACE_GITHUB_OAUTH_CLIENT_ID }}
 
       - name: Inspect and safely roll back a failed fixture transition
-        if: ${{ failure() && inputs.mode == 'deploy' && inputs.runtime_mode == 'fixture' && steps.capture_transition_baseline.outcome == 'success' }}
+        if: ${{ failure() && inputs.mode == 'deploy' && (inputs.runtime_mode == 'fixture' || inputs.runtime_mode == 'owner') && steps.capture_transition_baseline.outcome == 'success' }}
         shell: bash
         run: pnpm exec tsx scripts/verify-production-fixture-transition.ts rollback-if-needed
         env:
