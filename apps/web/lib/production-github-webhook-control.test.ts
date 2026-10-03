@@ -99,6 +99,32 @@ function run(operation: WebhookOperation, responses: ReturnType<typeof fake>, de
   });
 }
 describe('protected production GitHub webhook control', () => {
+  it('reports bounded rejected event identity without exposing arbitrary metadata', () => {
+    expect(() =>
+      selectSafeDeliveries(
+        [
+          {
+            ...delivery,
+            event: 'installation',
+            action: 'created',
+            repository_id: null,
+            installation_id: null,
+            status_code: 403,
+          },
+        ],
+        166179374,
+      ),
+    ).toThrow(/"event":"installation".*"action":"created".*"installationId":null/);
+    try {
+      selectSafeDeliveries(
+        [{ ...delivery, event: 'secret-value!'.repeat(10), action: 'private payload!' }],
+        166179374,
+      );
+    } catch (error) {
+      expect(String(error)).not.toContain('secret-value');
+      expect(String(error)).not.toContain('private payload');
+    }
+  });
   it('preserves int64 IDs without rounding and permits only their exact discovered endpoints', () => {
     const id = '9223372036854775807';
     const body = parseWebhookResponseJson(
