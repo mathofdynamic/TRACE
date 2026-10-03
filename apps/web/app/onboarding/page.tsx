@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { d1Schema, isD1Database, schema } from '@trace/db';
 import type { TraceD1Database } from '@trace/db';
 import { OnboardingForm } from '../components/onboarding-form';
+import { Wordmark } from '../components/public';
 import { SetupProgress } from '../components/setup-progress';
 import { createRequestDatabase, getRequestTraceSession } from '../../lib/request-database';
 
@@ -38,13 +39,7 @@ export default async function OnboardingPage() {
   return (
     <main className="onboarding-shell">
       <div className="auth-shell__top">
-        <span className="wordmark">
-          <span className="trace-mark" aria-hidden="true">
-            <span />
-            <span />
-          </span>
-          <span>TRACE</span>
-        </span>
+        <Wordmark />
         <span className="onboarding-step">Setup</span>
       </div>
       <SetupProgress current={1} />

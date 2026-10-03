@@ -12,8 +12,7 @@ export const navItems = [
   ['Docs', '/docs'],
 ] as const;
 
-export const TRACE_LOGO_URL =
-  'https://famjljl5gg.ufs.sh/f/aej4FOV7nKCWxlYdm74WLq4h6ZbegtSl8A7Xw2YKRnmpcVyi';
+export const TRACE_LOGO_URL = '/brand/trace-logo.png';
 
 export function TraceMark({ size = 20, className = '' }: { size?: number; className?: string }) {
   return (

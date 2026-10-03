@@ -1922,3 +1922,21 @@
   history. No synthetic Queue probe, extra fixture issue, copied runtime secrets,
   source upload, customer cutover or rollback. CANONICAL ORIGIN MIGRATION=PASS;
   OWNER PRODUCTION OPERATIONAL=YES; PUBLIC CUSTOMER CUTOVER=NO.
+
+### Same-origin TRACE branding and local repository scaffold — 2026-10-03
+
+- Store the owner's canonical transparent 256px logo unchanged under public/brand.
+  Shared TraceMark now uses the same-origin asset, fixing the external image blocked
+  by the existing CSP across public navigation/footer, auth screens and app shell.
+  Onboarding reuses Wordmark instead of an empty legacy mark.
+- Register Next.js file metadata icons: transparent 256px PNG, 180px Apple icon,
+  and a 16/32/48px ICO derived from the canonical image. Document asset provenance.
+- Run the real repository CLI `pnpm trace init --yes` in TRACE itself, preserving
+  existing state. Scaffold README, schema-version, config and all expected folders;
+  `pnpm trace validate` returns no violations. `.trace/` remains ignored local
+  runtime output; no login/connect, credentials, deployment or unrelated assets changed.
+- Verification: `pnpm check` passed formatting, lint, typecheck, workspace unit tests
+  (including CLI tests) and optimized build. Local built-server smoke verified
+  landing/sign-in logo markup, generated favicon/PNG/Apple metadata links and all
+  four image routes returning 200 with correct MIME types. Asset byte identity,
+  derived dimensions, scaffold structure, ignore rules and repo reference audit passed.
