@@ -44,6 +44,8 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
+      - name: Preserve canonical scaffold bytes on Windows
+        run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
         with:
           path: tooling
