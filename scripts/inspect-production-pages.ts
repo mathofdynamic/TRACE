@@ -1,7 +1,4 @@
-import {
-  PRODUCTION_BROWSER_ORIGIN,
-  PRODUCTION_BACKEND_ORIGIN,
-} from '../apps/web/lib/browser-origin.js';
+import { PRODUCTION_BROWSER_ORIGIN, PRODUCTION_BACKEND_ORIGIN } from '../apps/web/lib/origins.js';
 async function main() {
   if (
     process.env.CLOUDFLARE_ACCOUNT_ID !== 'c5d6cf110905c91fc3eed1abaf8236a2' ||

@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { createProductionGitHubAppJwt } from './production-github-app-jwt.js';
-import { PRODUCTION_BACKEND_ORIGIN } from '../apps/web/lib/browser-origin.js';
+import { PRODUCTION_BACKEND_ORIGIN } from '../apps/web/lib/origins.js';
 import { fileURLToPath } from 'node:url';
 import { readProductionGitHubFixtureInstallation } from './verify-production-github-fixture-installation.js';
 import { productionFixtureTransitionBaseline as target } from './verify-production-fixture-transition.js';

@@ -1,8 +1,7 @@
 import { getTracePublicUrl } from '@trace/auth';
 
-export const PRODUCTION_BROWSER_ORIGIN = 'https://trace-code.pages.dev';
-export const PRODUCTION_BACKEND_ORIGIN = 'https://trace-production.mathofdynamic2.workers.dev';
-export const STAGING_ORIGIN = 'https://trace-test-staging.mathofdynamic2.workers.dev';
+import { PRODUCTION_BROWSER_ORIGIN, PRODUCTION_BACKEND_ORIGIN } from './origins';
+export { PRODUCTION_BROWSER_ORIGIN, PRODUCTION_BACKEND_ORIGIN, STAGING_ORIGIN } from './origins';
 
 // Forwarding metadata selects the browser URL only; it never grants authentication.
 export function canonicalBrowserLocation(
