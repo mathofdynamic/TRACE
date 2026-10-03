@@ -1,0 +1,18 @@
+schema_version: "0.1"
+execution_mode: local
+repository:
+  provider: git
+  name: trace-project
+git_write_policy: disabled
+sync_policy:
+  enabled: true
+  default: local_only
+  allow:
+    - analysis
+    - daily_report
+    - weekly_report
+    - pr_brief
+    - decision
+    - risk
+    - conflict
+  include_code_snippets: false

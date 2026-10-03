@@ -1922,3 +1922,39 @@
   history. No synthetic Queue probe, extra fixture issue, copied runtime secrets,
   source upload, customer cutover or rollback. CANONICAL ORIGIN MIGRATION=PASS;
   OWNER PRODUCTION OPERATIONAL=YES; PUBLIC CUSTOMER CUTOVER=NO.
+
+### Same-origin TRACE branding and local repository scaffold — 2026-10-03
+
+- Store the owner's canonical transparent 256px logo unchanged under public/brand.
+  Shared TraceMark now uses the same-origin asset, fixing the external image blocked
+  by the existing CSP across public navigation/footer, auth screens and app shell.
+  Onboarding reuses Wordmark instead of an empty legacy mark.
+- Register Next.js file metadata icons: transparent 256px PNG, 180px Apple icon,
+  and a 16/32/48px ICO derived from the canonical image. Document asset provenance.
+- Run the real repository CLI `pnpm trace init --yes` in TRACE itself, preserving
+  existing state. Scaffold README, schema-version, config and all expected folders;
+  `pnpm trace validate` returns no violations. `.trace/` remains ignored local
+  runtime output; no login/connect, credentials, deployment or unrelated assets changed.
+- Verification: `pnpm check` passed formatting, lint, typecheck, workspace unit tests
+  (including CLI tests) and optimized build. Local built-server smoke verified
+  landing/sign-in logo markup, generated favicon/PNG/Apple metadata links and all
+  four image routes returning 200 with correct MIME types. Asset byte identity,
+  derived dimensions, scaffold structure, ignore rules and repo reference audit passed.
+
+### Durable init fixture and branding publication — 2026-10-03
+
+- Publish the previously verified branding commit on fix/trace-branding. Generate
+  tests/fixtures/trace-project/.trace with the real CLI in an isolated trace-project
+  directory; track only README, schema-version and safe deterministic config.
+  Keep root runtime .trace ignored and preserve its local state. Narrow fixture
+  exceptions never allow dashboard bindings, credentials or sync acknowledgements.
+- Add regression tests comparing a fresh real initialization byte-for-byte to the
+  committed fixture, validating schema/config, expected directories, repeatability,
+  and absence of runtime/credential content. Connect now rejects missing initialization
+  before credential/network access with an explicit trace init --yes instruction.
+- Correct the first-use documentation sequence to include init before login/connect.
+  Pin the existing verified canonical Worker version/source as a guarded owner rollback
+  baseline before publishing branding through the existing protected deployment.
+- Local validation passed: 13 CLI tests (3 fixture/init regressions), 31 guarded
+  transition tests, pnpm check, pnpm cf:build and git diff --check. Root/runtime
+  ignore checks passed. CI/E2E and protected publication follow the consolidated PR.
