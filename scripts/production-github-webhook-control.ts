@@ -87,7 +87,31 @@ export function selectSafeDeliveries(body: unknown, installationId: number): Saf
           (entry.status_code as number) < 100 ||
           (entry.status_code as number) > 599))
     )
-      fail('Delivery metadata is invalid.');
+      fail(
+        `Delivery metadata is invalid (${JSON.stringify({
+          record: record(entry),
+          idValid: record(entry) && Number.isSafeInteger(entry.id) && (entry.id as number) > 0,
+          guidValid:
+            record(entry) &&
+            typeof entry.guid === 'string' &&
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(entry.guid),
+          timestampValid:
+            record(entry) &&
+            typeof entry.delivered_at === 'string' &&
+            Number.isFinite(Date.parse(entry.delivered_at)),
+          redeliveryType: record(entry) ? typeof entry.redelivery : 'unavailable',
+          statusCode:
+            record(entry) && entry.status_code === null
+              ? null
+              : record(entry) &&
+                  Number.isInteger(entry.status_code) &&
+                  (entry.status_code as number) >= -1 &&
+                  (entry.status_code as number) <= 599
+                ? entry.status_code
+                : 'unavailable',
+          statusCodeType: record(entry) ? typeof entry.status_code : 'unavailable',
+        })}).`,
+      );
     const ping =
       entry.event === 'ping' &&
       entry.action === null &&
