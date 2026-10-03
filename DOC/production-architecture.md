@@ -69,8 +69,9 @@ capacity and operations decision.
 
 ## Domain and GitHub callback decision
 
-`https://trace-code.pages.dev` remains the verified staging URL and must not be
-repurposed silently. A single GitHub App cannot safely provide independent
+In the historical CF4.9 plan, `https://trace-code.pages.dev` served staging.
+The owner has now authorized its canonical production migration; staging uses
+`https://trace-test-staging.mathofdynamic2.workers.dev` independently. A single GitHub App cannot safely provide independent
 staging and production callback/webhook endpoints without a coordinated
 cutover. Before production, choose one of:
 

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { verifyProductionFixtureRoutes } from '../../../scripts/verify-production-fixture-routes.js';
 
-const productionUrl = 'https://trace-production.mathofdynamic2.workers.dev';
+const productionUrl = 'https://trace-code.pages.dev';
 const oauthClientId = 'production-oauth-client-id';
 
 function response(status: number, headers: Record<string, string> = {}, body = '') {

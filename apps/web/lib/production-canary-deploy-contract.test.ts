@@ -19,8 +19,7 @@ const productionVariables = {
   TRACE_GITHUB_APP_ID: '5082884',
   TRACE_GITHUB_APP_CLIENT_ID: 'fake-app-client-id',
   TRACE_GITHUB_APP_SLUG: 'trace-production-integration',
-  TRACE_GITHUB_APP_CALLBACK_URL:
-    'https://trace-production.mathofdynamic2.workers.dev/api/github/setup',
+  TRACE_GITHUB_APP_CALLBACK_URL: 'https://trace-code.pages.dev/api/github/setup',
   TRACE_GITHUB_APP_INSTALL_URL:
     'https://github.com/apps/trace-production-integration/installations/new',
   TRACE_GITHUB_OAUTH_CLIENT_ID: 'fake-oauth-client-id',
@@ -149,8 +148,7 @@ describe('production canary deployment runtime mode', () => {
       GITHUB_APP_ID: '5082884',
       GITHUB_APP_CLIENT_ID: 'fake-app-client-id',
       GITHUB_APP_SLUG: 'trace-production-integration',
-      GITHUB_APP_CALLBACK_URL:
-        'https://trace-production.mathofdynamic2.workers.dev/api/github/setup',
+      GITHUB_APP_CALLBACK_URL: 'https://trace-code.pages.dev/api/github/setup',
       GITHUB_APP_INSTALL_URL:
         'https://github.com/apps/trace-production-integration/installations/new',
       GITHUB_OAUTH_CLIENT_ID: 'fake-oauth-client-id',

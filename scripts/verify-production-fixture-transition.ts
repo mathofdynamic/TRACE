@@ -86,9 +86,11 @@ type RuntimeCanaryMode = 'closed' | 'fixture' | 'owner';
 type FetchImplementation = typeof fetch;
 type KnownBaseline =
   | { versionId: string; mode: 'closed' }
-  | { versionId: string; mode: 'fixture'; sourceSha: string };
+  | { versionId: string; mode: 'fixture' | 'owner'; sourceSha: string };
 
 function knownBaselineForVersion(versionId: string): KnownBaseline | undefined {
+  if (versionId === 'a118f111-0bcb-4662-b864-c8587ca29567')
+    return { versionId, mode: 'owner', sourceSha: '72f71ff4f597c0a18abaa2eaec837ff4892266d0' };
   if (versionId === '14e30410-d83b-4de6-90cc-6ba0356957ed')
     return {
       versionId,
@@ -226,7 +228,7 @@ function assertExpectedDeployment(
     expectedBaselineVersionId = baseline.versionId;
     expectedBaselineMode = baseline.mode;
     if (
-      baseline.mode === 'fixture' &&
+      baseline.mode !== 'closed' &&
       !sourceAnnotationMatches(deployment.annotations?.['workers/message'], baseline.sourceSha)
     ) {
       fail(
@@ -324,6 +326,16 @@ function assertWorkerBindings(
     }
   }
 
+  const legacyBrowserOrigin =
+    version.id === 'a118f111-0bcb-4662-b864-c8587ca29567' || expectedRuntimeMode !== 'owner';
+  const expectedBrowserOrigin = legacyBrowserOrigin
+    ? productionFixtureTransitionBaseline.productionBaseUrl
+    : 'https://trace-code.pages.dev';
+  if (
+    variables.get('TRACE_PUBLIC_URL') !== expectedBrowserOrigin &&
+    expectedRuntimeMode === 'owner'
+  )
+    fail('Owner public browser origin is incorrect.');
   const runtimeNames = Object.keys(productionGitHubRuntimeVariableSources);
   if (bindings.some((binding) => binding.name?.startsWith('TRACE_GITHUB_'))) {
     fail('Production Worker must not expose TRACE_GITHUB_* source names as runtime bindings.');
@@ -332,7 +344,11 @@ function assertWorkerBindings(
     fail('CLOUDFLARE_API_TOKEN must not be a production Worker binding.');
   }
   for (const [runtimeName, sourceName] of Object.entries(productionGitHubRuntimeVariableSources)) {
-    const sourceValue = environment[sourceName];
+    const sourceValue =
+      runtimeName === 'GITHUB_APP_CALLBACK_URL' &&
+      version.id === 'a118f111-0bcb-4662-b864-c8587ca29567'
+        ? `${expectedBrowserOrigin}/api/github/setup`
+        : environment[sourceName];
     if (typeof sourceValue !== 'string' || sourceValue.length === 0) {
       fail(`Required production GitHub source variable is unavailable: ${sourceName}.`);
     }
@@ -343,8 +359,7 @@ function assertWorkerBindings(
   if (
     variables.get('GITHUB_APP_ID') !== '5082884' ||
     variables.get('GITHUB_APP_SLUG') !== 'trace-production-integration' ||
-    variables.get('GITHUB_APP_CALLBACK_URL') !==
-      `${productionFixtureTransitionBaseline.productionBaseUrl}/api/github/setup` ||
+    variables.get('GITHUB_APP_CALLBACK_URL') !== `${expectedBrowserOrigin}/api/github/setup` ||
     variables.get('GITHUB_APP_INSTALL_URL') !==
       `https://github.com/apps/${productionFixtureTransitionBaseline.appSlug}/installations/new`
   ) {
@@ -624,7 +639,13 @@ async function readApplicationCounts(
   );
   const counts = parseProductionApplicationCountsResult(result);
   const stage = environment.TRACE_FIXTURE_D1_BASELINE_STAGE ?? 'before-oauth';
-  if (stage === 'before-oauth') assertProductionApplicationCountsEmpty(counts);
+  if (stage === 'owner') {
+    const { verifyOwnerState } = await import('./verify-production-owner-state.js');
+    await verifyOwnerState(
+      { ...environment, OWNER_ACCEPTANCE_STAGE: 'active' },
+      fetchImplementation,
+    );
+  } else if (stage === 'before-oauth') assertProductionApplicationCountsEmpty(counts);
   else if (stage === 'after-onboarding' || stage === 'after-live-issue') {
     assertExpectedProductionFixtureCounts(stage, counts);
     const query = buildProductionFixtureIdentityQuery(

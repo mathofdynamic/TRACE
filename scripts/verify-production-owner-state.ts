@@ -15,6 +15,22 @@ type CatalogRow = {
   installation_state: string;
   suspended_at: unknown;
 };
+export type OwnerLoginState = {
+  users_count: number;
+  unexpected_accounts: number;
+  completed_onboarding: number;
+  active_sessions: number;
+};
+export function assertOwnerLoginState(state: OwnerLoginState) {
+  if (
+    state.users_count !== 1 ||
+    state.unexpected_accounts !== 0 ||
+    state.completed_onboarding !== 1 ||
+    !Number.isSafeInteger(state.active_sessions) ||
+    state.active_sessions < 1
+  )
+    throw new Error('Owner identity, onboarding or active sessions are invalid.');
+}
 export const ownerCatalogSql = `SELECT r.github_repository_id AS provider_id, r.full_name, r.state, ir.selected, (r.organization_id = gi.organization_id) AS tenant_matches, gi.github_installation_id AS installation_id, gi.account_login, gi.state AS installation_state, gi.suspended_at FROM github_repositories r JOIN github_installations gi ON gi.id = r.installation_id LEFT JOIN github_installation_repositories ir ON ir.installation_id = gi.id AND ir.github_repository_id = r.github_repository_id ORDER BY r.github_repository_id`;
 export const ownerIdentitySql = `SELECT (SELECT COUNT(*) FROM github_installations WHERE github_installation_id = '166179374' AND account_login = 'mathofdynamic' AND state = 'active' AND suspended_at IS NULL) AS installation_count, (SELECT COUNT(*) FROM memberships m JOIN accounts a ON a.user_id = m.user_id JOIN github_installations gi ON gi.organization_id = m.organization_id WHERE m.role = 'owner' AND a.provider_id = 'github' AND a.account_id = 'mathofdynamic' AND gi.github_installation_id = '166179374') AS owner_links, (SELECT COUNT(*) FROM github_webhook_deliveries d JOIN github_repositories r ON r.id = d.repository_id WHERE r.state <> 'active' AND r.github_repository_id <> '1378441300') AS inactive_deliveries`;
 export function assertOwnerCatalog(
@@ -119,6 +135,24 @@ export async function verifyOwnerState(
     identity.inactive_deliveries !== 0
   )
     throw new Error('Owner identity or nonselected repository delivery boundary is invalid.');
+  const loginAfter = environment.PAGES_LOGIN_AFTER_MS;
+  if (loginAfter && (!/^[0-9]{13}$/.test(loginAfter) || !Number.isSafeInteger(Number(loginAfter))))
+    throw new Error('Invalid Pages session acceptance timestamp.');
+  const login = (
+    await query(
+      `SELECT (SELECT COUNT(*) FROM users) AS users_count, (SELECT COUNT(*) FROM accounts WHERE provider_id <> 'github' OR account_id <> 'mathofdynamic') AS unexpected_accounts, (SELECT COUNT(*) FROM onboarding_profiles o JOIN accounts a ON a.user_id = o.user_id WHERE a.provider_id = 'github' AND a.account_id = 'mathofdynamic' AND o.completed = 1) AS completed_onboarding, (SELECT COUNT(*) FROM sessions s JOIN accounts a ON a.user_id = s.user_id WHERE a.provider_id = 'github' AND a.account_id = 'mathofdynamic' AND s.expires_at > ${Date.now()}) AS active_sessions, (SELECT COUNT(*) FROM sessions s JOIN accounts a ON a.user_id = s.user_id WHERE a.provider_id = 'github' AND a.account_id = 'mathofdynamic' AND s.expires_at > ${Date.now()} AND s.created_at >= ${loginAfter ? Number(loginAfter) : 0}) AS fresh_sessions`,
+    )
+  )[0] as OwnerLoginState & { fresh_sessions: number };
+  assertOwnerLoginState(login);
+  if (loginAfter && login.fresh_sessions < 1)
+    throw new Error('Fresh owner Pages login session is missing.');
+  const fixture = (
+    await query(
+      "SELECT (SELECT COUNT(*) FROM github_issues i JOIN github_repositories r ON r.id = i.repository_id WHERE r.github_repository_id = '1378441300' AND i.github_issue_id = '5686722719') AS fixture_issue, (SELECT COUNT(*) FROM github_webhook_deliveries d JOIN github_repositories r ON r.id = d.repository_id WHERE r.github_repository_id = '1378441300' AND d.delivery_id = '81b8a02c-bee7-11f1-89b0-776168eff2c6' AND d.status = 'processed' AND d.last_error IS NULL AND d.processed_at IS NOT NULL) AS fixture_delivery",
+    )
+  )[0] as { fixture_issue: number; fixture_delivery: number };
+  if (fixture.fixture_issue !== 1 || fixture.fixture_delivery !== 1)
+    throw new Error('Preserved fixture proof is missing.');
   if ((await query('PRAGMA foreign_key_check')).length)
     throw new Error('Owner D1 foreign-key violations detected.');
   const metrics = (await api(`queues/${target.queueId}/metrics`)) as { backlog_count: number };
@@ -129,7 +163,7 @@ export async function verifyOwnerState(
     signal: AbortSignal.timeout(15000),
   });
   if (health.status !== 200) throw new Error('Production owner health failed.');
-  return `OWNER_INSTALLATION=166179374 VERIFIED\nEXTERNAL_REPOSITORIES=${installation.repositoryCount}\nAVAILABLE_REPOSITORIES=${catalog.available}\nACTIVE_REPOSITORIES=${catalog.active.join(',')}\nTRACE_REPOSITORY_ID=${catalog.traceId}\nTRACE_REPOSITORY=${environment.OWNER_ACCEPTANCE_STAGE === 'active' ? 'ACTIVE' : 'CATALOGUED'}\nOWNER_IDENTITY=VERIFIED\nUNSELECTED_DELIVERIES=0\nFOREIGN_KEY_VIOLATIONS=0\nQUEUE_BACKLOG=0\nHEALTH=200`;
+  return `OWNER_INSTALLATION=166179374 VERIFIED\nEXTERNAL_REPOSITORIES=${installation.repositoryCount}\nAVAILABLE_REPOSITORIES=${catalog.available}\nACTIVE_REPOSITORIES=${catalog.active.join(',')}\nTRACE_REPOSITORY_ID=${catalog.traceId}\nTRACE_REPOSITORY=${environment.OWNER_ACCEPTANCE_STAGE === 'active' ? 'ACTIVE' : 'CATALOGUED'}\nOWNER_IDENTITY=VERIFIED\nACTIVE_OWNER_SESSIONS=${login.active_sessions}\nFRESH_OWNER_SESSIONS=${login.fresh_sessions}\nFIXTURE_PROOF=PRESERVED\nUNSELECTED_DELIVERIES=0\nFOREIGN_KEY_VIOLATIONS=0\nQUEUE_BACKLOG=0\nHEALTH=200`;
 }
 if (
   process.argv[1] &&

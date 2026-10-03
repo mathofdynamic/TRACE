@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "accountId": "c5d6cf110905c91fc3eed1abaf8236a2",
   "workerName": "trace-production",
-  "publicUrl": "https://trace-production.mathofdynamic2.workers.dev",
+  "publicUrl": "https://trace-code.pages.dev",
   "runtime": {
     "deploymentEnv": "production",
     "databaseDriver": "d1",
@@ -45,5 +45,6 @@
     "GITHUB_WEBHOOK_SECRET",
     "GITHUB_OAUTH_CLIENT_SECRET",
     "TRACE_AUTH_SECRET"
-  ]
+  ],
+  "backendUrl": "https://trace-production.mathofdynamic2.workers.dev"
 }
