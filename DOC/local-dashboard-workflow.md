@@ -26,7 +26,10 @@ trace sync
 
 ## Owner production target
 
-The CLI defaults to `https://trace-production.mathofdynamic2.workers.dev`.
+The owner browser website is `https://trace-code.pages.dev`. Fresh browser login
+and normal device approval use that origin. The CLI continues to default to
+`https://trace-production.mathofdynamic2.workers.dev`; do not replace its backend
+server with the Pages hostname. Existing CLI credentials remain valid.
 Production access is currently limited to GitHub user `mathofdynamic` and its
 approved installation `166179374`; public customer cutover remains disabled.
 Select the real repository in production Dashboard → Repositories before connecting.
