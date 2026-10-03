@@ -372,6 +372,8 @@ export function canaryInstallationSnapshotEligibility(
       value.repositories.every(
         (r) =>
           isRecord(r) &&
+          typeof r.id === 'number' &&
+          Number.isSafeInteger(r.id) &&
           ownerRepositoryRecordMatches({
             githubRepositoryId: r.id,
             owner: r.owner,
@@ -466,6 +468,8 @@ export function canaryWebhookPayloadEligibility(
         : { allowed: false, reason: 'owner-scope' };
     const repository = value.repository;
     return isRecord(repository) &&
+      typeof repository.id === 'number' &&
+      Number.isSafeInteger(repository.id) &&
       isRecord(repository.owner) &&
       ownerRepositoryRecordMatches({
         githubRepositoryId: repository.id,

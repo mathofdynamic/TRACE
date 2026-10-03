@@ -95,6 +95,24 @@ describe('explicit owner production boundaries', () => {
     expect(
       canaryInstallationSnapshotEligibility(env, {
         ...snapshot,
+        repositories: [{ ...repo, id: '9' }],
+      }).allowed,
+    ).toBe(false);
+    expect(
+      canaryInstallationSnapshotEligibility(env, {
+        ...snapshot,
+        repositories: [repo, { ...repo, id: '9' }],
+      }).allowed,
+    ).toBe(false);
+    expect(
+      canaryWebhookPayloadEligibility(env, 'issues', {
+        ...payload,
+        repository: { ...payload.repository, id: '9' },
+      }).allowed,
+    ).toBe(false);
+    expect(
+      canaryInstallationSnapshotEligibility(env, {
+        ...snapshot,
         repositories: [{ ...repo, owner: 'other' }],
       }).allowed,
     ).toBe(false);
