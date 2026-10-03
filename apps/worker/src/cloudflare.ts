@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   createD1Database,
+  isD1SelectedOwnerWebhookEvent,
   createD1GitHubIngestionStore,
   markD1WebhookDeliveryProcessed,
   markD1WebhookDeliveryFailure,
@@ -28,7 +29,11 @@ export async function assertD1Schema(binding: D1Database) {
   if (row?.name !== 'users') throw new Error('TRACE D1 schema is not initialized.');
 }
 
-export async function handleTraceQueueMessage(message: TraceQueueMessage, env: Env, attempt = 1) {
+export async function handleTraceQueueMessage(
+  message: TraceQueueMessage,
+  env: Env & { TRACE_DEPLOYMENT_ENV?: string; TRACE_CANARY_MODE?: string },
+  attempt = 1,
+) {
   if (!implemented.has(message.type)) {
     return { status: 'not-implemented' as const, type: message.type };
   }
@@ -46,6 +51,36 @@ export async function handleTraceQueueMessage(message: TraceQueueMessage, env: E
 
   if (message.type === 'github.webhook.process') {
     const db = createD1Database(env.DB);
+    if (env.TRACE_DEPLOYMENT_ENV === 'production') {
+      if (!['fixture', 'owner'].includes(env.TRACE_CANARY_MODE ?? ''))
+        throw new Error('Production Queue business processing is closed.');
+      if (env.TRACE_CANARY_MODE === 'fixture') {
+        const event = message.event;
+        const authorized =
+          event &&
+          'installationId' in event &&
+          event.installationId === 166179374 &&
+          ('repositoryId' in event
+            ? event.repositoryId === 1378441300
+            : event.type === 'InstallationCreated'
+              ? event.accountLogin.toLowerCase() === 'mathofdynamic'
+              : event.type === 'InstallationRepositoriesChanged' &&
+                event.repositoryIds.length > 0 &&
+                event.repositoryIds.every((id) => id === 1378441300));
+        if (!authorized) throw new Error('Queue event is outside the production fixture scope.');
+      }
+      if (
+        env.TRACE_CANARY_MODE === 'owner' &&
+        !(await isD1SelectedOwnerWebhookEvent(db, message.event))
+      ) {
+        await markD1WebhookDeliveryProcessed(db, message.deliveryId, 'ignored', attempt);
+        return {
+          status: 'completed' as const,
+          type: message.type,
+          result: { status: 'ignored' as const },
+        };
+      }
+    }
     const result = await processGitHubWebhookEvent(createD1GitHubIngestionStore(db), message.event);
     await markD1WebhookDeliveryProcessed(
       db,

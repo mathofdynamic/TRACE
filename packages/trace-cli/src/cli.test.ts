@@ -14,6 +14,23 @@ import {
 import { serializeArtifact } from '@trace/schema';
 
 describe('trace CLI contract', () => {
+  it('targets the actual production Worker by default', () => {
+    const url = process.env.TRACE_CLOUD_URL,
+      environment = process.env.TRACE_ENVIRONMENT;
+    try {
+      delete process.env.TRACE_CLOUD_URL;
+      delete process.env.TRACE_ENVIRONMENT;
+      expect(resolveCloudTarget()).toEqual({
+        server: 'https://trace-production.mathofdynamic2.workers.dev',
+        environment: 'Production',
+      });
+    } finally {
+      if (url === undefined) delete process.env.TRACE_CLOUD_URL;
+      else process.env.TRACE_CLOUD_URL = url;
+      if (environment === undefined) delete process.env.TRACE_ENVIRONMENT;
+      else process.env.TRACE_ENVIRONMENT = environment;
+    }
+  });
   it('keeps local commands explicit about deterministic limits', () => {
     expect(
       'The intended product goal was not inferred from filenames or commit subjects.',

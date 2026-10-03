@@ -501,7 +501,7 @@ describe('production canary deployment workflow', () => {
       'TRACE_BASELINE_RUNTIME_MODE: ${{ steps.capture_transition_baseline.outputs.baseline_mode }}',
     );
     expect(workflow).toContain(
-      "failure() && inputs.mode == 'deploy' && inputs.runtime_mode == 'fixture' && steps.capture_transition_baseline.outcome == 'success'",
+      "failure() && inputs.mode == 'deploy' && (inputs.runtime_mode == 'fixture' || inputs.runtime_mode == 'owner') && steps.capture_transition_baseline.outcome == 'success'",
     );
     expect(transitionScript).toContain("fixtureVersionId: '16055223-3a33-43a3-8d09-fafddb8abe72'");
     expect(transitionScript).toContain(

@@ -67,6 +67,9 @@ export async function POST(request: Request) {
             githubRepositoryId: d1Schema.githubRepositories.githubRepositoryId,
             githubInstallationId: d1Schema.githubInstallations.githubInstallationId,
             installationAccountLogin: d1Schema.githubInstallations.accountLogin,
+            installationState: d1Schema.githubInstallations.state,
+            organizationId: d1Schema.githubRepositories.organizationId,
+            installationOrganizationId: d1Schema.githubInstallations.organizationId,
             owner: d1Schema.githubRepositories.owner,
             name: d1Schema.githubRepositories.name,
             fullName: d1Schema.githubRepositories.fullName,
@@ -78,6 +81,19 @@ export async function POST(request: Request) {
             d1Schema.githubInstallations,
             eq(d1Schema.githubRepositories.installationId, d1Schema.githubInstallations.id),
           )
+          .innerJoin(
+            d1Schema.githubInstallationRepositories,
+            and(
+              eq(
+                d1Schema.githubInstallationRepositories.installationId,
+                d1Schema.githubInstallations.id,
+              ),
+              eq(
+                d1Schema.githubInstallationRepositories.githubRepositoryId,
+                d1Schema.githubRepositories.githubRepositoryId,
+              ),
+            ),
+          )
           .where(inArray(d1Schema.githubRepositories.organizationId, organizationIds))
       : await db
           .select({
@@ -86,6 +102,9 @@ export async function POST(request: Request) {
             githubRepositoryId: schema.githubRepositories.githubRepositoryId,
             githubInstallationId: schema.githubInstallations.githubInstallationId,
             installationAccountLogin: schema.githubInstallations.accountLogin,
+            installationState: schema.githubInstallations.state,
+            organizationId: schema.githubRepositories.organizationId,
+            installationOrganizationId: schema.githubInstallations.organizationId,
             owner: schema.githubRepositories.owner,
             name: schema.githubRepositories.name,
             fullName: schema.githubRepositories.fullName,
@@ -96,6 +115,19 @@ export async function POST(request: Request) {
           .innerJoin(
             schema.githubInstallations,
             eq(schema.githubRepositories.installationId, schema.githubInstallations.id),
+          )
+          .innerJoin(
+            schema.githubInstallationRepositories,
+            and(
+              eq(
+                schema.githubInstallationRepositories.installationId,
+                schema.githubInstallations.id,
+              ),
+              eq(
+                schema.githubInstallationRepositories.githubRepositoryId,
+                schema.githubRepositories.githubRepositoryId,
+              ),
+            ),
           )
           .where(inArray(schema.githubRepositories.organizationId, organizationIds));
     const repositoryEligibility = canaryRepositorySelectionEligibility(cloudflareEnv, repositories);

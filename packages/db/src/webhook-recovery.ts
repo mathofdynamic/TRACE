@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, notInArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm';
 import {
   enqueueCloudflareTraceMessage,
   traceGitHubEventSchema,
@@ -376,4 +376,109 @@ export async function markD1WebhookDeliveryFailure(
         notInArray(d1Schema.githubWebhookDeliveries.status, ['processed', 'ignored']),
       ),
     );
+}
+
+/** Recheck owner selection at receipt and consumption; GitHub visibility is not authorization. */
+export async function isD1SelectedOwnerWebhookEvent(
+  db: TraceD1Database,
+  event: TraceGitHubEvent | null,
+) {
+  if (!event || eventInstallationId(event) !== '166179374' || !eventRepositoryId(event))
+    return false;
+  const [row] = await db
+    .select({ id: d1Schema.githubRepositories.id })
+    .from(d1Schema.githubRepositories)
+    .innerJoin(
+      d1Schema.githubInstallations,
+      and(
+        eq(d1Schema.githubRepositories.installationId, d1Schema.githubInstallations.id),
+        eq(d1Schema.githubRepositories.organizationId, d1Schema.githubInstallations.organizationId),
+      ),
+    )
+    .innerJoin(
+      d1Schema.githubInstallationRepositories,
+      and(
+        eq(d1Schema.githubInstallationRepositories.installationId, d1Schema.githubInstallations.id),
+        eq(
+          d1Schema.githubInstallationRepositories.githubRepositoryId,
+          d1Schema.githubRepositories.githubRepositoryId,
+        ),
+      ),
+    )
+    .where(
+      and(
+        eq(d1Schema.githubRepositories.githubRepositoryId, eventRepositoryId(event)!),
+        eq(d1Schema.githubInstallations.githubInstallationId, '166179374'),
+        eq(d1Schema.githubInstallations.accountLogin, 'mathofdynamic'),
+        eq(d1Schema.githubInstallations.state, 'active'),
+        isNull(d1Schema.githubInstallations.suspendedAt),
+        eq(d1Schema.githubRepositories.owner, 'mathofdynamic'),
+        eq(d1Schema.githubRepositories.state, 'active'),
+        eq(d1Schema.githubInstallationRepositories.selected, true),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
+/** Administrative notifications can revoke selection, never activate or enqueue work. */
+export async function applyD1OwnerInstallationBoundary(
+  db: TraceD1Database,
+  eventName: string,
+  payload: unknown,
+) {
+  const root = payload as {
+    installation?: { id?: number; account?: { login?: string } };
+    action?: string;
+    repositories_removed?: { id: number }[];
+  } | null;
+  if (
+    !root ||
+    root.installation?.id !== 166179374 ||
+    root.installation.account?.login?.toLowerCase() !== 'mathofdynamic'
+  )
+    throw new Error('Owner installation notification is outside the approved account.');
+  const [installation] = await db
+    .select({ id: d1Schema.githubInstallations.id })
+    .from(d1Schema.githubInstallations)
+    .where(
+      and(
+        eq(d1Schema.githubInstallations.githubInstallationId, '166179374'),
+        eq(d1Schema.githubInstallations.accountLogin, 'mathofdynamic'),
+      ),
+    )
+    .limit(1);
+  if (!installation) return;
+  const now = new Date();
+  if (eventName === 'installation' && (root.action === 'deleted' || root.action === 'suspend'))
+    await db
+      .update(d1Schema.githubInstallations)
+      .set({ state: 'suspended', updatedAt: now })
+      .where(eq(d1Schema.githubInstallations.id, installation.id));
+  if (eventName === 'installation_repositories' && root.repositories_removed?.length) {
+    if (
+      root.repositories_removed.length > 500 ||
+      !root.repositories_removed.every((r) => Number.isSafeInteger(r.id) && r.id > 0)
+    )
+      throw new Error('Removed repository metadata is invalid.');
+    const ids = root.repositories_removed.map((r) => String(r.id));
+    await db
+      .update(d1Schema.githubInstallationRepositories)
+      .set({ selected: false, updatedAt: now })
+      .where(
+        and(
+          eq(d1Schema.githubInstallationRepositories.installationId, installation.id),
+          inArray(d1Schema.githubInstallationRepositories.githubRepositoryId, ids),
+        ),
+      );
+    await db
+      .update(d1Schema.githubRepositories)
+      .set({ state: 'available', disconnectedAt: now, updatedAt: now })
+      .where(
+        and(
+          eq(d1Schema.githubRepositories.installationId, installation.id),
+          inArray(d1Schema.githubRepositories.githubRepositoryId, ids),
+        ),
+      );
+  }
 }

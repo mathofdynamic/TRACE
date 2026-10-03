@@ -82,13 +82,19 @@ type QueueResponse = {
 
 type QueueMetrics = { backlog_count?: number };
 type TransitionPhase = 'before' | 'after' | 'rollback';
-type RuntimeCanaryMode = 'closed' | 'fixture';
+type RuntimeCanaryMode = 'closed' | 'fixture' | 'owner';
 type FetchImplementation = typeof fetch;
 type KnownBaseline =
   | { versionId: string; mode: 'closed' }
   | { versionId: string; mode: 'fixture'; sourceSha: string };
 
 function knownBaselineForVersion(versionId: string): KnownBaseline | undefined {
+  if (versionId === '14e30410-d83b-4de6-90cc-6ba0356957ed')
+    return {
+      versionId,
+      mode: 'fixture' as const,
+      sourceSha: '1498dcd2da74d1952ba97c61e6cd0c77811784eb',
+    };
   if (versionId === productionFixtureTransitionBaseline.workerVersionId) {
     return { versionId, mode: 'closed' as const };
   }
@@ -203,6 +209,7 @@ function assertExpectedDeployment(
   expectedSourceSha?: string,
   expectedBaselineVersionId: string = productionFixtureTransitionBaseline.workerVersionId,
   expectedBaselineMode: RuntimeCanaryMode = 'closed',
+  targetRuntimeMode: RuntimeCanaryMode = 'fixture',
 ) {
   const deployment = deployments?.[0];
   if (!deployment?.id || !Array.isArray(deployment.versions)) {
@@ -246,7 +253,7 @@ function assertExpectedDeployment(
     deploymentId: deployment.id,
     versionId,
     trafficPercentage: 100,
-    runtimeMode: phase === 'after' ? 'fixture' : expectedBaselineMode,
+    runtimeMode: phase === 'after' ? targetRuntimeMode : expectedBaselineMode,
     sourceSha: sourceAnnotationSha(deployment.annotations?.['workers/message']) || undefined,
   };
 }
@@ -299,7 +306,7 @@ function assertWorkerBindings(
     'TRACE_CANARY_GITHUB_REPOSITORY',
     'TRACE_CANARY_GITHUB_REPOSITORY_ID',
   ];
-  if (expectedRuntimeMode === 'closed') {
+  if (expectedRuntimeMode === 'closed' || expectedRuntimeMode === 'owner') {
     if (fixtureVariableNames.some((name) => variables.has(name))) {
       fail('Fixture allowlist variables must be absent before the transition.');
     }
@@ -618,9 +625,14 @@ async function readApplicationCounts(
   const counts = parseProductionApplicationCountsResult(result);
   const stage = environment.TRACE_FIXTURE_D1_BASELINE_STAGE ?? 'before-oauth';
   if (stage === 'before-oauth') assertProductionApplicationCountsEmpty(counts);
-  else if (stage === 'after-onboarding') {
+  else if (stage === 'after-onboarding' || stage === 'after-live-issue') {
     assertExpectedProductionFixtureCounts(stage, counts);
-    const query = buildProductionFixtureIdentityQuery(stage);
+    const query = buildProductionFixtureIdentityQuery(
+      stage,
+      stage === 'after-live-issue' ? '166179374' : undefined,
+      Date.now(),
+      'reconciled',
+    );
     const identity = await cloudflareRequest<unknown>(
       `/accounts/${productionFixtureTransitionBaseline.accountId}/d1/database/${productionFixtureTransitionBaseline.d1Id}/query`,
       token,
@@ -693,6 +705,7 @@ export async function verifyProductionFixtureTransitionState(options: {
     expectedSourceSha,
     expectedBaseline?.versionId,
     expectedBaseline?.mode,
+    options.environment.RUNTIME_MODE === 'owner' ? 'owner' : 'fixture',
   );
   const version = await cloudflareRequest<WorkerVersion>(
     `/accounts/${productionFixtureTransitionBaseline.accountId}/workers/scripts/${productionFixtureTransitionBaseline.workerName}/versions/${deployment.versionId}`,

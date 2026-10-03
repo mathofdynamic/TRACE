@@ -39,6 +39,7 @@ type ResponseBody = {
 };
 
 export type ProductionGitHubFixtureInstallationState = {
+  catalog?: { id: number; fullName: string }[];
   appId: string;
   appName: string;
   installationId: number;
@@ -281,6 +282,7 @@ export async function readProductionGitHubFixtureInstallation(
   fetchImplementation: typeof fetch = fetch,
   allowProductionWebhook = false,
   reportEvidence?: (evidence: string) => void,
+  policy: 'fixture' | 'owner' = 'fixture',
 ): Promise<ProductionGitHubFixtureInstallationState> {
   if (appId !== productionGitHubApp.id) fail('The configured App ID is not the production App.');
   if (typeof appClientId !== 'string' || appClientId.trim().length === 0) {
@@ -387,14 +389,33 @@ export async function readProductionGitHubFixtureInstallation(
     if (reportedRepositoryCount !== undefined && reportedRepositoryCount !== repositories.length) {
       fail('GitHub installation repository count does not match the paginated list.');
     }
-    if (installation.repository_selection === 'selected' && repositories.length !== 1)
-      fail('The App installation must have access to exactly one repository.');
-    const fixtures = repositories.filter(
-      (repository) => isRecord(repository) && repository.id === expectedRepository.id,
-    );
-    if (fixtures.length !== 1)
-      fail('The installation must contain exactly one authorized fixture repository.');
-    validateRepository(fixtures[0]);
+    if (policy === 'fixture') {
+      if (installation.repository_selection === 'selected' && repositories.length !== 1)
+        fail('The App installation must have access to exactly one repository.');
+      const fixtures = repositories.filter(
+        (repository) => isRecord(repository) && repository.id === expectedRepository.id,
+      );
+      if (fixtures.length !== 1)
+        fail('The installation must contain exactly one authorized fixture repository.');
+      validateRepository(fixtures[0]);
+    } else {
+      const ids = new Set<number>();
+      for (const repository of repositories) {
+        if (
+          !isRecord(repository) ||
+          !Number.isSafeInteger(repository.id) ||
+          (repository.id as number) <= 0 ||
+          !isRecord(repository.owner) ||
+          repository.owner.login !== 'mathofdynamic' ||
+          typeof repository.name !== 'string' ||
+          !/^[a-zA-Z0-9_.-]{1,100}$/.test(repository.name) ||
+          repository.full_name !== `mathofdynamic/${repository.name}` ||
+          ids.has(repository.id as number)
+        )
+          fail('Owner repository metadata is invalid.');
+        ids.add(repository.id as number);
+      }
+    }
   } finally {
     installationToken = '';
   }
@@ -424,6 +445,14 @@ export async function readProductionGitHubFixtureInstallation(
   }
 
   return {
+    ...(policy === 'owner'
+      ? {
+          catalog: repositories.map((r) => ({
+            id: (r as GitHubRepository).id as number,
+            fullName: (r as GitHubRepository).full_name as string,
+          })),
+        }
+      : {}),
     appId: productionGitHubApp.id,
     appName: productionGitHubApp.name,
     installationId,
@@ -466,11 +495,20 @@ async function main() {
       process.env.TRACE_GITHUB_APP_CLIENT_ID,
       process.env.TRACE_GITHUB_APP_PRIVATE_KEY,
       fetch,
-      false,
+      process.env.PRODUCTION_INSTALLATION_POLICY === 'owner',
       (evidence) => console.log(evidence),
+      process.env.PRODUCTION_INSTALLATION_POLICY === 'owner' ? 'owner' : 'fixture',
     );
-    console.log(formatProductionGitHubFixtureInstallation(state));
-    console.log('PRODUCTION_FIXTURE_INSTALLATION=VERIFIED');
+    if (state.catalog)
+      console.log(
+        `OWNER_INSTALLATION=VERIFIED\nINSTALLATION_ID=${state.installationId}\nEXTERNAL_REPOSITORY_COUNT=${state.repositoryCount}`,
+      );
+    else console.log(formatProductionGitHubFixtureInstallation(state));
+    console.log(
+      state.catalog
+        ? 'PRODUCTION_OWNER_INSTALLATION=VERIFIED'
+        : 'PRODUCTION_FIXTURE_INSTALLATION=VERIFIED',
+    );
   } catch (error) {
     console.error(
       error instanceof Error ? error.message : 'Fixture installation verification failed.',

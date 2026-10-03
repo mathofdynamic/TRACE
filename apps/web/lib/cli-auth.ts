@@ -3,6 +3,8 @@ import { and, count, eq, gt, gte, isNull } from 'drizzle-orm';
 import { createTraceId, d1Schema, isD1Database, schema } from '@trace/db';
 import type { TraceD1Database } from '@trace/db';
 import type { RequestDatabase } from './workspace';
+import { getRequestCloudflareEnv } from './request-database';
+import { canaryUserEligibility, resolveProductionCanaryMode } from './production-canary';
 
 const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const DEVICE_TTL_MS = 10 * 60 * 1000;
@@ -172,7 +174,27 @@ export async function authenticateCliRequest(
   requiredScope?: (typeof CLI_SCOPES)[number],
 ) {
   if (isD1Database(db)) {
-    return authenticateD1CliRequest(db as unknown as TraceD1Database, request, requiredScope);
+    const connection = await authenticateD1CliRequest(
+      db as unknown as TraceD1Database,
+      request,
+      requiredScope,
+    );
+    if (!connection) return null;
+    const env = await getRequestCloudflareEnv();
+    if (resolveProductionCanaryMode(env).kind !== 'non-production') {
+      const [user] = await (db as unknown as TraceD1Database)
+        .select({ githubLogin: d1Schema.accounts.accountId })
+        .from(d1Schema.accounts)
+        .where(
+          and(
+            eq(d1Schema.accounts.userId, connection.userId),
+            eq(d1Schema.accounts.providerId, 'github'),
+          ),
+        )
+        .limit(1);
+      if (!canaryUserEligibility(env, user).allowed) return null;
+    }
+    return connection;
   }
 
   const authorization = request.headers.get('authorization');

@@ -24,7 +24,7 @@ export type CanaryManifest = {
   runtime: {
     deploymentEnv: string;
     databaseDriver: string;
-    canaryMode: 'closed' | 'fixture';
+    canaryMode: 'closed' | 'fixture' | 'owner';
   };
   fixtureCanaryEnvironment: {
     owner: string;

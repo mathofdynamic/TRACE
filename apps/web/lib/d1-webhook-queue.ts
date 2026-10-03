@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import {
   d1Schema,
   resolveD1WebhookScope,
+  isD1SelectedOwnerWebhookEvent,
   sanitizeWebhookError,
   type TraceD1Database,
 } from '@trace/db';
@@ -14,6 +15,7 @@ import {
 
 export type D1WebhookQueueInput = {
   db: TraceD1Database;
+  ownerMode?: boolean;
   queue: TraceQueueSender;
   deliveryId: string;
   eventName: string;
@@ -23,6 +25,7 @@ export type D1WebhookQueueInput = {
 };
 
 export type D1WebhookQueueResult =
+  | { accepted: true; ignored: true; queued: false; normalized: boolean }
   | { accepted: true; duplicate: true; queued: false; normalized: boolean }
   | { accepted: true; duplicate: false; queued: boolean; normalized: boolean };
 
@@ -32,6 +35,8 @@ export type D1WebhookQueueResult =
  * left as an ambiguous `received` row that blocks operator recovery.
  */
 export async function enqueueD1Webhook(input: D1WebhookQueueInput): Promise<D1WebhookQueueResult> {
+  if (input.ownerMode && !(await isD1SelectedOwnerWebhookEvent(input.db, input.normalized)))
+    return { accepted: true, ignored: true, queued: false, normalized: Boolean(input.normalized) };
   const scope = await resolveD1WebhookScope(
     input.db,
     input.normalized,

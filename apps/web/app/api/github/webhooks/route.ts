@@ -1,6 +1,6 @@
 import { PgBoss } from 'pg-boss';
 import { eq } from 'drizzle-orm';
-import { createDatabase, schema } from '@trace/db';
+import { createDatabase, schema, applyD1OwnerInstallationBoundary } from '@trace/db';
 import type { TraceD1Database } from '@trace/db';
 import { parseGitHubWebhookEnv } from '@trace/env';
 import { hashWebhookPayload, normalizeGitHubEvent, verifyGitHubSignature } from '@trace/github';
@@ -68,7 +68,10 @@ export async function POST(request: Request) {
     return Response.json({ error: 'Invalid JSON payload.' }, { status: 400 });
   }
 
-  if (eventName === 'ping' && resolveProductionCanaryMode(cloudflareEnv).kind === 'fixture') {
+  if (
+    eventName === 'ping' &&
+    ['fixture', 'owner'].includes(resolveProductionCanaryMode(cloudflareEnv).kind)
+  ) {
     return Response.json(
       { accepted: true, ping: true },
       { status: 200, headers: { 'cache-control': 'no-store' } },
@@ -77,6 +80,21 @@ export async function POST(request: Request) {
 
   const webhookEligibility = canaryWebhookPayloadEligibility(cloudflareEnv, eventName, payload);
   if (!webhookEligibility.allowed) return productionCanaryGateResponse(webhookEligibility);
+
+  if (
+    resolveProductionCanaryMode(cloudflareEnv).kind === 'owner' &&
+    ['installation', 'installation_repositories'].includes(eventName)
+  ) {
+    if (!cloudflareEnv?.DB)
+      return Response.json({ error: 'Production D1 is unavailable.' }, { status: 503 });
+    const { db, client } = await createRequestDatabase();
+    try {
+      await applyD1OwnerInstallationBoundary(db as unknown as TraceD1Database, eventName, payload);
+      return Response.json({ accepted: true, ignored: true }, { status: 200 });
+    } finally {
+      await client.end();
+    }
+  }
 
   const root =
     typeof payload === 'object' && payload !== null ? (payload as Record<string, unknown>) : {};
@@ -98,6 +116,7 @@ export async function POST(request: Request) {
       }
       const result = await enqueueD1Webhook({
         db: d1,
+        ownerMode: resolveProductionCanaryMode(cloudflareEnv).kind === 'owner',
         queue: { send: (message) => queue.send(message) },
         deliveryId,
         eventName,
@@ -105,7 +124,7 @@ export async function POST(request: Request) {
         normalized,
         payloadSha256: hashWebhookPayload(rawBody),
       });
-      return Response.json(result, { status: 202 });
+      return Response.json(result, { status: 'ignored' in result ? 200 : 202 });
     } catch {
       return Response.json({ error: 'Webhook delivery could not be queued.' }, { status: 503 });
     } finally {

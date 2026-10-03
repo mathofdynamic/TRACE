@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, notInArray } from 'drizzle-orm';
 import type { TraceUser } from '@trace/auth';
 import {
   d1Schema,
@@ -75,6 +75,7 @@ export async function persistGitHubInstallationSnapshot(input: {
   user: TraceUser;
   snapshot: InstallationSnapshotResult;
   action: InstallationPersistenceAction;
+  ownerMode?: boolean;
 }) {
   const installationSnapshot = input.snapshot.installation;
   const providerId = String(installationSnapshot.id);
@@ -170,6 +171,27 @@ export async function persistGitHubInstallationSnapshot(input: {
           ],
           set: { permissions: repository.permissions, updatedAt: now },
         });
+    }
+    if (input.ownerMode) {
+      const ids = input.snapshot.repositories.map((repository) => String(repository.id));
+      await db
+        .update(d1Schema.githubInstallationRepositories)
+        .set({ selected: false, updatedAt: now })
+        .where(
+          and(
+            eq(d1Schema.githubInstallationRepositories.installationId, installation.id),
+            notInArray(d1Schema.githubInstallationRepositories.githubRepositoryId, ids),
+          ),
+        );
+      await db
+        .update(d1Schema.githubRepositories)
+        .set({ state: 'available', disconnectedAt: now, updatedAt: now })
+        .where(
+          and(
+            eq(d1Schema.githubRepositories.installationId, installation.id),
+            notInArray(d1Schema.githubRepositories.githubRepositoryId, ids),
+          ),
+        );
     }
     await db.insert(d1Schema.auditEvents).values({
       organizationId: workspace.id,

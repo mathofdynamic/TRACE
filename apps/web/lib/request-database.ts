@@ -19,7 +19,7 @@ import {
 } from '@trace/db';
 import { eq } from 'drizzle-orm';
 import type { AnyD1Database } from 'drizzle-orm/d1';
-import type { ProductionCanaryRuntime } from './production-canary';
+import { canaryUserEligibility, type ProductionCanaryRuntime } from './production-canary';
 
 type HyperdriveBinding = {
   connectionString?: string;
@@ -225,6 +225,7 @@ export async function invalidateRequestAuthSession(sessionToken: string | null) 
 export async function getRequestTraceSession(headers: Headers): Promise<TraceSession | null> {
   const session = await getTraceSession(headers);
   if (!session?.user) return null;
+  if (!canaryUserEligibility(await getRequestCloudflareEnv(), session.user).allowed) return null;
   const token = readCookie(headers, sessionCookieName());
   if (!token) return null;
 

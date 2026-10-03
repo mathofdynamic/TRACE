@@ -1,3 +1,4 @@
+import { expectedProductionFixtureCounts } from '../../../scripts/production-fixture-d1-state.js';
 import { describe, expect, it } from 'vitest';
 import { productionApplicationTables } from '../../../scripts/production-canary-d1.js';
 import {
@@ -31,7 +32,7 @@ const consumerList = [
   },
 ];
 
-function bindings(mode: 'closed' | 'fixture') {
+function bindings(mode: 'closed' | 'fixture' | 'owner') {
   return [
     { type: 'd1', name: 'DB', database_id: baseline.d1Id },
     { type: 'queue', name: 'TRACE_QUEUE', queue_name: baseline.queueName },
@@ -127,7 +128,7 @@ function fakeCloudflare(
   sourceSha: string,
   overrides: {
     queue?: Record<string, unknown>;
-    mode?: 'closed' | 'fixture';
+    mode?: 'closed' | 'fixture' | 'owner';
     backlog?: number;
     counts?: Record<string, number>;
     identity?: Record<string, number>;
@@ -265,6 +266,62 @@ const commonEnvironment = {
 };
 
 describe('production fixture transition state gate', () => {
+  it('verifies explicit owner mode without fixture variables while preserving accepted fixture state', async () => {
+    const source = 'd'.repeat(40);
+    const identity = Object.fromEntries(
+      [
+        'oauth_identity_links',
+        'active_session_links',
+        'onboarding_profile_links',
+        'onboarding_completed_links',
+        'onboarding_intended_usage_links',
+        'onboarding_execution_mode_links',
+        'onboarding_audit_actor_links',
+        'onboarding_audit_action_links',
+        'onboarding_audit_subject_links',
+        'onboarding_audit_unscoped_links',
+        'onboarding_audit_event_links',
+        'fixture_workspace_count',
+        'owner_membership_links',
+        'fixture_installation_links',
+        'fixture_repository_links',
+        'fixture_installation_repository_links',
+        'fixture_audit_event_links',
+        'fixture_selection_audit_links',
+        'fixture_active_repository_links',
+        'fixture_selected_mapping_links',
+        'fixture_issue_links',
+        'fixture_processed_delivery_links',
+      ].map((key) => [key, 1]),
+    );
+    const fake = fakeCloudflare('after', source, {
+      mode: 'owner',
+      counts: expectedProductionFixtureCounts('after-live-issue'),
+      identity,
+    });
+    const input = {
+      phase: 'after' as const,
+      environment: {
+        ...commonEnvironment,
+        RUNTIME_MODE: 'owner',
+        TRACE_FIXTURE_D1_BASELINE_STAGE: 'after-live-issue',
+      },
+      expectedSourceSha: source,
+      expectedBaselineVersionId: '14e30410-d83b-4de6-90cc-6ba0356957ed',
+      expectedBaselineMode: 'fixture' as const,
+      fetchImplementation: fake.fetchImplementation,
+      consumerOutput: consumerList,
+    };
+    const result = await verifyProductionFixtureTransitionState(input);
+    expect(result.canaryMode).toBe('owner');
+    expect(result.fixtureOwner).toBeUndefined();
+    expect(result.sourceSha).toBe(source);
+    identity.fixture_processed_delivery_links = 0;
+    await expect(verifyProductionFixtureTransitionState(input)).rejects.toThrow(
+      /processed_delivery/,
+    );
+  });
+
   it.each(['before', 'after'] as const)(
     'preserves and verifies accepted onboarding state %s deployment',
     async (phase) => {

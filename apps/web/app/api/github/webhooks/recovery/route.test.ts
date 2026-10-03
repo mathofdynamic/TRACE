@@ -21,7 +21,10 @@ const mocks = vi.hoisted(() => ({
   listD1WebhookRecoveriesForOwner: vi.fn(async () => []),
 }));
 
-vi.mock('drizzle-orm', () => ({ eq: vi.fn((...values: unknown[]) => values) }));
+vi.mock('drizzle-orm', () => ({
+  eq: vi.fn((...values: unknown[]) => values),
+  and: vi.fn((...values: unknown[]) => values),
+}));
 
 vi.mock('@trace/db', () => ({
   D1WebhookRecoveryError: class D1WebhookRecoveryError extends Error {
@@ -33,6 +36,11 @@ vi.mock('@trace/db', () => ({
     }
   },
   d1Schema: {
+    githubInstallationRepositories: {
+      selected: 'mapping.selected',
+      installationId: 'mapping.installationId',
+      githubRepositoryId: 'mapping.repositoryId',
+    },
     githubWebhookDeliveries: {
       deliveryId: 'delivery.deliveryId',
       organizationId: 'delivery.organizationId',

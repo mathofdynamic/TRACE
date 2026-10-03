@@ -1,10 +1,10 @@
 export type ProductionCanaryDeploymentAction = 'validate-only' | 'deploy';
-export type ProductionCanaryRuntimeMode = 'closed' | 'fixture';
+export type ProductionCanaryRuntimeMode = 'closed' | 'fixture' | 'owner';
 
 export function resolveProductionCanaryRuntimeMode(value: unknown): ProductionCanaryRuntimeMode {
   if (value === undefined || value === null || value === '') return 'closed';
-  if (value === 'closed' || value === 'fixture') return value;
-  throw new Error('Unsupported production runtime mode; expected closed or fixture.');
+  if (value === 'closed' || value === 'fixture' || value === 'owner') return value;
+  throw new Error('Unsupported production runtime mode; expected closed, fixture or owner.');
 }
 
 export function validateProductionCanaryDispatch(
@@ -19,9 +19,11 @@ export function validateProductionCanaryDispatch(
   const runtimeMode = resolveProductionCanaryRuntimeMode(runtimeModeValue);
   if (actionValue === 'deploy') {
     const requiredConfirmation =
-      runtimeMode === 'fixture'
-        ? 'DEPLOY_TRACE_PRODUCTION_FIXTURE_CANARY'
-        : 'DEPLOY_TRACE_PRODUCTION_CANARY';
+      runtimeMode === 'owner'
+        ? 'DEPLOY_TRACE_PRODUCTION_OWNER'
+        : runtimeMode === 'fixture'
+          ? 'DEPLOY_TRACE_PRODUCTION_FIXTURE_CANARY'
+          : 'DEPLOY_TRACE_PRODUCTION_CANARY';
     if (confirmationValue !== requiredConfirmation) {
       throw new Error(`${runtimeMode} deployment requires its exact confirmation string.`);
     }
