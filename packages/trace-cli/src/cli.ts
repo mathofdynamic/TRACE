@@ -1,7 +1,9 @@
+#!/usr/bin/env node
 import { execFile } from 'node:child_process';
-import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
 import { parse, stringify } from 'yaml';
 import {
   analyzeChanges,
@@ -567,7 +569,9 @@ export async function main(args: string[]): Promise<CliResult> {
   };
 }
 
-const invokedDirectly = process.argv[1]?.replaceAll('\\', '/').endsWith('/cli.js');
+const invokedDirectly = process.argv[1]
+  ? (await realpath(process.argv[1]).catch(() => '')) === fileURLToPath(import.meta.url)
+  : false;
 if (invokedDirectly) {
   try {
     const result = await main(process.argv.slice(2));

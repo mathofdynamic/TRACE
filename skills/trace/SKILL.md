@@ -40,15 +40,15 @@ trace status --json        # valid?, GitHub identity, dashboard binding
 
 Then pick a branch:
 
-| Observation                                                   | Action                                                                                                                                 |
-| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `trace` not found                                             | Use the current workspace build instructions in README.md; no published installer is verified. Do not `npm install` a guessed package. |
-| `.trace/config.yml` or `schema-version` missing               | Initialize. Do NOT run `trace analyze` first (it would create a partial `.trace/`).                                                    |
-| `trace validate` reports issues                               | Stop; read `references/troubleshooting.md`; repair or ask.                                                                             |
-| `dashboard.connected: false`                                  | Authenticate/connect if the user wants dashboard sync; otherwise local-only is valid.                                                  |
-| Connected, no analysis file                                   | Analyze.                                                                                                                               |
-| Tree dirty                                                    | Local exploratory analysis only; DO NOT sync. Commit relevant changes, obtain a clean tree, then re-analyze before publication.        |
-| Tree clean and latest analysis `head_commit` == `HEAD`, valid | For requested sync, always re-analyze the clean committed checkout; matching HEAD alone cannot prove a prior analysis was clean.       |
+| Observation                                                   | Action                                                                                                                                            |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `trace` not found                                             | Use the GitHub release installer in packages/trace-cli/README.md, or the workspace build in README.md. Do not install a guessed registry package. |
+| `.trace/config.yml` or `schema-version` missing               | Initialize. Do NOT run `trace analyze` first (it would create a partial `.trace/`).                                                               |
+| `trace validate` reports issues                               | Stop; read `references/troubleshooting.md`; repair or ask.                                                                                        |
+| `dashboard.connected: false`                                  | Authenticate/connect if the user wants dashboard sync; otherwise local-only is valid.                                                             |
+| Connected, no analysis file                                   | Analyze.                                                                                                                                          |
+| Tree dirty                                                    | Local exploratory analysis only; DO NOT sync. Commit relevant changes, obtain a clean tree, then re-analyze before publication.                   |
+| Tree clean and latest analysis `head_commit` == `HEAD`, valid | For requested sync, always re-analyze the clean committed checkout; matching HEAD alone cannot prove a prior analysis was clean.                  |
 
 Latest analysis head: `trace inspect .trace/analyses/<file>.md --json` -> `dashboard.head_commit`. The analysis filename is derived from repo + HEAD, so re-analysis of the same HEAD overwrites the same file; it does not distinguish uncommitted edits, so a dirty analysis can retain the same HEAD even after edits are reverted. A clean tree alone does not rehabilitate that artifact; regenerate clean before synchronization.
 

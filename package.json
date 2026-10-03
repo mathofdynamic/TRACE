@@ -12,8 +12,8 @@
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "lint": "eslint .",
-    "format": "prettier --write \"AGENTS.md\" \"CONTRIBUTING.md\" \"IMPLEMENTATION-LOG.md\" \"SECURITY.md\" \"package.json\" \"pnpm-workspace.yaml\" \"turbo.json\" \"tsconfig.base.json\" \"*.mjs\" \"*.ts\" \".github/**/*.{md,yml}\" \"apps/**/*.{ts,tsx,css,json}\" \"packages/**/*.{ts,tsx,css,json}\"",
-    "format:check": "prettier --check \"AGENTS.md\" \"CONTRIBUTING.md\" \"IMPLEMENTATION-LOG.md\" \"SECURITY.md\" \"package.json\" \"pnpm-workspace.yaml\" \"turbo.json\" \"tsconfig.base.json\" \"*.mjs\" \"*.ts\" \".github/**/*.{md,yml}\" \"apps/**/*.{ts,tsx,css,json}\" \"packages/**/*.{ts,tsx,css,json}\"",
+    "format": "prettier --write \"AGENTS.md\" \"CONTRIBUTING.md\" \"IMPLEMENTATION-LOG.md\" \"SECURITY.md\" \"package.json\" \"pnpm-workspace.yaml\" \"turbo.json\" \"tsconfig.base.json\" \"*.mjs\" \"*.ts\" \".github/**/*.{md,yml}\" \"apps/**/*.{ts,tsx,css,json}\" \"packages/**/*.{ts,tsx,css,json}\" \"scripts/*.mts\"",
+    "format:check": "prettier --check \"AGENTS.md\" \"CONTRIBUTING.md\" \"IMPLEMENTATION-LOG.md\" \"SECURITY.md\" \"package.json\" \"pnpm-workspace.yaml\" \"turbo.json\" \"tsconfig.base.json\" \"*.mjs\" \"*.ts\" \".github/**/*.{md,yml}\" \"apps/**/*.{ts,tsx,css,json}\" \"packages/**/*.{ts,tsx,css,json}\" \"scripts/*.mts\"",
     "test": "turbo run test:unit",
     "test:unit": "turbo run test:unit",
     "test:e2e": "playwright test",
@@ -37,7 +37,8 @@
     "cf:build": "tsx scripts/cloudflare-build.ts",
     "cf:preview": "pnpm --filter @trace/web cf:preview",
     "cf:deploy:test": "tsx scripts/cloudflare-build.ts --deploy",
-    "trace": "node packages/trace-cli/dist/cli.js"
+    "trace": "node packages/trace-cli/dist/cli.js",
+    "cli:pack": "pnpm --filter @trace/cli... build && tsx scripts/package-trace-cli.mts"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
@@ -45,12 +46,13 @@
     "@types/node": "22.15.30",
     "@typescript-eslint/eslint-plugin": "8.39.0",
     "@typescript-eslint/parser": "8.39.0",
+    "esbuild": "0.25.12",
     "eslint": "9.33.0",
     "prettier": "3.6.2",
     "tsx": "4.20.3",
     "turbo": "2.5.6",
     "typescript": "5.9.2",
-    "wrangler": "latest",
-    "vitest": "3.2.4"
+    "vitest": "3.2.4",
+    "wrangler": "latest"
   }
 }

@@ -1,0 +1,74 @@
+name: TRACE CLI distribution
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing CLI release tag to verify (empty builds a candidate)
+        type: string
+        required: false
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.16.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm cli:pack
+        if: ${{ !inputs.release_tag }}
+      - name: Download published release for fresh acceptance
+        if: ${{ inputs.release_tag }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern '*.tgz' --pattern SHA256SUMS --dir dist/cli-release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trace-cli-release
+          path: dist/cli-release/
+  acceptance:
+    needs: package
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: tooling
+      - uses: actions/checkout@v4
+        with:
+          path: fresh-trace
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.16.0
+          package_json_file: tooling/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+          cache-dependency-path: tooling/pnpm-lock.yaml
+      - uses: actions/download-artifact@v4
+        with:
+          name: trace-cli-release
+          path: release
+      - run: pnpm install --frozen-lockfile
+        working-directory: tooling
+      - run: pnpm --filter @trace/cli... build
+        working-directory: tooling
+      - run: pnpm --filter @trace/cli test:unit
+        working-directory: tooling
+      - name: Install release and analyze fresh TRACE checkout
+        working-directory: tooling
+        run: pnpm exec tsx scripts/test-cli-install.mts ../release/mathofdynamic-trace-cli-0.1.0.tgz ../fresh-trace
