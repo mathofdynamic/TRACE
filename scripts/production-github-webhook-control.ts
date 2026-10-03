@@ -16,10 +16,23 @@ function fail(message: string): never {
   throw new Error(`Production webhook control failed: ${message}`);
 }
 
+export function exactDeliveryId(value: unknown): string | undefined {
+  if (typeof value === 'number') {
+    if (!Number.isSafeInteger(value) || value <= 0) return undefined;
+    return String(value);
+  }
+  return typeof value === 'string' && /^[1-9][0-9]{0,19}$/.test(value) ? value : undefined;
+}
+
+/** Preserve opaque int64 delivery IDs before JSON number parsing can round them. */
+export function parseWebhookResponseJson(body: string): unknown {
+  return JSON.parse(body.replace(/("id"\s*:\s*)([0-9]{16,20})(?=\s*[,}])/g, '$1"$2"'));
+}
+
 export function assertWebhookControlRequest(
   method: string,
   urlValue: string,
-  discoveredId?: number,
+  discoveredId?: number | string,
 ) {
   let url: URL;
   try {
@@ -36,7 +49,7 @@ export function assertWebhookControlRequest(
   )
     return;
   if (method === 'GET' && url.pathname + url.search === recentPath) return;
-  if (Number.isSafeInteger(discoveredId) && discoveredId! > 0 && !url.search) {
+  if (exactDeliveryId(discoveredId) && !url.search) {
     if (method === 'GET' && url.pathname === `/app/hook/deliveries/${discoveredId}`) return;
     if (method === 'POST' && url.pathname === `/app/hook/deliveries/${discoveredId}/attempts`)
       return;
@@ -60,7 +73,7 @@ export function assertWebhookConfiguration(body: unknown) {
 }
 
 export type SafeDelivery = {
-  id: number;
+  id: string;
   guid: string;
   event: 'ping' | 'issues';
   action: string | null;
@@ -72,11 +85,10 @@ export type SafeDelivery = {
 };
 export function selectSafeDeliveries(body: unknown, installationId: number): SafeDelivery[] {
   if (!Array.isArray(body) || body.length > 100) fail('Recent deliveries must be a bounded list.');
-  return body.map((entry) => {
+  return body.flatMap((entry) => {
     if (
       !record(entry) ||
-      !Number.isSafeInteger(entry.id) ||
-      (entry.id as number) <= 0 ||
+      !exactDeliveryId(entry.id) ||
       typeof entry.guid !== 'string' ||
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(entry.guid) ||
       typeof entry.delivered_at !== 'string' ||
@@ -90,7 +102,8 @@ export function selectSafeDeliveries(body: unknown, installationId: number): Saf
       fail(
         `Delivery metadata is invalid (${JSON.stringify({
           record: record(entry),
-          idValid: record(entry) && Number.isSafeInteger(entry.id) && (entry.id as number) > 0,
+          idValid: record(entry) && Boolean(exactDeliveryId(entry.id)),
+          idType: record(entry) ? typeof entry.id : 'unavailable',
           guidValid:
             record(entry) &&
             typeof entry.guid === 'string' &&
@@ -122,9 +135,21 @@ export function selectSafeDeliveries(body: unknown, installationId: number): Saf
       entry.action === 'opened' &&
       entry.installation_id === installationId &&
       entry.repository_id === 1378441300;
-    if (!ping && !issue) fail('Unexpected event or nonfixture delivery; stop activation.');
+    if (!ping && !issue) {
+      // The approved external all-repositories App may send events that TRACE rejects.
+      // Keep those rejected deliveries out of the fixture inspection/redelivery set.
+      const rejectedOutsideFixture =
+        entry.status_code === 403 &&
+        entry.installation_id === installationId &&
+        ((Boolean(exactDeliveryId(entry.repository_id)) &&
+          exactDeliveryId(entry.repository_id) !== '1378441300') ||
+          (entry.repository_id === null &&
+            (entry.event === 'installation' || entry.event === 'installation_repositories')));
+      if (rejectedOutsideFixture) return [];
+      fail('Unexpected event or nonfixture delivery; stop activation.');
+    }
     return {
-      id: entry.id as number,
+      id: exactDeliveryId(entry.id)!,
       guid: entry.guid,
       event: entry.event as 'ping' | 'issues',
       action: entry.action as string | null,
@@ -160,7 +185,12 @@ export async function controlProductionWebhook(input: {
     environment.TRACE_GITHUB_APP_ID,
     environment.TRACE_GITHUB_APP_PRIVATE_KEY,
   );
-  async function request(method: string, endpoint: string, body?: unknown, discoveredId?: number) {
+  async function request(
+    method: string,
+    endpoint: string,
+    body?: unknown,
+    discoveredId?: number | string,
+  ) {
     const url = new URL(endpoint, origin);
     assertWebhookControlRequest(method, url.href, discoveredId);
     let response: Response;
@@ -186,7 +216,7 @@ export async function controlProductionWebhook(input: {
     if (response.status === 202 || response.status === 204)
       return { absent: false as const, body: undefined };
     try {
-      return { absent: false as const, body: (await response.json()) as unknown };
+      return { absent: false as const, body: parseWebhookResponseJson(await response.text()) };
     } catch {
       fail('GitHub returned invalid JSON.');
     }
@@ -238,14 +268,13 @@ export async function controlProductionWebhook(input: {
     'WEBHOOK_INSECURE_SSL=0',
     'WEBHOOK_SECRET_PRESENT=YES',
   );
-  const recent = selectSafeDeliveries(
-    (await request('GET', recentPath)).body,
-    fixture.installationId,
-  );
+  const recentBody = (await request('GET', recentPath)).body;
+  const recent = selectSafeDeliveries(recentBody, fixture.installationId);
+  lines.push(`BLOCKED_OUT_OF_SCOPE_DELIVERIES=${(recentBody as unknown[]).length - recent.length}`);
   if (input.operation === 'redeliver') {
-    if (!input.deliveryId || !/^[1-9][0-9]{0,15}$/.test(input.deliveryId))
+    if (!input.deliveryId || !exactDeliveryId(input.deliveryId))
       fail('A valid discovered delivery ID is required.');
-    const id = Number(input.deliveryId);
+    const id = input.deliveryId;
     const delivery = recent.find((entry) => entry.id === id);
     if (!delivery) fail('Delivery ID was not discovered in this protected bounded read.');
     if (delivery.redelivery) fail('Do not redeliver a redelivery attempt.');
@@ -253,7 +282,8 @@ export async function controlProductionWebhook(input: {
       fail('This delivery already has a redelivery attempt.');
     const detail = (await request('GET', `/app/hook/deliveries/${id}`, undefined, id)).body;
     if (!record(detail)) fail('Delivery detail is invalid.');
-    const checked = selectSafeDeliveries([detail], fixture.installationId)[0]!;
+    const checked = selectSafeDeliveries([detail], fixture.installationId)[0];
+    if (!checked) fail('Delivery detail is outside the authorized fixture scope.');
     if (
       checked.id !== delivery.id ||
       checked.guid !== delivery.guid ||

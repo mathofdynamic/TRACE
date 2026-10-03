@@ -7,6 +7,8 @@ import {
   controlProductionWebhook,
   productionWebhookUrl,
   selectSafeDeliveries,
+  exactDeliveryId,
+  parseWebhookResponseJson,
   type WebhookOperation,
 } from '../../../scripts/production-github-webhook-control.js';
 const config = {
@@ -97,6 +99,74 @@ function run(operation: WebhookOperation, responses: ReturnType<typeof fake>, de
   });
 }
 describe('protected production GitHub webhook control', () => {
+  it('preserves int64 IDs without rounding and permits only their exact discovered endpoints', () => {
+    const id = '9223372036854775807';
+    const body = parseWebhookResponseJson(
+      `[${JSON.stringify(delivery).replace('12345,', id + ',')}]`,
+    );
+    expect(selectSafeDeliveries(body, 166179374)[0]?.id).toBe(id);
+    expect(exactDeliveryId(Number(id))).toBeUndefined();
+    expect(exactDeliveryId(id)).toBe(id);
+    expect(() =>
+      assertWebhookControlRequest(
+        'POST',
+        `https://api.github.com/app/hook/deliveries/${id}/attempts`,
+        id,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertWebhookControlRequest(
+        'POST',
+        'https://api.github.com/app/hook/deliveries/9223372036854775808/attempts',
+        id,
+      ),
+    ).toThrow();
+    expect(
+      parseWebhookResponseJson(JSON.stringify({ body: '{"id":9223372036854775807}', id: 7 })),
+    ).toEqual({ body: '{"id":9223372036854775807}', id: 7 });
+  });
+  it('excludes rejected nonfixture deliveries from the redelivery set, but rejects accepted nonfixture delivery', () => {
+    expect(
+      selectSafeDeliveries(
+        [{ ...delivery, repository_id: 7, status_code: 403 }, delivery],
+        166179374,
+      ),
+    ).toHaveLength(1);
+    expect(() =>
+      selectSafeDeliveries([{ ...delivery, repository_id: 7, status_code: 200 }], 166179374),
+    ).toThrow(/nonfixture/);
+    expect(() =>
+      selectSafeDeliveries(
+        [{ ...delivery, repository_id: 7, installation_id: 9, status_code: 403 }],
+        166179374,
+      ),
+    ).toThrow(/nonfixture/);
+  });
+  it('redelivers an exact int64 fixture issue ID without converting it to a number', async () => {
+    const id = '9223372036854775807';
+    const entry = { ...delivery, id };
+    const f = fake([
+      ...prefix(),
+      { body: config },
+      { body: [entry] },
+      {
+        body: {
+          ...entry,
+          request: {
+            payload: {
+              action: 'opened',
+              installation: { id: 166179374 },
+              repository: { id: 1378441300 },
+            },
+          },
+        },
+      },
+      { status: 202 },
+    ]);
+    expect(await run('redeliver', f, id)).toContain(`REDELIVERY_REQUESTED_ID=${id}`);
+    expect(f.requests.at(-1)?.path).toBe(`/app/hook/deliveries/${id}/attempts`);
+  });
+
   it('reports bounded metadata diagnostics without exposing arbitrary strings or payloads', () => {
     expect(() => selectSafeDeliveries([{ ...delivery, status_code: 0 }], 166179374)).toThrow(
       /"statusCode":0/,
@@ -187,7 +257,7 @@ describe('protected production GitHub webhook control', () => {
       },
     ]);
     const report = await run('inspect-deliveries', f);
-    expect(report).toContain('"id":12345');
+    expect(report).toContain('"id":"12345"');
     expect(report).not.toContain('sensitive');
     expect(f.requests.at(-1)?.path).toBe('/app/hook/deliveries?per_page=100');
   });
