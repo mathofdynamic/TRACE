@@ -1,13 +1,30 @@
-import { and, eq } from 'drizzle-orm';
 import { PgBoss } from 'pg-boss';
-import { createDatabase, schema } from '@trace/db';
+import { eq } from 'drizzle-orm';
+import { createDatabase, schema, applyD1OwnerInstallationBoundary } from '@trace/db';
+import type { TraceD1Database } from '@trace/db';
 import { parseGitHubWebhookEnv } from '@trace/env';
 import { hashWebhookPayload, normalizeGitHubEvent, verifyGitHubSignature } from '@trace/github';
-import { getRequestDatabaseUrl } from '../../../../lib/request-database';
+import {
+  createRequestDatabase,
+  getRequestCloudflareEnv,
+  getRequestDatabaseUrl,
+  requiresD1Runtime,
+} from '../../../../lib/request-database';
+import { enqueueD1Webhook } from '../../../../lib/d1-webhook-queue';
+import {
+  canaryWebhookPayloadEligibility,
+  productionCanaryGateResponse,
+  productionCanaryIntegrationEligibility,
+  resolveProductionCanaryMode,
+} from '../../../../lib/production-canary';
 
 const MAX_BODY_BYTES = 1_048_576;
 
 export async function POST(request: Request) {
+  const cloudflareEnv = await getRequestCloudflareEnv();
+  const integrationEligibility = productionCanaryIntegrationEligibility(cloudflareEnv);
+  if (!integrationEligibility.allowed) return productionCanaryGateResponse(integrationEligibility);
+
   if (!request.headers.get('content-type')?.toLowerCase().includes('application/json')) {
     return Response.json({ error: 'application/json is required.' }, { status: 415 });
   }
@@ -50,10 +67,71 @@ export async function POST(request: Request) {
   } catch {
     return Response.json({ error: 'Invalid JSON payload.' }, { status: 400 });
   }
+
+  if (
+    eventName === 'ping' &&
+    ['fixture', 'owner'].includes(resolveProductionCanaryMode(cloudflareEnv).kind)
+  ) {
+    return Response.json(
+      { accepted: true, ping: true },
+      { status: 200, headers: { 'cache-control': 'no-store' } },
+    );
+  }
+
+  const webhookEligibility = canaryWebhookPayloadEligibility(cloudflareEnv, eventName, payload);
+  if (!webhookEligibility.allowed) return productionCanaryGateResponse(webhookEligibility);
+
+  if (
+    resolveProductionCanaryMode(cloudflareEnv).kind === 'owner' &&
+    ['installation', 'installation_repositories'].includes(eventName)
+  ) {
+    if (!cloudflareEnv?.DB)
+      return Response.json({ error: 'Production D1 is unavailable.' }, { status: 503 });
+    const { db, client } = await createRequestDatabase();
+    try {
+      await applyD1OwnerInstallationBoundary(db as unknown as TraceD1Database, eventName, payload);
+      return Response.json({ accepted: true, ignored: true }, { status: 200 });
+    } finally {
+      await client.end();
+    }
+  }
+
   const root =
     typeof payload === 'object' && payload !== null ? (payload as Record<string, unknown>) : {};
   const action = typeof root.action === 'string' ? root.action : undefined;
   const normalized = normalizeGitHubEvent(eventName, action, payload);
+  if (cloudflareEnv?.DB || requiresD1Runtime(cloudflareEnv)) {
+    if (!cloudflareEnv?.DB) {
+      return Response.json(
+        { error: 'Webhook D1 database binding is not configured.' },
+        { status: 503 },
+      );
+    }
+    const { db, client } = await createRequestDatabase();
+    const d1 = db as unknown as TraceD1Database;
+    try {
+      const queue = cloudflareEnv.TRACE_QUEUE;
+      if (!queue) {
+        return Response.json({ error: 'Webhook queue is not configured.' }, { status: 503 });
+      }
+      const result = await enqueueD1Webhook({
+        db: d1,
+        ownerMode: resolveProductionCanaryMode(cloudflareEnv).kind === 'owner',
+        queue: { send: (message) => queue.send(message) },
+        deliveryId,
+        eventName,
+        action,
+        normalized,
+        payloadSha256: hashWebhookPayload(rawBody),
+      });
+      return Response.json(result, { status: 'ignored' in result ? 200 : 202 });
+    } catch {
+      return Response.json({ error: 'Webhook delivery could not be queued.' }, { status: 503 });
+    } finally {
+      await client.end();
+    }
+  }
+
   const databaseUrl = await getRequestDatabaseUrl();
   const { db, pool } = createDatabase(databaseUrl);
   try {
@@ -63,32 +141,6 @@ export async function POST(request: Request) {
       .onConflictDoNothing({ target: schema.githubWebhookDeliveries.deliveryId })
       .returning({ id: schema.githubWebhookDeliveries.id });
     if (!delivery) return Response.json({ accepted: true, duplicate: true });
-
-    if (normalized?.type === 'BranchPushed') {
-      const [repository] = await db
-        .select({
-          id: schema.githubRepositories.id,
-          defaultBranch: schema.githubRepositories.defaultBranch,
-        })
-        .from(schema.githubRepositories)
-        .where(eq(schema.githubRepositories.githubRepositoryId, normalized.repositoryId))
-        .limit(1);
-      if (
-        repository?.defaultBranch &&
-        normalized.ref === `refs/heads/${repository.defaultBranch}` &&
-        /^[a-f0-9]{40}$/i.test(normalized.after)
-      ) {
-        await db
-          .update(schema.githubRepositories)
-          .set({ remoteHeadSha: normalized.after, updatedAt: new Date() })
-          .where(
-            and(
-              eq(schema.githubRepositories.id, repository.id),
-              eq(schema.githubRepositories.state, 'active'),
-            ),
-          );
-      }
-    }
 
     const boss = new PgBoss({ connectionString: databaseUrl });
     await boss.start();

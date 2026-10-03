@@ -14,7 +14,7 @@ import {
 } from '@trace/schema';
 
 const run = promisify(execFile);
-const DEFAULT_SERVER = 'https://trace-code.pages.dev';
+const DEFAULT_SERVER = 'https://trace-production.mathofdynamic2.workers.dev';
 
 export type TraceEnvironment = 'Production' | 'Staging' | 'Custom';
 export type CloudTarget = { server: string; environment: TraceEnvironment };

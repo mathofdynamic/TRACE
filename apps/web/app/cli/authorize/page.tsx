@@ -1,10 +1,11 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { eq } from 'drizzle-orm';
-import { getTraceSession, safeAuthNext } from '@trace/auth';
-import { schema } from '@trace/db';
+import { safeAuthNext } from '@trace/auth';
+import { d1Schema, isD1Database, schema } from '@trace/db';
+import type { TraceD1Database } from '@trace/db';
 import { headers } from 'next/headers';
-import { createRequestDatabase } from '../../../lib/request-database';
+import { createRequestDatabase, getRequestTraceSession } from '../../../lib/request-database';
 
 export default async function CliAuthorizePage({
   searchParams,
@@ -15,20 +16,29 @@ export default async function CliAuthorizePage({
   const code = typeof parameters.code === 'string' ? parameters.code.toUpperCase() : '';
   const approved = parameters.approved === '1';
   const error = typeof parameters.error === 'string' ? parameters.error : null;
-  const session = await getTraceSession(await headers());
+  const session = await getRequestTraceSession(await headers());
   if (!session?.user) {
     redirect(`/sign-in?next=${encodeURIComponent(safeAuthNext(`/cli/authorize?code=${code}`))}`);
   }
   const { db, client } = await createRequestDatabase();
   try {
-    const organizations = await db
-      .select({ id: schema.organizations.id, name: schema.organizations.name })
-      .from(schema.memberships)
-      .innerJoin(
-        schema.organizations,
-        eq(schema.memberships.organizationId, schema.organizations.id),
-      )
-      .where(eq(schema.memberships.userId, session.user.id));
+    const organizations = isD1Database(db)
+      ? await (db as unknown as TraceD1Database)
+          .select({ id: d1Schema.organizations.id, name: d1Schema.organizations.name })
+          .from(d1Schema.memberships)
+          .innerJoin(
+            d1Schema.organizations,
+            eq(d1Schema.memberships.organizationId, d1Schema.organizations.id),
+          )
+          .where(eq(d1Schema.memberships.userId, session.user.id))
+      : await db
+          .select({ id: schema.organizations.id, name: schema.organizations.name })
+          .from(schema.memberships)
+          .innerJoin(
+            schema.organizations,
+            eq(schema.memberships.organizationId, schema.organizations.id),
+          )
+          .where(eq(schema.memberships.userId, session.user.id));
     return (
       <main className="auth-page">
         <section className="auth-card cli-auth-card">

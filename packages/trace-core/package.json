@@ -8,13 +8,17 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:unit": "vitest run --config vitest.config.ts"
+  },
+  "dependencies": {
+    "zod": "4.0.17"
   },
   "devDependencies": {
     "typescript": "5.9.2",

@@ -1,0 +1,591 @@
+# Cloudflare-native runtime migration
+
+Status: Phase CF2.5 GitHub ingestion and Queue business-handler parity is
+implemented for the paths exercised by the isolated D1 harness. D1 is a parity
+candidate;
+PostgreSQL, Hyperdrive, pg-boss, and the Node worker remain the authoritative
+fallback/reference until broader domain and browser parity is proven. No remote
+provisioning, staging cutover, or production deployment occurred in CF2.
+
+## CF2 parity matrix
+
+The matrix records the current dual-runtime boundary. “D1” means the request
+path has an explicit D1 implementation and is covered by the isolated parity
+harness; it does not imply that PostgreSQL has been removed.
+
+| Domain                             | PostgreSQL                                  | D1                                                                                           | Browser tested                                  |
+| ---------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| Authentication, sessions, accounts | Existing request database                   | User upsert, GitHub account/session persistence, expiry and invalidation                     | D1 parity harness; core browser session         |
+| Onboarding                         | Existing request database                   | Profile read/write and audit event                                                           | D1 parity harness                               |
+| Workspace and membership           | Existing request database                   | Workspace creation, membership lookup, tenant predicates                                     | D1 tenant-isolation harness                     |
+| GitHub installation and access     | Existing request database                   | Installation, repository catalog, selected state and re-selection                            | D1 route/service coverage; provider HTTP mocked |
+| GitHub repositories                | Existing request database                   | Metadata, provider IDs as TEXT, remote-head updates                                          | D1 parity harness; core browser catalog         |
+| Pull requests and issues           | Existing request database                   | D1 create/update/close projection from normalized webhook metadata; provider IDs remain TEXT | D1 ingestion harness; not yet browser-seeded    |
+| Webhook deduplication              | Existing PostgreSQL delivery path           | D1 delivery identity, status transition and Queue producer boundary                          | Service/integration harness                     |
+| Dashboard and repository detail    | Existing request database                   | Membership-scoped D1 projection, fail-closed freshness, records and activity                 | D1 projection; core browser dashboard           |
+| CLI authorization                  | Existing request database                   | Device authorization, consume-once conditional claim, scoped credentials, expiry/revocation  | D1 parity harness                               |
+| Local TRACE sync                   | Existing PostgreSQL transaction path        | D1 negotiate, bounded artifact staging, idempotent completion and retry recovery             | D1 parity harness                               |
+| Reports and findings               | Existing request database                   | Synced-artifact projection and finding reads from D1                                         | D1 projection/service harness                   |
+| Conflicts, decisions, rules        | Existing request database                   | Synced-artifact projection, only when a real artifact exists                                 | D1 projection/service harness                   |
+| Activity and audit                 | Existing request database                   | Tenant-scoped audit projection with deterministic epoch-ms ordering                          | D1 projection/service harness                   |
+| Local browser E2E                  | PostgreSQL fixture/config remains available | Isolated local D1 schema, seed, OpenNext Worker, and Playwright flow                         | Health/session/dashboard/repositories           |
+
+CF2 therefore proves the D1 persistence/service seams and a core browser flow
+locally without claiming a remote cutover. The broad Playwright suite still
+uses its existing PostgreSQL fixture; the D1 browser runner is intentionally a
+separate isolated lifecycle and currently covers health, persisted session,
+dashboard, and repository discovery.
+
+## Architecture
+
+### Current
+
+```text
+OpenNext web Worker
+  -> Hyperdrive
+  -> PostgreSQL
+
+GitHub webhook route
+  -> PostgreSQL webhook record
+  -> pg-boss
+  -> continuously running Node worker
+```
+
+### Target
+
+```text
+OpenNext web Worker
+  -> D1
+
+OpenNext web Worker
+  -> Queue producer binding
+  -> Cloudflare Queue
+  -> Cloudflare background Worker consumer
+  -> D1
+
+Existing GitHub App
+  -> existing callback and webhook routes
+```
+
+The public test URL remains `trace-code.pages.dev`. The target requires no external PostgreSQL provider, continuously running Node server, or custom domain. Existing PostgreSQL, Hyperdrive, and staging resources remain rollback/reference infrastructure until D1 parity is proven.
+
+## PostgreSQL dependency inventory
+
+| Area                 | PostgreSQL dependency                                                        | D1 equivalent                                                              | Difficulty | Action                                                                           |
+| -------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------- |
+| Schema               | `pgTable`, native UUID, JSONB, `timestamptz`, bigint, boolean                | SQLite tables using TEXT, INTEGER, JSON text, and explicit application IDs | High       | Complete CF1 schema mapping; retain PostgreSQL schema during transition          |
+| Web request database | Hyperdrive connection string or `DATABASE_URL` creates a `pg` client         | Cloudflare `DB` binding passed to `drizzle-orm/d1`                         | High       | Explicit D1/legacy runtime selector added; PG retained as fallback               |
+| Authentication       | User/session/account/verification writes use the PostgreSQL request database | Driver-neutral stores over Drizzle D1                                      | High       | D1 callback/session persistence and expiry path ported; PG retained              |
+| Workspace/onboarding | PostgreSQL upserts and unique constraints                                    | SQLite `ON CONFLICT` with the same unique targets                          | Medium     | D1 route/service branches and tenant tests added                                 |
+| GitHub setup         | Transactional installation/repository upserts and bigint provider IDs        | D1 batches/transactions; provider IDs stored as TEXT                       | High       | D1 installation/catalog/selection path added; PR/issue writes remain PG          |
+| GitHub webhooks      | PostgreSQL delivery record, repository update, pg-boss enqueue               | D1 delivery record plus Queue binding                                      | High       | Message contract exists; producer not switched until D1 persistence is active    |
+| Dashboard            | Drizzle reads through PostgreSQL request database                            | Membership-scoped D1 projection                                            | Medium     | D1 projection and fail-closed freshness harness added                            |
+| CLI authorization    | Multi-write approval transaction and `RETURNING`                             | D1 conditional claim plus bounded batch                                    | High       | D1 consume-once/scoped credential path and concurrency harness added             |
+| Local TRACE sync     | Three transactions, idempotent upserts, promotion/supersession               | D1-safe conditional claims and bounded batches                             | High       | D1 negotiation/staging/completion and idempotency harness added                  |
+| E2E fixtures         | 16 raw PostgreSQL query sites using `$n`, `::jsonb`, `NOW()`, and `INTERVAL` | D1 local migrations and SQLite-compatible fixture helpers                  | Medium     | New zero-schema D1 integration test added; E2E conversion pending                |
+| Migrations           | PostgreSQL DDL and Drizzle PostgreSQL journal                                | Independent transitional SQLite migration journal                          | Medium     | Complete zero-to-D1 migration generated                                          |
+| Worker jobs          | pg-boss tables and continuously running Node process                         | Cloudflare Queue consumer with retries and DLQ                             | High       | Contract and isolated consumer boundary added; business handlers remain unported |
+| Deployment           | Hyperdrive binding                                                           | D1 and Queue bindings                                                      | Medium     | Isolated example/local config only; current staging config untouched             |
+
+### Query compatibility inventory
+
+The application uses Drizzle rather than runtime raw SQL for most production paths. The audit found:
+
+- 16 raw PostgreSQL-shaped statements in `tests/e2e/home.spec.ts`.
+- 10 `.returning()` call sites across runtime and integration-test code, including the new dual-driver user store.
+- 3 application transactions: CLI approval plus two Local TRACE synchronization/promotion paths.
+- 16 `onConflict` references across runtime and tests, including the new dual-driver user store.
+- No PostgreSQL advisory locks or PostgreSQL arrays in runtime application code.
+- PostgreSQL-specific migration DDL: `gen_random_uuid()`, JSONB, BIGINT, `timestamptz`, `public.` references, PostgreSQL casts, and btree declarations.
+
+SQLite/D1 supports `RETURNING` and upserts, but each query still requires behavioral parity tests. CF1 does not treat import compatibility as transaction or concurrency parity.
+
+## Schema mapping
+
+All 22 PostgreSQL tables have a D1 counterpart with matching application-level column names.
+
+| Table                              | D1 mapping notes                                                          |
+| ---------------------------------- | ------------------------------------------------------------------------- |
+| `users`                            | TEXT ID; INTEGER boolean; millisecond timestamps                          |
+| `sessions`                         | TEXT ID/token; millisecond expiry; cascade to user                        |
+| `accounts`                         | OAuth tokens remain application data; TEXT IDs; cascade to user           |
+| `verifications`                    | TEXT ID/value; millisecond expiry                                         |
+| `onboarding_profiles`              | INTEGER boolean; unique user                                              |
+| `organizations`                    | TEXT ID; unique slug                                                      |
+| `memberships`                      | TEXT references; unique organization/user; cascades preserved             |
+| `system_jobs`                      | Retained as product/audit state; not used as Queue infrastructure         |
+| `audit_events`                     | JSON text metadata; nullable tenant and actor references                  |
+| `github_installations`             | GitHub installation ID stored as TEXT                                     |
+| `github_repositories`              | GitHub repository ID stored as TEXT; lifecycle/freshness fields retained  |
+| `github_installation_repositories` | GitHub repository ID stored as TEXT; JSON permissions                     |
+| `github_pull_requests`             | Provider ID stored as TEXT; PR number remains INTEGER                     |
+| `github_issues`                    | Provider ID stored as TEXT; issue number remains INTEGER                  |
+| `github_webhook_deliveries`        | Provider installation ID stored as TEXT; idempotent delivery key retained |
+| `analysis_runs`                    | JSON result/cost text; nullable repository relation preserved             |
+| `cli_device_authorizations`        | Hashed codes only; expiry and approval references retained                |
+| `cli_connections`                  | Hashed token and JSON scopes retained; no secret plaintext introduced     |
+| `sync_operations`                  | JSON manifest; idempotency and repository/sync unique keys retained       |
+| `sync_uploads`                     | JSON metadata/projection; operation cascade retained                      |
+| `synced_artifacts`                 | JSON metadata/projection; immutable record references retained            |
+| `analysis_findings`                | JSON evidence; disposition references retained                            |
+
+### Type strategies
+
+- **UUIDs:** stored as SQLite TEXT. New application-created IDs use `crypto.randomUUID()` through `createTraceId()`. The SQL migration deliberately has no database UUID default; application and fixture writes must supply IDs.
+- **Timestamps:** stored as INTEGER Unix epoch milliseconds through Drizzle `timestamp_ms`. Drizzle exposes `Date` to TypeScript. SQL defaults use `(unixepoch() * 1000)`.
+- **Booleans:** stored as INTEGER through Drizzle boolean mode and exposed as TypeScript `boolean`.
+- **JSON:** stored as SQLite TEXT through Drizzle JSON mode. JSON is serialized/deserialized at the database boundary. No query depends on PostgreSQL JSONB operators today.
+- **GitHub/provider IDs:** stored as TEXT. `normalizeProviderId()` rejects unsafe JavaScript numbers so provider identifiers cannot silently lose precision. API boundaries must normalize IDs before D1 writes during CF2.
+- **Application counters:** PR/issue numbers, byte counts, attempts, and artifact counts remain INTEGER because current contracts bound them to safe integer ranges. This must remain validated at input boundaries.
+
+### Foreign keys and deletion behavior
+
+The D1 schema preserves the PostgreSQL cascade, set-null, and restrict intent. D1 foreign-key enforcement and the behavior of each destructive service path must be verified in the D1 integration suite before cutover.
+
+## Database boundary
+
+`createD1Database(binding)` is the D1 factory. It accepts a Cloudflare-compatible
+D1 binding and returns the schema-bound Drizzle D1 database. UI code never
+constructs a database client. During this transitional phase, route/service
+modules use the shared request-database selector and explicit D1 schema branches;
+raw `env.DB.prepare()` calls are not scattered through the application.
+
+The first domain seam is `UserStore`:
+
+```text
+upsertRequestUser
+  -> UserStore
+     -> PostgreSQL implementation (current runtime)
+     -> D1 implementation (migration target)
+```
+
+The live request path selects D1 when the Cloudflare `DB` binding or explicit
+local `TRACE_DATABASE_DRIVER=d1` is present, and otherwise retains PostgreSQL.
+This keeps the migration reversible while the remaining domain and browser
+paths are brought to parity.
+
+## Local D1 development
+
+Local D1 never contacts production.
+
+```bash
+pnpm db:d1:generate
+pnpm db:d1:migrate:local
+pnpm test:d1
+```
+
+- `packages/db/wrangler.d1.jsonc` declares a local-only database identity.
+- `packages/db/drizzle-d1/` contains deterministic zero-to-D1 migrations.
+- `pnpm test:d1` creates an isolated temporary Wrangler persistence directory, applies every migration, verifies all 22 tables, checks JSON/timestamp behavior, then removes that directory.
+- `.wrangler/`, `*.sqlite`, and `*.sqlite3` are already ignored. No local database file is committed.
+- Remote D1 commands are not part of CF1. No script contains `--remote`.
+
+## Queue audit
+
+### Existing pg-boss queues
+
+| Queue                      | Produced today            | Consumed today | Classification       | Ordering/idempotency requirement                            |
+| -------------------------- | ------------------------- | -------------- | -------------------- | ----------------------------------------------------------- |
+| `system.healthcheck`       | No runtime producer found | Log only       | Placeholder          | No ordering; probe ID should deduplicate diagnostics        |
+| `github.webhook.process`   | GitHub webhook route      | Log only       | Placeholder boundary | Delivery ID is the idempotency key; duplicates must be safe |
+| `github.installation.sync` | No                        | No             | Unused scaffold      | Installation ID reference; latest-state processing          |
+| `github.repository.sync`   | No                        | No             | Unused scaffold      | Tenant/repository key; duplicate safe                       |
+| `github.pull-request.sync` | No                        | No             | Unused scaffold      | Repository/PR reference; duplicate safe                     |
+| `github.issue.sync`        | No                        | No             | Unused scaffold      | Repository/issue reference; duplicate safe                  |
+| `github.webhook.replay`    | No                        | No             | Unused scaffold      | Original delivery ID; explicit replay audit required        |
+| `analysis.changes`         | No                        | Log only       | Placeholder          | Analysis-run idempotency key; no source payload in Queue    |
+| `reports.daily`            | No                        | Log only       | Placeholder          | One organization/window key; no strict ordering             |
+| `reports.weekly`           | No                        | Log only       | Placeholder          | One organization/window key; no strict ordering             |
+| `conflicts.reconcile`      | No                        | Log only       | Placeholder          | Repository-scoped idempotent reconciliation                 |
+| `sync.reconcile`           | No                        | Log only       | Placeholder          | Sync-operation ID; retry-safe promotion semantics           |
+
+There are no real pg-boss business handlers in the current worker. Seven registered handlers only log acceptance. Five declared queues have no registered consumer. CF1 therefore does not claim that a background capability was ported.
+
+### Cloudflare Queue contract
+
+`TraceQueueMessage` is a strict, versioned discriminated union for all 12 known job types. Every message carries:
+
+- `version`
+- a bounded `idempotencyKey`
+- an offset-aware `enqueuedAt`
+- only job-specific IDs and bounded metadata
+
+Unknown keys and source-bearing payloads are rejected. Queue bodies contain references, not repository source, snippets, OAuth secrets, or CLI credentials.
+
+The initial Cloudflare consumer:
+
+- validates every message before dispatch;
+- implements only `system.healthcheck` against D1;
+- retries invalid, failed, and not-yet-implemented jobs so configured max retries/DLQ policy can retain them;
+- does not acknowledge placeholder work as completed;
+- never logs the Queue body.
+
+The current GitHub webhook route still produces through pg-boss. Switching that producer before the D1 webhook-delivery transaction is parity-tested would create a split-brain persistence boundary, so CF1 exposes a typed Queue sender but does not wire the live route.
+
+Cloudflare Queues provide at-least-once delivery, not global ordering. Every real handler must use the message idempotency key plus durable D1 state. Code must not infer ordering from batch position.
+
+### CF2.5 Queue update
+
+The D1 runtime now implements `github.webhook.process`. When a D1 binding and
+Queue binding are explicitly active, the webhook route records the delivery,
+enqueues the validated normalized event, and leaves business mutation to the
+Cloudflare consumer. The consumer calls the shared D1 GitHub ingestion
+dispatcher and acknowledges permanent domain rejections as ignored; malformed
+messages and handler failures are retried. The legacy PostgreSQL route and
+pg-boss worker use the same dispatcher for webhook jobs when D1 is not active.
+The remaining queue names retain their CF1 placeholder/unused status.
+
+## Scheduling decision
+
+- Daily and weekly report generation should use Cloudflare Cron Triggers to enqueue one bounded Queue message per organization/time window after those handlers become real.
+- Reconciliation can use a Cron Trigger to enqueue idempotent repository/operation references when periodic repair is necessary.
+- Cloudflare Workflows are not justified by current behavior. No existing handler contains a durable multi-step process requiring workflow state.
+- CF1 creates no Cron Trigger because the corresponding handlers are placeholders.
+
+## D1 concurrency and correctness gates
+
+Before switching runtime traffic, CF2/CF3 must prove:
+
+1. Tenant predicates remain mandatory for repository and intelligence queries.
+2. Duplicate GitHub deliveries produce one durable effect.
+3. CLI approval consumes an authorization code once under concurrency.
+4. Sync negotiation remains idempotent for repository/sync and idempotency keys.
+5. Artifact promotion is atomic enough for readers to see either the previous verified set or the new complete set.
+6. Failed sync preserves the previous verified dashboard state.
+7. D1 transaction/batch behavior matches each current PostgreSQL transaction invariant.
+8. Queue retries cannot promote partial records or cross organization boundaries.
+
+No PostgreSQL locking primitive was found, but PostgreSQL transaction isolation is still an implicit dependency in CLI approval and sync promotion. It must be replaced with explicit conditional writes, uniqueness constraints, and retry tests rather than assumed away.
+
+## Security and tenant isolation
+
+- Existing Cloudflare/GitHub/session secrets remain deployment secrets. They are not D1 columns or Queue payloads.
+- Existing hashes for CLI tokens and device codes remain hashes.
+- No repository source or code snippets are added to Queue messages.
+- The D1 schema preserves every current organization/repository foreign key, but schema shape alone does not prove authorization. Cross-organization query and mutation tests are required before cutover.
+- The existing GitHub App, permissions, callback URLs, webhook secret, and `trace-code.pages.dev` proxy remain unchanged.
+
+## Transition plan and cutover gates
+
+### CF1 — additive foundation (this change)
+
+- Complete PostgreSQL/schema/queue audit.
+- Add all 22 D1 tables and zero-to-D1 migration.
+- Add D1 factory and first driver-neutral user store.
+- Add local isolated D1 test infrastructure.
+- Add Queue message contract and non-deployed consumer skeleton.
+
+### CF2 — service parity
+
+- Move auth, workspace, GitHub installation/repository, dashboard, CLI auth, and Local TRACE sync persistence behind driver-neutral contracts.
+- Replace PostgreSQL-shaped E2E fixtures with D1-local factories.
+- Add auth, tenant isolation, cascade, webhook deduplication, CLI approval, and sync transaction parity tests.
+
+### CF3 — isolated Cloudflare-native staging
+
+- Provision new staging-only D1 and Queue resources.
+- Bind a distinct CF-native staging web/consumer pair.
+- Switch the webhook producer only in that isolated environment.
+- Verify existing GitHub App, auth, dashboard, and Local TRACE bridge end to end.
+
+### CF4 — runtime cutover
+
+- Remove the web runtime dependency on `DATABASE_URL`/Hyperdrive after parity and rollback tests.
+- Keep PostgreSQL resources intact until the accepted observation window ends.
+
+### CF5 — retirement
+
+- Remove pg-boss and the external Node worker only after every real producer/consumer is replaced.
+- Remove PostgreSQL/Hyperdrive dependencies and legacy CI only after D1 is authoritative and recovery is documented.
+
+## CF1 exclusions (historical)
+
+- No Cloudflare resource was created, changed, or deleted.
+- No staging or production deployment occurred.
+- No migration was applied to staging or production.
+- PostgreSQL, Hyperdrive, pg-boss, and the Node worker were not removed.
+- At the end of CF1, the web request database still used PostgreSQL.
+- At the end of CF1, the GitHub webhook route still used pg-boss.
+- At the end of CF1, auth beyond user upsert, GitHub data paths, dashboard
+  reads, CLI authorization, and sync transactions were not yet ported. CF2
+  adds explicit D1 branches while retaining these PostgreSQL references.
+
+## CF2 application boundary
+
+The request database now selects an explicit runtime driver:
+
+```text
+Cloudflare DB binding or TRACE_DATABASE_DRIVER=d1 -> D1
+explicit TRACE_DATABASE_DRIVER=postgres          -> PostgreSQL
+no binding/selector in non-production reference   -> legacy PostgreSQL configuration
+production without D1 configuration              -> fail closed
+```
+
+The selector fails closed when D1 is requested without a `DB` binding or when
+an unsupported driver is named. Web routes use the shared request-database
+boundary; UI code does not construct a PostgreSQL client or call a D1 binding
+directly.
+
+### D1-ready application paths
+
+- Auth callback persistence writes the user, GitHub account identity, and
+  signed session to D1. Protected routes validate the signed cookie against an
+  unexpired persisted session; sign-out invalidates that session.
+- Onboarding, workspace membership, repository catalog/selection, and GitHub
+  installation setup use D1 tables with the same tenant predicates as the
+  PostgreSQL path.
+- CLI device authorization uses conditional D1 claims for consume-once
+  behavior. Credentials remain hashed, scoped, expiring, and revocable.
+- Local TRACE sync uses D1-safe conditional operation claims and bounded D1
+  batches. Manifest/checksum validation, source-free policy, divergence, and
+  idempotent promotion remain unchanged.
+- Dashboard projections read D1 repositories, analysis runs, findings, synced
+  artifacts, reports, conflicts, decisions, rules, and audit activity. Unknown
+  GitHub freshness remains unknown rather than becoming `Current`.
+- A D1 webhook branch records delivery identity before it enqueues a bounded
+  Queue reference. The legacy PostgreSQL/pg-boss path remains only for
+  non-production reference environments; production D1 selection without a
+  binding returns a visible configuration error.
+
+### Remaining PostgreSQL-only or reference paths
+
+These paths are intentionally retained until CF3/CF4 cutover proof:
+
+- `packages/db/src/index.ts` PostgreSQL pool/client factory and PostgreSQL
+  schema remain the legacy driver.
+- The PostgreSQL branches in `apps/web/lib/sync-service.ts`,
+  `apps/web/lib/cli-auth.ts`, dashboard projection, GitHub setup, and request
+  database remain operational reference implementations.
+- `apps/worker/src/index.ts` still runs the existing Node/pg-boss worker.
+- The non-D1 branch of `apps/web/app/api/github/webhooks/route.ts` still
+  records deliveries and publishes through pg-boss.
+- `apps/web/lib/bridge.integration.test.ts` and `tests/e2e/home.spec.ts`
+  retain PostgreSQL fixtures. They are not production fallbacks; the isolated
+  D1 browser runner is separate and currently covers the core authenticated
+  dashboard/repository flow.
+- PostgreSQL migrations, Hyperdrive bindings, deployment examples, backups,
+  and restore scripts remain untouched for rollback/reference use.
+
+### Local CF2 commands
+
+The following commands never use a remote D1 database:
+
+```bash
+pnpm db:d1:generate
+pnpm db:d1:migrate:local
+pnpm test:d1
+pnpm test:d1:parity
+pnpm test:d1:cf26
+pnpm dev:d1
+```
+
+`test:d1` verifies the zero-to-D1 schema and type round trips. `test:d1:parity`
+seeds an isolated in-memory D1 database and verifies auth/session expiry,
+workspace isolation, provider-ID precision, CLI authorization, webhook
+deduplication, sync idempotency, freshness, and required indexes. `test:d1:e2e`
+creates a fresh local D1 store, applies the migration, seeds a signed session,
+starts the OpenNext worker with Wrangler's `local-d1` environment, and runs the
+authenticated product flow against D1. `test:d1:cf26` verifies the signed
+GitHub webhook → D1 → Queue → shared-ingestion-handler path, duplicate delivery
+and queue replay idempotency, unsupported-message retry behavior, tenant
+rejection, and representative indexed query plans. `dev:d1` starts the same
+local environment interactively; neither command seeds production or staging
+data.
+
+### Query and index audit
+
+The D1 schema includes indexes for membership lookup, provider identity,
+session tokens, CLI credentials, repository-scoped sync history, artifact
+lookups, activity ordering, and webhook delivery identity. The dashboard uses
+bounded, membership-scoped queries and in-memory maps for latest-per-repository
+selection rather than per-row follow-up queries. Sync uploads are sent in
+bounded D1 batches and are safe to retry through unique natural keys and
+conditional lifecycle updates. No N+1 query was introduced by the D1
+projection; full query-plan profiling remains a CF3 staging task.
+
+### Queue transition status
+
+Cloudflare Queue contracts and the isolated consumer are available, but pg-boss
+remains the live asynchronous path outside D1 runtime. The D1 webhook branch
+uses a Queue binding only when D1 is explicitly active, so a request is never
+intentionally published to both systems. Queue business handlers remain
+placeholders until their corresponding PostgreSQL behavior is proven and ported.
+
+### CF2 limits
+
+No remote D1 database or Queue was created. No existing PostgreSQL, Hyperdrive,
+GitHub App, staging, or production resource was changed. The isolated D1
+Playwright runner passed health, persisted-session, dashboard, and repository
+discovery checks at a mobile viewport. The broad Playwright suite and several
+domain bridge tests still use their PostgreSQL fixtures. GitHub PR/issue write
+ingestion and Queue business handlers remain on the reference path or are
+placeholders, so full application parity and cutover are not claimed.
+
+### Phase CF2.5 GitHub ingestion and Queue business parity
+
+- Status: D1 pull-request and issue ingestion is implemented through a shared,
+  transport-neutral dispatcher. The Cloudflare Queue consumer and the legacy
+  pg-boss worker both call the same dispatcher; PostgreSQL, pg-boss,
+  Hyperdrive, and the Node worker remain reference/fallback infrastructure.
+- GitHub ingestion: normalized pull-request opened, synchronize, edited,
+  reopened, closed, and merged events update the D1 pull-request projection.
+  Normalized issue opened, edited, reopened, closed, and transferred events
+  update the D1 issue projection. Repository and installation ownership is
+  checked before mutation, provider identifiers remain precision-safe TEXT,
+  and duplicate delivery updates are idempotent.
+- Queue boundary: `github.webhook.process` messages carry the validated,
+  bounded normalized event plus delivery identity. They contain no source
+  content, credentials, tokens, private keys, or report bodies. The consumer
+  acknowledges only successful D1 handling; malformed, unimplemented, and
+  failed messages are retried for eventual dead-letter handling.
+- Implemented Cloudflare handlers: `system.healthcheck` validates the D1
+  schema and `github.webhook.process` invokes the real D1 ingestion handler.
+  The remaining declared queue names are retained as explicit placeholders or
+  unused scaffolding because their current pg-boss handlers do not perform
+  business work. No behavior is claimed for those jobs.
+- Legacy adapter: the PostgreSQL pg-boss webhook handler decodes the same
+  normalized event contract and calls the shared dispatcher. Existing
+  non-webhook worker handlers remain unchanged until their real behavior is
+  separately ported.
+- Verification: `pnpm test:d1:github` runs an isolated local D1 migration and
+  verifies pull-request and issue create/update/close flows, duplicate
+  idempotency, installation/repository tenant rejection, removed-repository
+  selection state, Queue contract validation, and successful Queue consumer
+  acknowledgement. Core, GitHub, DB, and worker focused tests cover the shared
+  dispatcher and both transport adapters.
+- Current limits: the D1 browser runner still covers the CF2 core flow rather
+  than every reports/findings/conflicts/decisions/rules/settings surface. Full
+  D1 domain parity and remote D1/Queue cutover are not claimed. PostgreSQL,
+  Hyperdrive, pg-boss, and the external Node worker remain in place for
+  rollback/reference use.
+
+### Phase CF2.6 production-reachable Queue closure and full D1 browser parity
+
+- Status: Local parity proof complete for the production-reachable denominator;
+  no remote Cloudflare resources, migrations, deployment, push, or merge were
+  performed.
+- Date: 2026-09-17
+- Reachability denominator: The historical twelve pg-boss names are not twelve
+  active product jobs. The current source graph reaches two Cloudflare job
+  types: the D1 schema health probe and `github.webhook.process`. The latter is
+  the only product business job. Installation/repository/PR/issue sync names
+  have no current producer, replay is legacy-only, and analysis/report/conflict/
+  reconciliation names are log-only placeholders with no current producer.
+  This inventory is recorded in `DOC/cloudflare-queue-parity.md` and enforced
+  by `traceQueueJobRegistry`.
+- Queue safeguards: The D1 producer accepts only registered Cloudflare-capable
+  types. The consumer validates the discriminated contract, retries malformed,
+  unsupported, and failed messages, and acknowledges only completed handlers.
+  Unsupported historical names therefore cannot be silently treated as
+  successful work or emitted by the current D1 webhook route.
+- D1 browser parity: `scripts/test-d1-e2e.ts` now runs a fresh local D1 schema,
+  seeds a signed persisted session and real projection records, and exercises
+  the authenticated shell, repository switch/access, Needs refresh Local TRACE
+  workflow, repository detail/finding, Changes, Conflicts, Reports/Quick
+  Inspect/native daily and weekly detail, Decisions and Rules prompt builders,
+  Activity, Settings, dashboard Documentation, focus/body-scroll overlay
+  behavior, and responsive overflow at 390/768/1024/1440px. The runner sets an
+  explicit D1 driver and an empty legacy database URL; it does not connect to
+  PostgreSQL, Hyperdrive, or pg-boss.
+- End-to-end Queue proof: `scripts/test-d1-cf26.ts` verifies a signed realistic
+  pull-request webhook is deduplicated in D1, queued as a bounded reference,
+  consumed by the Cloudflare adapter, and persisted through the shared D1
+  handler. Replayed deliveries and queue messages do not duplicate state;
+  unsupported placeholder messages retry without acknowledgement; simulated
+  D1 failure retries; tenant mismatch is rejected; and representative D1
+  query plans use the expected tenant/provider indexes.
+- Sync scope: The current D1 sync flow has no Queue dependency, so a sync →
+  Queue assertion is not applicable. Sync remains local TRACE → D1 and keeps
+  its existing idempotency and source-free manifest contract.
+- Legacy boundary: PostgreSQL, Hyperdrive, pg-boss, and the external Node worker
+  remain intact as fallback/reference infrastructure. The legacy PostgreSQL
+  Playwright suite remains separate and may still require its historical local
+  database; this does not participate in the Cloudflare-native D1 parity gate.
+- Result: All production-reachable Cloudflare jobs are implemented (2/2,
+  including one infrastructure probe and one business handler). Full remote
+  D1/Queue cutover is intentionally deferred to CF3.
+
+### Phase CF3 verified staging baseline and CF4.1 reconciliation
+
+- Staging source: `9f29f6d74632fbf20808d2ebd9e3061d8c1519e2`.
+- Staging Worker: `trace-test-staging`, version
+  `9ebfa182-2d41-4e13-83b5-4a7e4e0fc2d6`.
+- Staging resources: D1 `trace-test-staging-db`, Queue
+  `trace-staging-jobs`, and the existing `trace-code.pages.dev` Pages proxy.
+- CF3 acceptance: a signed fixture issue webhook was deduplicated, persisted
+  in D1, delivered through the same-Worker Queue consumer, and processed by
+  the shared D1 handler. No production cutover was performed.
+- CF4.1 correction: an authenticated **Refresh GitHub access** flow now
+  reauthorizes the existing GitHub App user token for one request, discovers
+  installations through `GET /user/installations`, filters to the configured
+  App, verifies the signed-in identity and installation access, and reuses the
+  tenant-scoped installation/repository upsert. The token is not persisted.
+  Multiple accessible installations fail closed unless an explicitly
+  authorized installation ID is selected. Existing repository selection is
+  preserved on refresh.
+- The existing `/api/github/setup` callback remains the validated installation
+  path and is covered by regression tests. Production provisioning and legacy
+  infrastructure retirement remain separate CF4 work.
+
+### Phase CF4.9 production topology and release gates
+
+- Status: Production plan and no-fallback guard prepared locally; no production
+  resource, migration, deployment, route, OAuth/App setting, or secret changed.
+- Local source: `e1ce189f2a447a05d1f9637f3b05bb844662303d` before the CF4.9
+  working-tree changes. The deployed staging Worker remains the CF4.5 source
+  `1bc3fc09c19084545df8191a3ae63a8377aa40e0`; CF4.6--CF4.9 local changes are
+  not staging evidence.
+- Proposed resources: Worker `trace-production`, D1
+  `trace-production-db`, and Queue `trace-production-jobs`. None exists yet.
+  The isolated `trace-restore-rehearsal-20260921` database remains allocated,
+  unbound, and excluded from production configuration.
+- Free-plan gate: the account currently has eight D1 databases, including the
+  staging and rehearsal databases. Wrangler reports 474 staging reads and 9
+  writes in its rolling 24-hour window, and 15/72 for the rehearsal; exact
+  account-wide current-UTC-day totals and aggregate Worker CPU are not exposed
+  by the available read-only CLI output. Treat current-day quota headroom as
+  UNKNOWN until Dashboard/GraphQL metrics are available. The current staging
+  Wrangler dry run measured 13,749.19 KiB uncompressed upload, 144 asset files,
+  and no size-limit breach. These measurements are not a production capacity
+  guarantee.
+- Guard: `request-database.ts` now treats production or explicit D1 selection
+  as D1-required. Missing `DB`/driver configuration throws; the webhook route
+  returns 503 instead of constructing a PostgreSQL client or pg-boss instance.
+  The legacy branch remains available for non-production reference
+  environments that have not selected D1. The guard is local and awaits
+  staging regression/deployment.
+- Release gates: production requires a dedicated D1/Queue binding, explicit
+  `TRACE_DEPLOYMENT_ENV=production` and `TRACE_DATABASE_DRIVER=d1`, a selected
+  production hostname, a coordinated GitHub callback/App decision, a fresh
+  Time Travel bookmark, authenticated canary, signed webhook -> D1 -> Queue
+  proof, owner recovery, tenant isolation, retry/idempotency evidence, and
+  sanitized runtime metrics. Stop on quota exhaustion, missing bindings,
+  Worker CPU or bundle limits, callback ambiguity, or any legacy database use.
+
+### Phase CF4.10 staging no-fallback regression and capacity evidence
+
+- Source: local `79ce9f879601cd50d09b817214273e017119fc4b`. The deployed
+  staging Worker remains `7cfc8de1-0291-47dc-a180-cb691bef2943` from source
+  `1bc3fc09c19084545df8191a3ae63a8377aa40e0`; CF4.9 is not staging evidence.
+- No-fallback proof: request-database tests cover valid production D1
+  selection, missing production binding, and an incorrect production driver.
+  Webhook route tests prove a production request returns 503 without a D1
+  binding and never constructs pg-boss, and that the normal staging D1 path
+  publishes to the Queue producer. No deployment was performed in CF4.10.
+- Remote parity: `trace-test-staging-db` (`c4df63bc-8270-4500-9dab-c1c6439efa64`)
+  reports 23 tables and no pending migrations. The existing staging Worker
+  remains on the previously deployed source and data.
+- Capacity evidence: the account inventory contains eight D1 databases and
+  the retained unbound restore rehearsal. Wrangler exposes per-database
+  rolling 24-hour metrics but not exact account-wide current-UTC-day totals,
+  aggregate Worker CPU percentiles, or Queue backlog/retry metrics in this
+  operating context. Current-day D1 quota, Worker CPU headroom, and Queue
+  headroom therefore remain `UNKNOWN`; rolling values must not be treated as
+  daily quota.
+- Routing: `https://trace-code.pages.dev` remains the Pages project and staging
+  proxy. The deployed staging Worker is also reachable at
+  `https://trace-test-staging.mathofdynamic2.workers.dev`. No production route
+  or GitHub callback was changed.
+- Release status: the no-fallback guard is locally verified but not deployed;
+  production resources, routing, callback decisions, and capacity evidence
+  remain open gates.

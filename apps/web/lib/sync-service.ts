@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { and, count, desc, eq, gte, inArray } from 'drizzle-orm';
-import { schema } from '@trace/db';
+import { isD1Database, schema } from '@trace/db';
+import type { d1Schema, TraceD1Database } from '@trace/db';
 import {
   checksum,
   parseArtifact,
@@ -9,6 +10,12 @@ import {
   type SyncManifest,
 } from '@trace/schema';
 import type { RequestDatabase } from './workspace';
+import {
+  completeD1Sync,
+  getD1SyncStatus,
+  negotiateD1Sync,
+  stageD1SyncArtifact,
+} from './sync-service-d1';
 
 const RATE_WINDOW_MS = 5 * 60 * 1000;
 const MAX_OPERATIONS_PER_WINDOW = 30;
@@ -53,6 +60,13 @@ export async function negotiateSync(
   connection: typeof schema.cliConnections.$inferSelect,
   input: unknown,
 ) {
+  if (isD1Database(db)) {
+    return negotiateD1Sync(
+      db as unknown as TraceD1Database,
+      connection as unknown as typeof d1Schema.cliConnections.$inferSelect,
+      input,
+    );
+  }
   const parsed = syncManifestSchema.safeParse(input);
   if (!parsed.success)
     return {
@@ -314,6 +328,13 @@ export async function stageSyncArtifact(
   connection: typeof schema.cliConnections.$inferSelect,
   input: unknown,
 ) {
+  if (isD1Database(db)) {
+    return stageD1SyncArtifact(
+      db as unknown as TraceD1Database,
+      connection as unknown as typeof d1Schema.cliConnections.$inferSelect,
+      input,
+    );
+  }
   const parsed = syncArtifactUploadSchema.safeParse(input);
   if (!parsed.success)
     return {
@@ -431,6 +452,13 @@ export async function completeSync(
   connection: typeof schema.cliConnections.$inferSelect,
   operationId: string,
 ) {
+  if (isD1Database(db)) {
+    return completeD1Sync(
+      db as unknown as TraceD1Database,
+      connection as unknown as typeof d1Schema.cliConnections.$inferSelect,
+      operationId,
+    );
+  }
   return db.transaction(async (tx) => {
     const [operation] = await tx
       .select()
@@ -628,6 +656,13 @@ export async function getSyncStatus(
   connection: typeof schema.cliConnections.$inferSelect,
   repositoryId: string,
 ) {
+  if (isD1Database(db)) {
+    return getD1SyncStatus(
+      db as unknown as TraceD1Database,
+      connection as unknown as typeof d1Schema.cliConnections.$inferSelect,
+      repositoryId,
+    );
+  }
   const [repository] = await db
     .select({ id: schema.githubRepositories.id, fullName: schema.githubRepositories.fullName })
     .from(schema.githubRepositories)

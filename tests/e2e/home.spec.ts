@@ -1,9 +1,15 @@
 import { expect, test } from '@playwright/test';
+import {
+  createSessionCookie as createAuthSessionCookie,
+  getTraceSession,
+  sessionCookieName,
+} from '@trace/auth';
 import { createHmac, randomUUID } from 'node:crypto';
 import { Client } from 'pg';
+import { e2eAuthSecret } from './auth-secret';
 
 const databaseUrl = 'postgresql://trace:change-me@127.0.0.1:3002/trace_dev';
-const authSecret = 'trace-playwright-secret-change-this-32-chars';
+process.env.TRACE_AUTH_SECRET ??= e2eAuthSecret;
 const appBaseUrl = process.env.TRACE_E2E_BASE_URL ?? 'http://127.0.0.1:3001';
 
 type SeedOptions = {
@@ -17,16 +23,7 @@ type SeedOptions = {
 };
 
 function sessionCookie(user: { id: string; name: string; email: string; githubLogin: string }) {
-  const now = Math.floor(Date.now() / 1000);
-  const payload = Buffer.from(
-    JSON.stringify({
-      user: { ...user, image: null },
-      issuedAt: now,
-      expiresAt: now + 3600,
-    }),
-  ).toString('base64url');
-  const signature = createHmac('sha256', authSecret).update(payload).digest('base64url');
-  return `${payload}.${signature}`;
+  return createAuthSessionCookie({ ...user, image: null });
 }
 
 async function seedWorkspace(options: SeedOptions = {}) {
@@ -39,6 +36,7 @@ async function seedWorkspace(options: SeedOptions = {}) {
     email: `trace-${suffix}@example.com`,
     githubLogin: `trace-${suffix}`,
   };
+  const cookie = await sessionCookie(user);
   let organizationId: string | null = null;
   let repositoryId: string | null = null;
   try {
@@ -47,6 +45,10 @@ async function seedWorkspace(options: SeedOptions = {}) {
       user.email,
       user.name,
     ]);
+    await client.query(
+      "INSERT INTO sessions (user_id, token, expires_at) VALUES ($1, $2, NOW() + INTERVAL '7 days')",
+      [user.id, cookie],
+    );
     if (options.profileComplete !== false) {
       await client.query(
         'INSERT INTO onboarding_profiles (user_id, intended_usage, execution_mode, completed) VALUES ($1, $2, $3, true)',
@@ -260,7 +262,7 @@ async function seedWorkspace(options: SeedOptions = {}) {
   return {
     user,
     repositoryId,
-    cookie: sessionCookie(user),
+    cookie,
     async cleanup() {
       const cleanupDatabase = new Client({ connectionString: databaseUrl });
       await cleanupDatabase.connect();
@@ -424,6 +426,34 @@ test('invalid GitHub webhook signatures are rejected before parsing', async ({ r
 });
 
 test.describe('authenticated product journey', () => {
+  test('E2E session cookies use the configured signing secret and reach the authenticated app', async ({
+    page,
+  }) => {
+    const seeded = await seedWorkspace();
+    const previousSecret = process.env.TRACE_AUTH_SECRET;
+    const headers = new Headers({ cookie: `${sessionCookieName()}=${seeded.cookie}` });
+
+    try {
+      process.env.TRACE_AUTH_SECRET = e2eAuthSecret;
+      expect((await getTraceSession(headers))?.user.id).toBe(seeded.user.id);
+
+      process.env.TRACE_AUTH_SECRET = `${e2eAuthSecret}-wrong`;
+      await expect(getTraceSession(headers)).resolves.toBeNull();
+
+      process.env.TRACE_AUTH_SECRET = e2eAuthSecret;
+      await page
+        .context()
+        .addCookies([{ name: sessionCookieName(), value: seeded.cookie, url: appBaseUrl }]);
+      await page.goto('/app');
+      await expect(page.getByRole('heading', { name: 'What needs your attention' })).toBeVisible();
+      await expect(page).toHaveURL(/\/app\/?$/);
+    } finally {
+      if (previousSecret === undefined) delete process.env.TRACE_AUTH_SECRET;
+      else process.env.TRACE_AUTH_SECRET = previousSecret;
+      await seeded.cleanup();
+    }
+  });
+
   test('completed users skip onboarding while saving a new workspace advances automatically', async ({
     page,
   }) => {

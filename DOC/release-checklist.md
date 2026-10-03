@@ -9,5 +9,37 @@
 - [ ] Quality thresholds in `DOC/quality-thresholds.md` are measured; failed features are disabled.
 - [ ] Accessibility and responsive smoke review complete.
 - [ ] Staging migration, backup restore, rollback, and queue recovery complete.
+- [ ] Production topology, D1-only/no-fallback guard, Free-plan capacity, and
+      GitHub callback strategy approved; production resources remain uncreated
+      until this gate is closed.
+- [ ] Production canary proves D1 auth, tenant isolation, signed webhook ->
+      Queue processing, owner recovery, retry/idempotency, and rollback.
 - [ ] Feature flags and public claims reviewed.
 - [ ] Operator, incident, deletion, rotation, and support ownership confirmed.
+
+## CF4.10 evidence
+
+| Gate                         | Evidence                                                                                                      | Status          |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------- | --------------- |
+| Production D1 selection      | `createRequestDatabase()` selects D1 with a valid production binding                                          | PASS locally    |
+| Missing production D1        | Missing binding fails closed; webhook returns 503 without pg-boss                                             | PASS locally    |
+| Incorrect production driver  | `TRACE_DATABASE_DRIVER=postgres` is rejected in production                                                    | PASS locally    |
+| Staging migration parity     | Remote staging reports no pending migrations; deployed version remains `7cfc8de1-0291-47dc-a180-cb691bef2943` | PASS, read-only |
+| Current-UTC-day D1 quota     | Account-wide current-day totals are not exposed by available read-only CLI                                    | UNKNOWN         |
+| Worker CPU capacity          | Aggregate CPU distribution and limit errors unavailable in this context                                       | UNKNOWN         |
+| Queue capacity               | Backlog/retry metrics unavailable through available CLI                                                       | UNKNOWN         |
+| Production routing/callbacks | Production hostname and GitHub App callback strategy remain undecided                                         | OPEN            |
+| Production cutover           | No production resources or deployment exist                                                                   | NOT RUN         |
+
+## CF4.12 operational evidence and integration decision
+
+| Gate                               | Evidence                                                                                                                                               | Status          |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------- |
+| Staging D1 readback                | Fixture issues `#1` and `#2` are present/open in the expected workspace and repository; delivery `45efb6c0-b5c3-11f1-8385-adc2e6c87a39` is `processed` | PASS, read-only |
+| Live owner recovery GET            | Authenticated same-origin request was not accessible because the browser path returned `ERR_BLOCKED_BY_CLIENT`; local owner/RBAC tests already pass    | UNVERIFIED LIVE |
+| Current-UTC-day D1 quota           | Available CLI exposes only rolling 24-hour, staging-only metrics (`20,947` rows read, `185` rows written)                                              | UNKNOWN         |
+| Worker CPU and limit errors        | Aggregate CPU distribution and complete historical error metrics unavailable; short error tail had no entries                                          | UNKNOWN         |
+| Queue operations                   | Binding and consumer are configured; backlog, operation totals, and retry history unavailable through the authorized CLI                               | UNKNOWN         |
+| Production GitHub integration      | Separate production App and OAuth App design documented; staging callbacks remain unchanged                                                            | PROPOSED        |
+| Isolated production canary         | Ordered plan documented for `trace-production`, `trace-production-db`, and `trace-production-jobs`; no resources created                               | READY TO PLAN   |
+| Customer-facing production cutover | Requires production resources, App/OAuth configuration, telemetry evidence, canary, and owner approval                                                 | NOT READY       |

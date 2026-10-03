@@ -1,14 +1,17 @@
-import {
-  cookieAttributes,
-  getTracePublicUrl,
-  getTraceSession,
-  isSecurePublicUrl,
-  safeAuthNext,
-} from '@trace/auth';
+import { cookieAttributes, getTracePublicUrl, isSecurePublicUrl, safeAuthNext } from '@trace/auth';
 import { parseGitHubAppInstallEnv } from '@trace/env';
+import { getRequestCloudflareEnv, getRequestTraceSession } from '../../../../lib/request-database';
+import {
+  canaryUserEligibility,
+  productionCanaryGateResponse,
+  productionCanaryIntegrationEligibility,
+} from '../../../../lib/production-canary';
 
 const APP_STATE_COOKIE = 'trace_github_app_state';
 const APP_NEXT_COOKIE = 'trace_github_app_next';
+const RECONCILE_STATE_COOKIE = 'trace_github_reconcile_state';
+const RECONCILE_NEXT_COOKIE = 'trace_github_reconcile_next';
+const RECONCILE_INSTALLATION_COOKIE = 'trace_github_reconcile_installation';
 
 function randomState() {
   const bytes = new Uint8Array(32);
@@ -21,10 +24,17 @@ function appInstallUrl(slug: string, configuredUrl?: string) {
 }
 
 export async function GET(request: Request) {
+  const cloudflareEnv = await getRequestCloudflareEnv();
+  const integrationEligibility = productionCanaryIntegrationEligibility(cloudflareEnv);
+  if (!integrationEligibility.allowed) return productionCanaryGateResponse(integrationEligibility);
+
   const publicUrl = getTracePublicUrl();
-  const session = await getTraceSession(request.headers);
+  const session = await getRequestTraceSession(request.headers);
   if (!session?.user)
     return Response.redirect(new URL('/sign-in?next=/app/repositories', publicUrl));
+
+  const userEligibility = canaryUserEligibility(cloudflareEnv, session.user);
+  if (!userEligibility.allowed) return productionCanaryGateResponse(userEligibility);
 
   let env;
   try {
@@ -42,6 +52,16 @@ export async function GET(request: Request) {
     status: 302,
     headers: { location: installUrl.toString() },
   });
+  for (const cookie of [
+    RECONCILE_STATE_COOKIE,
+    RECONCILE_NEXT_COOKIE,
+    RECONCILE_INSTALLATION_COOKIE,
+  ]) {
+    response.headers.append(
+      'set-cookie',
+      `${cookie}=; ${cookieAttributes(0, isSecurePublicUrl())}`,
+    );
+  }
   response.headers.append('set-cookie', `${APP_STATE_COOKIE}=${state}; ${attributes}`);
   response.headers.append(
     'set-cookie',

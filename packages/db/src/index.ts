@@ -4,7 +4,32 @@ import { parseServerEnv } from '@trace/env';
 import * as schema from './schema.js';
 
 export { schema };
+export { createD1Database, d1Schema, isD1Database } from './d1.js';
+export type { TraceD1Database } from './d1.js';
+export { createD1UserStore, createPostgresUserStore } from './user-store.js';
+export type { PersistedUserInput, UserStore } from './user-store.js';
+export { createTraceId, normalizeProviderId } from './domain-types.js';
+export type { JsonObject, ProviderId, StringList, StringMap } from './domain-types.js';
 export type TraceDatabase = ReturnType<typeof createDatabase>;
+export type TracePostgresDatabase = Awaited<ReturnType<typeof createDatabaseClient>>['db'];
+export {
+  createD1GitHubIngestionStore,
+  createPostgresGitHubIngestionStore,
+  markD1WebhookDeliveryProcessed,
+  markPostgresWebhookDeliveryProcessed,
+} from './github-ingestion.js';
+export {
+  D1_WEBHOOK_RECOVERY_STATUSES,
+  D1WebhookRecoveryError,
+  listD1WebhookRecoveriesForOwner,
+  markD1WebhookDeliveryFailure,
+  requestD1WebhookReplay,
+  resolveD1WebhookScope,
+  isD1SelectedOwnerWebhookEvent,
+  applyD1OwnerInstallationBoundary,
+  sanitizeWebhookError,
+} from './webhook-recovery.js';
+export type { D1WebhookRecoveryDelivery, D1WebhookRecoveryStatus } from './webhook-recovery.js';
 
 export function createDatabase(databaseUrl = parseServerEnv().DATABASE_URL) {
   const pool = new Pool({ connectionString: databaseUrl, max: 5 });

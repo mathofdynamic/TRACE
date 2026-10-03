@@ -1,5 +1,39 @@
 # TRACE Implementation Log
 
+### Phase CF4.4 Durable webhook recovery
+
+- Status: Local D1 owner-only recovery implemented; no remote migration,
+  deployment, push, merge, resource, credential, or production change.
+- Date: 2026-09-21
+- Recovery contract: D1 webhook deliveries now retain the trusted normalized
+  event, tenant/repository scope, bounded attempts, sanitized failure metadata,
+  replay claim state, and operator identity. Queue/handler failures become
+  `potentially_unresolved`; this does not claim remote retry exhaustion.
+- Access: Owners can list at most 50 unresolved deliveries and request one
+  replay by delivery ID. Server-side checks enforce workspace ownership,
+  current installation/repository state, stored event validity, and an atomic
+  single-winner `replaying` transition. Enqueue failures return to the
+  recoverable state. Recovery actions are audited.
+- Verification: `pnpm test:d1:cf44` covers normal completion, transient retry,
+  post-write replay, four modeled failures, owner replay, existing-effect
+  replay, concurrent claims, tenant/non-owner rejection, revoked access,
+  enqueue failure/recovery, and exactly-one issue projection. These are local
+  simulations; remote Queue exhaustion is not claimed.
+
+### Phase CF4.3 Queue retry and business idempotency
+
+- Status: Local D1 fault-injection proof complete; no staging or production
+  deployment, resource, migration, credential, or legacy-infrastructure change.
+- Date: 2026-09-21
+- Verification: `pnpm test:d1:cf43` proves transient failure retry, replay after
+  a business write before acknowledgement, one logical PR projection, tenant
+  and repository preservation, and retry exhaustion without false success.
+- Operational gap: staging uses `max_retries: 3` without a dead-letter queue.
+  Exhausted messages are not acknowledged and leave the D1 delivery row
+  `queued`; Cloudflare logs/Queue metrics are the only current operator signal.
+  Production cutover requires a bounded DLQ or an owner-only durable replay
+  path.
+
 ### Staging hardening and merge readiness
 
 - Status: Hardening is implemented, deployed to staging, and regression-tested locally. Immutable Worker version `4817dae0-dd68-4e7b-9a7a-51ef00260882` is serving 100% of staging traffic; GitHub-backed freshness refresh and the completion-race fix are live.
@@ -65,7 +99,7 @@
 
 ## Phase history
 
-### Phase 00 — Project Rules and Agent Workflow
+### Phase 00 â€” Project Rules and Agent Workflow
 
 - Status: Completed
 - Date: 2026-08-08
@@ -78,7 +112,7 @@
 - Known limitations: Product code and dependency configuration did not exist at the end of this phase.
 - Next prerequisites: Native PostgreSQL installation and Phase 01 monorepo initialization.
 
-### Phase 01 — Foundation and Monorepo
+### Phase 01 â€” Foundation and Monorepo
 
 - Status: Completed
 - Date: 2026-08-08
@@ -91,7 +125,7 @@
 - Known limitations: GitHub OAuth values are local placeholders; no live GitHub OAuth/App integration exists yet. The Windows PostgreSQL service is installed but could not be started without administrator rights, so the project-local cluster is the supported local fallback. The web surface is explicitly a Phase 01 foundation and does not claim product functionality.
 - Next prerequisites: Phase 02 design tokens and shared components.
 
-### Phase 02 — TRACE Design System
+### Phase 02 â€” TRACE Design System
 
 - Status: Completed
 - Date: 2026-08-08
@@ -104,7 +138,7 @@
 - Known limitations: The primitives are foundational and not yet the complete product shell. Marketing, authentication, GitHub, analysis, and dashboard behavior remain intentionally unimplemented.
 - Next prerequisites: Phase 03 public marketing and application shell.
 
-### Phase 03 — Marketing Website and Authentication Shell
+### Phase 03 â€” Marketing Website and Authentication Shell
 
 - Status: Completed
 - Date: 2026-08-08
@@ -115,13 +149,13 @@
 - Known limitations: GitHub OAuth credentials are placeholders, so live provider sign-in has not been claimed or tested. Rate limiting, production callback configuration, and account recovery depend on later operational setup.
 - Next prerequisites: Phase 04 authenticated dashboard shell.
 
-### Phase 04 — Dashboard Application Shell
+### Phase 04 â€” Dashboard Application Shell
 
 - Status: Completed
 - Date: 2026-08-08
 - Scope completed: Protected `/app` route group, persistent desktop sidebar, responsive mobile navigation, workspace context, command-search placeholder, application navigation, overview hierarchy, repository setup state, conflict/report/rules/activity/settings shells, repository route family, explicit fixture labels, empty states, source-data boundaries, and responsive layout adaptations.
 - Files changed: `apps/web/app/(app)/app/`, `apps/web/app/globals.css`, `tests/e2e/home.spec.ts`
-- Fixtures: No connected GitHub or analysis fixtures were added. All application shells identify themselves as `Demo data · not connected` or use explicit empty states.
+- Fixtures: No connected GitHub or analysis fixtures were added. All application shells identify themselves as `Demo data Â· not connected` or use explicit empty states.
 - Results: Full typecheck, lint, production build, and browser suite passed. The authenticated route group is server-protected and ready for later typed data adapters.
 - Known limitations: No GitHub payloads, analysis results, reports, findings, conflicts, or repository rows are represented as real data.
 - Next prerequisites: Phase 05 signed GitHub App webhook and installation integration.
@@ -319,7 +353,7 @@
 - Date: 2026-08-08
 - Scope: Check and create Pages project `trace`, with `trace-code` reserved as the fallback requested by the owner.
 - Results: Wrangler authentication succeeded for `mathofdynamic2` (`c5d6cf110905c91fc3eed1abaf8236a`). Both `wrangler pages project list` and `wrangler pages project create trace --production-branch main` failed before project-name validation with Cloudflare API error `7003`: `Could not route to /client/v4/accounts/c5d6cf110905c91fc3eed1abaf8236a/pages/projects`.
-- Decision: Do not create `trace-code` based on this response. The API did not report that `trace` was unavailable, and TRACE’s full-stack Next.js app should not be represented as a static Pages deployment without a verified Pages-compatible build.
+- Decision: Do not create `trace-code` based on this response. The API did not report that `trace` was unavailable, and TRACEâ€™s full-stack Next.js app should not be represented as a static Pages deployment without a verified Pages-compatible build.
 
 ### Direct GitHub OAuth test boundary
 
@@ -344,7 +378,7 @@
 
 - Status: Completed for the Cloudflare staging test environment
 - Date: 2026-08-10
-- Scope: Provision a separate PostgreSQL database through Vercel’s Neon integration, connect the Cloudflare staging Worker through Hyperdrive, and make authenticated onboarding persistence use the database.
+- Scope: Provision a separate PostgreSQL database through Vercelâ€™s Neon integration, connect the Cloudflare staging Worker through Hyperdrive, and make authenticated onboarding persistence use the database.
 - Results: Created the Vercel database resource `trace-staging-postgres`, created Hyperdrive config `2d1e4821c1484d6299d88e29f2884310`, and applied all repository migrations successfully. The Worker now resolves the request database URL from `env.HYPERDRIVE.connectionString`; no database credential is stored in `wrangler.jsonc`, the repository, or the browser bundle.
 - Code changes: Onboarding, dashboard summary, and webhook database access use the request-scoped Hyperdrive connection. The GitHub OAuth callback upserts the authenticated user before issuing the signed test session, preventing onboarding foreign-key failures. The PostgreSQL pool limit is five for the Worker runtime.
 - Verification: `pnpm check`, `pnpm cf:build`, and the web callback unit test passed. Wrangler uploaded and promoted version `1c69b70e-0f48-4874-85c0-70ec3f43273c` to 100% of `trace-test-staging`. The Worker `/api/health` and home route return HTTP 200. Wrangler confirms the deployed `HYPERDRIVE` binding.
@@ -367,7 +401,7 @@
 - Configuration correction: When GitHub App user authorization during installation is enabled, the callback URL is the return path and the setup URL is left empty. `GITHUB_APP_CALLBACK_URL` is optional because the application derives the canonical callback from `TRACE_PUBLIC_URL` when it is not set.
 - Database boundary: The slice uses the existing Phase 05 GitHub tables and repository-level permissions column. No new remote migration is required.
 - Verification: `pnpm check`, `pnpm cf:build`, and the GitHub integration tests passed. Wrangler promoted version `f286775c-7eb5-4c8a-8670-5e12f386647e` to 100% of `trace-test-staging`. `https://trace-code.pages.dev/api/health` and the Worker origin both return HTTP 200 with `{"service":"web","status":"ok"}`.
-- Browser verification: The signed-in Chrome session opened `https://trace-code.pages.dev/app/repositories`; the page rendered “Step 2 of 2 · GitHub connection,” “Not connected,” and the real **Install GitHub App** action.
+- Browser verification: The signed-in Chrome session opened `https://trace-code.pages.dev/app/repositories`; the page rendered â€œStep 2 of 2 Â· GitHub connection,â€ â€œNot connected,â€ and the real **Install GitHub App** action.
 - Known limitations: The GitHub App has not yet been registered/configured for this staging deployment, its private key and secrets are not present in the Worker, and no live installation or repository sync has been claimed.
 
 ### Dashboard route-state and interaction refinement
@@ -405,7 +439,7 @@
 - Data boundary: Synced analysis projections create local-origin analysis runs and findings. Reports, conflicts, decisions, and risks remain immutable artifact projections from the latest completed repository snapshot. The repository artifact is durable; dashboard surfaces are read projections and do not silently edit `.trace`.
 - Failure behavior: Rejected artifacts and stale-device divergence never replace the last verified snapshot. Failed sync is visible as deterministic dashboard attention and activity with a recovery path.
 - Pilot evidence: The CLI analyzed this repository locally: 223 supported files, 721 file-level-only files, 7,974 symbols, four deterministic findings, and zero source sent to a model. The generated analysis artifact validated successfully. The dry run selected one 4,786-byte source-free artifact and excluded no eligible artifact.
-- Workflow: `trace login` → `trace connect` → `trace analyze` → `trace sync --dry-run` → `trace sync` → `trace sync status`. See `DOC/local-dashboard-workflow.md`.
+- Workflow: `trace login` â†’ `trace connect` â†’ `trace analyze` â†’ `trace sync --dry-run` â†’ `trace sync` â†’ `trace sync status`. See `DOC/local-dashboard-workflow.md`.
 - Verification: Fresh and existing PostgreSQL migrations passed. `pnpm check` passed all formatting, lint, type-check, unit, package-build, and optimized Next.js build gates. Web tests passed 17/17, including six PostgreSQL bridge integration tests. CLI tests passed 8/8, including Windows DPAPI storage and staging-target safety. Playwright passed 17/17 browser contracts. `pnpm cf:build` produced the complete OpenNext Worker bundle. `git diff --check` passed.
 - Deployment at this implementation checkpoint: not authorized and not attempted; see the subsequent `Staging acceptance and deployment` entry.
 
@@ -413,18 +447,18 @@
 
 - Status: Staging Worker deployed and smoke-tested; real CLI-to-dashboard acceptance blocked by staging database migration access.
 - Date: 2026-08-13
-- Migration review: `0004`–`0006` were inspected. `0006` previously added `cli_device_authorizations.request_key_hash` as `NOT NULL` without a backfill, which was unsafe for an existing database. It now adds the column nullable, backfills existing rows from the already-hashed `device_code_hash`, then enforces `NOT NULL` before creating the index.
+- Migration review: `0004`â€“`0006` were inspected. `0006` previously added `cli_device_authorizations.request_key_hash` as `NOT NULL` without a backfill, which was unsafe for an existing database. It now adds the column nullable, backfills existing rows from the already-hashed `device_code_hash`, then enforces `NOT NULL` before creating the index.
 - Migration verification: Fresh and populated upgrade tests passed on temporary local PostgreSQL databases. The populated upgrade preserved one legacy authorization row, backfilled `request_key_hash`, and reported `is_nullable = NO`; both temporary databases were removed. Local `trace_dev` migrations are current.
 - Local gates: `pnpm check` passed (format, lint, 26/26 typechecks, unit tests, 15/15 package builds); `pnpm test:e2e` passed 17/17; explicit bridge integration tests passed 6/6; `pnpm --filter @trace/web test:unit` passed 17/17 with the bridge database configured; `pnpm --filter @trace/cli test:unit` passed 8/8; `pnpm cf:build` passed; `git diff --check` passed.
 - Post-fix rerun: the first E2E attempt found local PostgreSQL stopped (`ECONNREFUSED 127.0.0.1:3002`); `scripts/postgres/bootstrap-local.ps1` and `scripts/postgres/health.ps1` restored the documented native service, and the subsequent full run passed 17/17.
 - Deployment: `pnpm cf:deploy:test` uploaded version `2a87b573-fb0b-4938-9419-de74dc273a7e`; the initial deploy request did not return after asset upload, so `wrangler versions list` and `wrangler deployments list` were used to verify the immutable version before promotion. The documented `wrangler versions deploy 2a87b573-fb0b-4938-9419-de74dc273a7e@100% --env staging --config apps/web/wrangler.jsonc --message "TRACE staging acceptance bridge" --yes` then promoted it to 100% of `trace-test-staging`.
 - Staging smoke: `GET /api/health` returned `200 {"service":"web","status":"ok"}`; `/sign-in` returned `200`; unauthenticated `/app` returned `307` to `/sign-in?next=/app`.
 - CLI targeting: added explicit `TRACE_ENVIRONMENT` labeling and fail-closed staging resolution. With `TRACE_CLOUD_URL` set to the staging Worker and `TRACE_ENVIRONMENT=staging`, `trace status --json` returned `environment: Staging` and the staging server URL; staging mode without a URL refused the production default. CLI tests passed 8/8.
-- Live bridge result: `POST /api/cli/device/start` returned `500 {"error":"The request could not be completed."}`. No credential was issued. The repository has no staging PostgreSQL connection credential, and no safe migration endpoint exists, so `0004`–`0006` could not be applied or inspected remotely. The live `login → connect → sync` path, dashboard projection, revocation, idempotency, freshness, divergence, checksum, and recovery tests remain pending.
+- Live bridge result: `POST /api/cli/device/start` returned `500 {"error":"The request could not be completed."}`. No credential was issued. The repository has no staging PostgreSQL connection credential, and no safe migration endpoint exists, so `0004`â€“`0006` could not be applied or inspected remotely. The live `login â†’ connect â†’ sync` path, dashboard projection, revocation, idempotency, freshness, divergence, checksum, and recovery tests remain pending.
 - Provider handoff: Vercel CLI identifies team `nebulas-projects-74786240` Neon resource `trace-staging-postgres` (`store_Gu6KtHgqull4KOWU`), surfaced through Hyperdrive `2d1e4821c1484d6299d88e29f2884310`; the resource has no connected Vercel project. The provider guide directs operators from Vercel Storage to **Open in Neon Console** and the SQL Editor. The repository-supported operator path is `scripts/postgres/migrate.ps1` with a temporary `DATABASE_URL`, which lets Drizzle inspect `drizzle.__drizzle_migrations` and apply only pending migrations. No credential was available here. Wrangler tail created a staging tail but returned no exception before the stream disconnected, so the exact 500 cause remains unverified.
 - Local pilot evidence: `trace analyze` on `mathofdynamic/TRACE` at the current `main` HEAD produced a valid local artifact with 233 supported files, 742 unsupported/file-level files, 7,986 symbols, four deterministic findings, and `sourceCodeSentToProvider: false`. `trace validate` passed. `trace sync --dry-run --json` selected one 4,786-byte artifact, excluded none, and reported `sourceCodeIncluded: false` and `codeSnippetsIncluded: false`.
 - Security scan: no tracked private-key or real token pattern was found. The only `trc_` match is the intentional credential-storage test fixture; the only PEM marker is parser code. `.trace` runtime output and the local private-key file remain ignored/untracked.
-- Remaining owner action: Apply and verify migrations `0004`–`0006` on the designated staging PostgreSQL database, then rerun the real CLI authorization and sync acceptance. Production was not touched.
+- Remaining owner action: Apply and verify migrations `0004`â€“`0006` on the designated staging PostgreSQL database, then rerun the real CLI authorization and sync acceptance. Production was not touched.
 
 ### Final redesign integration (local review)
 
@@ -433,3 +467,1384 @@
 - Scope: Ported the finalized presentation system, authenticated shell, real-data view models, public visual surfaces, entrance motion, overlays, responsive behavior, and redesign documentation into the real product.
 - Boundary: Preserved real authentication, database access, GitHub integration, Local TRACE bridge, sync APIs, privacy rules, Cloudflare/OpenNext configuration, and production data semantics. Redesign mock providers, mock sessions, fixture universes, and runtime mock mode were not migrated. No migrations, deployment, or production changes were performed.
 - Verification: Web typecheck, monorepo typecheck, lint, unit tests, production build, Cloudflare build, and Playwright passed; the final E2E suite passed 17/17. Repository-wide format checking retains pre-existing baseline failures; zero redesign-changed files intersect those failures.
+
+### Phase CF1 Cloudflare-native runtime foundation
+
+- Status: Additive foundation complete; no runtime cutover or deployment.
+- Date: 2026-09-16
+- Audit: Documented all 22 PostgreSQL tables, 16 raw PostgreSQL-shaped E2E statements, 10 `returning` sites, three transaction boundaries, 16 conflict/upsert references, and all 12 pg-boss queue names in `DOC/cloudflare-native-migration.md`. No current pg-boss consumer performs business work; seven registered handlers are log-only placeholders and five queues are unused scaffolding.
+- D1 foundation: Added a complete transitional Drizzle SQLite schema, generated a zero-to-D1 migration, application-generated TEXT UUIDs, millisecond INTEGER timestamps, JSON text mapping, boolean INTEGER mapping, and precision-safe TEXT provider identifiers. The local Wrangler integration applied 66 migration commands, created all 22 tables, and verified JSON and timestamp round trips in an isolated temporary D1 store.
+- Database boundary: Added a D1 Drizzle factory and a driver-neutral user-upsert store. The authenticated web runtime deliberately remains on Hyperdrive/PostgreSQL until auth, GitHub, dashboard, CLI authorization, tenant isolation, and Local TRACE sync transaction parity are proven.
+- Queue foundation: Added a strict versioned reference-only message union for all 12 known job types, a validated producer boundary, and an isolated Cloudflare Queue consumer. Only the D1 healthcheck is implemented. Invalid, failed, and placeholder work is retried for DLQ handling rather than acknowledged as completed. The live GitHub webhook route remains on pg-boss to avoid a split persistence boundary.
+- Local Cloudflare verification: The isolated background Worker started under Wrangler 4.120.1 with local D1 and Queue bindings. `/api/health` returned HTTP 200 and an unknown route returned 404. The CF1 configs use distinct local/staging names and placeholder resource IDs; no Cloudflare resource was created or changed.
+- Quality gates: Frozen install, changed-file Prettier, lint, 26/26 monorepo typecheck tasks, 26/26 unit-test tasks, 15/15 package builds, the optimized Next.js build, and the OpenNext Cloudflare build passed. The web unit suite reported 32 passed and six PostgreSQL bridge tests skipped without the optional integration database. The D1, Queue contract, and Queue consumer tests passed. `git diff --check` passed during the implementation pass.
+- Boundaries: PostgreSQL, Hyperdrive, pg-boss, the external Node worker, the existing GitHub App, current staging, and `trace-code.pages.dev` are unchanged. No remote D1 migration, staging cutover, production deployment, secret rotation, or resource deletion occurred.
+- Next: Port auth, workspace, GitHub installation/repository, dashboard, CLI authorization, and sync persistence behind driver-neutral contracts; replace PostgreSQL E2E fixtures with D1-local factories; then prove tenant isolation, deduplication, and sync promotion semantics before isolated D1/Queue staging.
+
+### Phase CF2 Cloudflare-native application parity
+
+- Status: Local D1 parity foundation implemented; PostgreSQL remains the fallback/reference runtime. No remote resources, migrations, deployment, or production changes were performed.
+- Date: 2026-09-16
+- Runtime boundary: `createRequestDatabase()` now selects D1 from the Cloudflare `DB` binding or an explicit local `TRACE_DATABASE_DRIVER=d1` selector, fails closed when that binding is absent, and retains the existing Hyperdrive/PostgreSQL path for legacy mode.
+- D1 application paths: Auth callback user/account/session persistence and expiry checks, sign-out invalidation, onboarding, workspace membership, GitHub installation/repository catalog and selection, dashboard projection, CLI device authorization/consume-once/scoped credential checks, and Local TRACE sync negotiation/staging/completion now have explicit D1 implementations. Provider identifiers remain precision-safe TEXT values and all reads retain organization/repository scope.
+- Sync correctness: D1 sync avoids unsupported SQL `BEGIN`/`COMMIT` calls. Conditional operation claims, unique natural keys, and bounded `D1Database.batch()` writes preserve source-free manifest validation, checksum checks, divergence rejection, idempotent retries, and previous-snapshot safety.
+- Webhooks and queues: The D1 webhook branch records delivery identity, updates known default-branch heads, and enqueues a bounded reference-only Queue message when a D1/Queue binding is explicitly active. The existing PostgreSQL/pg-boss producer and Node worker remain unchanged outside D1 mode; Queue business handlers remain placeholders.
+- Verification: `scripts/test-d1-local.ts` applied the zero-to-D1 migration and verified all 22 tables plus JSON/timestamp round trips. `scripts/test-d1-parity.ts` passed auth/session expiry, CLI consume-once including concurrent attempts, tenant isolation, webhook deduplication, sync idempotency, freshness, and required-index assertions. Web, DB, and worker typechecks passed; the web unit suite passed 32 tests with six optional PostgreSQL bridge tests skipped.
+- D1 browser status: `scripts/test-d1-e2e.ts` now creates an isolated local D1 store, applies the zero-to-D1 migration, seeds a signed persisted session, starts the OpenNext Worker through Wrangler's `local-d1` environment, and verifies `/api/health`, `/app`, and `/app/repositories` at a mobile viewport. The broad Playwright suite still uses its PostgreSQL fixture; full domain browser parity is not claimed.
+- Verification rerun: D1 local schema, D1 parity, and D1 browser E2E passed. The root lint, monorepo typecheck (26/26 tasks), unit suite (26 tasks; web 32 passed and six optional PostgreSQL tests skipped), optimized build, and Cloudflare/OpenNext build passed. Targeted Prettier validation covered 54 changed files with zero failures. The repository-wide format check retains unrelated baseline failures and was not mass-formatted.
+- Provider safety: GitHub normalization now rejects unsafe numeric provider identifiers instead of allowing precision-loss values to cross the application boundary; string identifiers remain the D1 representation.
+- Next: Expand the isolated D1 browser seed/server lifecycle across reports, findings, conflicts, decisions, rules, activity, settings, and CLI flows; port any unexercised GitHub PR/issue persistence; then validate an isolated remote D1/Queue staging cutover in CF3 while retaining PostgreSQL rollback infrastructure.
+
+### Phase CF2.5 D1 GitHub ingestion and Queue business parity
+
+- Status: Partial parity implementation complete locally; no remote Cloudflare
+  resources, migrations, deployment, push, or merge performed.
+- Date: 2026-09-17
+- GitHub ingestion: Added a bounded normalized event contract and shared
+  transport-neutral dispatcher for pull-request, issue, branch, repository,
+  and installation-repository webhook events. D1 handlers now create/update/
+  close PR and issue projections, enforce installation/repository ownership,
+  preserve provider IDs as text, update default-branch heads, and retain
+  idempotent natural-key behavior. The legacy PostgreSQL adapter calls the same
+  dispatcher for webhook jobs.
+- Queue: The D1 webhook route now sends the validated normalized event in the
+  reference-only `github.webhook.process` message. The Cloudflare consumer
+  handles D1 healthchecks and real GitHub webhook ingestion; malformed,
+  failed, and not-yet-implemented message types are retried. pg-boss,
+  PostgreSQL, Hyperdrive, and the Node worker remain the fallback/reference
+  path, and the seven existing log-only worker handlers were not presented as
+  migrated business behavior.
+- Verification: `pnpm test:d1:github` passed against an isolated local D1
+  database, covering realistic PR and issue create/update/close flows,
+  duplicate idempotency, installation mismatch, unknown repository rejection,
+  repository removal selection state, Queue schema validation, and successful
+  Queue consumer acknowledgement. Focused `@trace/core`, `@trace/github`,
+  `@trace/db`, and worker tests passed during implementation.
+- Limits: Full D1 application/browser parity is not claimed. Remaining queue
+  jobs are placeholders or unused scaffolding, the broad Playwright suite still
+  uses its PostgreSQL fixture, and remote D1/Queue provisioning is deferred to
+  CF3. PostgreSQL, Hyperdrive, pg-boss, and the external Node worker remain
+  intentionally intact.
+
+### Phase CF2.6 production-reachable Queue closure and full D1 browser parity
+
+- Status: Local parity proof complete for the production-reachable queue
+  denominator; no remote Cloudflare resources, migrations, deployment, push,
+  or merge performed.
+- Date: 2026-09-17
+- Queue reachability: the current source graph reaches two Cloudflare job types:
+  `system.healthcheck` and `github.webhook.process`. The latter is the only
+  product business job. The remaining historical pg-boss names are explicitly
+  classified as unused, legacy-only, or log-only placeholders in
+  `DOC/cloudflare-queue-parity.md`; `traceQueueJobRegistry` prevents dormant
+  names from being emitted through the D1 producer.
+- Queue safety: Cloudflare messages use the existing strict versioned schema.
+  The consumer retries malformed, unsupported, and failed messages and only
+  acknowledges completed handlers. A signed pull-request webhook was proven
+  locally through D1 delivery dedupe, Queue publication, the shared GitHub
+  ingestion handler, duplicate delivery/replay, tenant rejection, and a
+  simulated D1 retry.
+- Browser parity: `scripts/test-d1-e2e.ts` now provisions fresh local D1,
+  seeds a persisted signed session and real projection records, then exercises
+  authenticated navigation and interactions across repository access,
+  Needs-refresh Local TRACE commands, repository/finding detail, Changes,
+  Conflicts, Reports/Quick Inspect/daily/weekly detail, Decisions and Rules
+  prompt builders, Activity, Settings, Documentation, overlays, focus/body
+  scroll lifecycle, and responsive overflow at 390/768/1024/1440px. It runs
+  with an explicit D1 driver and no usable legacy database URL, so the browser
+  suite does not depend on PostgreSQL, Hyperdrive, or pg-boss.
+- Query review: representative repository, pull-request, webhook-delivery,
+  activity, and artifact lookups use the expected D1 indexes with no observed
+  unbounded scan.
+- Limits: the legacy PostgreSQL Playwright suite and reference Node/pg-boss
+  worker remain intentionally separate. The current D1 sync path does not emit
+  Queue work, so sync â†’ Queue is not applicable. Remote D1/Queue provisioning
+  and cutover remain deferred to CF3.
+
+### Phase CF3 remote D1 and Queue staging
+
+- Status: Staging resources provisioned and accepted through the Cloudflare
+  native D1/Queue path. Production cutover remains deferred.
+- Date: 2026-09-18
+- Resources: Created the isolated `trace-test-staging-db` D1 database and
+  `trace-staging-jobs` Queue in the existing `mathofdynamic2` account. The
+  existing `trace-test-staging` Worker, Pages proxy, Hyperdrive, GitHub App,
+  and secrets were not deleted, changed, or rotated.
+- Runtime wiring: `apps/web/wrangler.jsonc` now binds staging `DB` to the
+  dedicated D1 database, binds `TRACE_QUEUE` to the dedicated Queue, selects
+  `TRACE_DATABASE_DRIVER=d1`, and attaches a same-Worker Queue consumer with
+  bounded batch/retry settings. `apps/web/custom-worker.ts` wraps the
+  generated OpenNext fetch handler and exposes `queue()`; no second Worker was
+  created.
+- Local verification: Wrangler 4.120.1 dry-run resolved the intended staging
+  D1, Queue, and preserved Hyperdrive bindings. The OpenNext Cloudflare build,
+  web typecheck, local D1 integration, CF2.6 queue parity, GitHub ingestion,
+  and D1 Playwright E2E passed. The dry-run reported only existing esbuild
+  duplicate-case warnings in generated OpenNext output.
+- Acceptance: after the account quota reset, migration `0000_cheerful_legion.sql`
+  was applied remotely. The deployed Worker, D1 bindings, same-Worker Queue
+  consumer, authentication, GitHub issue ingestion, duplicate delivery
+  protection, and authenticated browser flows passed staging verification.
+- Historical risk: D1 error 7500 remains a production-capacity concern and
+  must be rechecked before production provisioning.
+
+### Phase CF4.1 existing GitHub installation reconciliation
+
+- Status: Staging-first reconciliation correction implemented locally; no
+  deployment, push, merge, migration, resource, credential, or production
+  change performed.
+- Date: 2026-09-20
+- Root cause: The GitHub App setup callback persisted installations, but the
+  authenticated repository page only read persisted rows and never discovered
+  an already-authorized installation. Reinstalling the App therefore appeared
+  to fix the connection by invoking the callback again.
+- Implementation: Added an authenticated Refresh GitHub access flow using a
+  separate state cookie and the existing setup callback. The short-lived App
+  user token is used to verify the signed-in GitHub identity, list installations
+  accessible to that App user, select one candidate only, verify installation
+  access and snapshot identity, and then discard the token. Multiple candidates
+  fail closed. Installation/repository persistence is shared with the existing
+  callback and preserves repository selection on conflict updates.
+- Security: Installation ownership and workspace mapping are checked against
+  existing D1/PostgreSQL rows before reassociation. No new App, permission,
+  persistent OAuth token, or client-supplied workspace association was added.
+- Verification: GitHub package tests, setup/reconciliation callback tests,
+  installation-selection tests, D1 reconciliation integration tests, and web
+  typecheck passed. The D1 integration test covers first discovery, repeated
+  refresh idempotency, selected-repository preservation, suspended state, and
+  cross-workspace reassociation rejection.
+- E2E follow-up: `scripts/test-d1-e2e.ts` now accepts `TRACE_D1_E2E_PORT` and
+  derives its Wrangler port, browser base URL, and `TRACE_PUBLIC_URL` from the
+  same validated value. The full D1 Playwright suite passed on port `8789`;
+  the unrelated RBD process on port `8787` was left untouched.
+
+### Phase CF4.6 recovery API isolation and D1 restore readiness
+
+- Status: Local verification and restore rehearsal preparation complete; no
+  staging or production change performed.
+- Date: 2026-09-21
+- Verification: Added `scripts/test-d1-cf46.ts` and `test:d1:cf46`. The test
+  creates two independent owner/member workspaces with installations,
+  repositories, selected access, and unresolved deliveries. It proves owner
+  scope, non-owner and cross-tenant denial, payload omission, mismatched
+  installation/repository rejection, duplicate-installation rejection,
+  concurrent replay single-winner behavior, Queue business processing, and
+  stable organization assignment.
+- Restore readiness: Added `DOC/d1-restore-rehearsal.md`. A local-only
+  Wrangler D1 export/import rehearsal preserved schema, indexes, foreign keys,
+  sessions, installation, selected repository, issue, delivery, and recovery
+  metadata. Remote Time Travel restore was not run; it requires an owner-
+  approved separate destination and fresh Free-plan quota headroom.
+
+### Phase CF4.8 isolated Cloudflare D1 restore rehearsal
+
+- Status: Remote Time Travel restoration proven on an isolated synthetic D1;
+  live staging and production were not restored or rebound.
+- Date: 2026-09-21
+- Destination: Created exactly one unbound database,
+  `trace-restore-rehearsal-20260921` (`5075dc29-954f-4f65-a38a-0d22e7c076ac`).
+  The staging database ID was asserted before migration and restore; no Queue,
+  Worker, Pages route, GitHub callback, or external application used the
+  destination.
+- Data: Applied migrations `0000_cheerful_legion.sql` and
+  `0001_goofy_lester.sql`, then inserted only `cf48-*` synthetic records with a
+  nonfunctional placeholder session token. No live sessions, OAuth values,
+  webhook payloads, or provider identifiers were exported.
+- Restore: Captured destination bookmark
+  `00000000-0000001a-000050ed-90d1f46fc0c152afc1e24ba13ae0fe5d`, mutated one
+  synthetic issue and added one synthetic delivery, then restored once in
+  place. The original issue state and recovery metadata returned, and the
+  post-bookmark delivery disappeared. Index checks passed and
+  `PRAGMA foreign_key_check` returned no rows.
+- Safety: Staging remained at Worker version
+  `7cfc8de1-0291-47dc-a180-cb691bef2943` with the existing fixture data and
+  health response. The rehearsal database remains allocated and unbound for
+  owner-directed cleanup. This proves isolated remote recovery only; it is not
+  a production recovery rehearsal.
+
+### Phase CF4.9 production topology and Workers Free release gates
+
+- Status: Local production-readiness guard and runbook updates prepared. No
+  production resource, migration, deployment, route, OAuth/App setting, or
+  secret changed.
+- No-fallback guard: `request-database.ts` treats production or explicit D1
+  selection as D1-required. Missing D1 configuration fails visibly, and the
+  webhook route returns 503 rather than constructing PostgreSQL/pg-boss work.
+  The guard is not deployed to staging or production yet.
+- Capacity evidence: the account currently contains eight D1 databases. The
+  read-only Wrangler output exposes rolling 24-hour database metrics but not
+  exact account-wide current-UTC-day totals or aggregate Worker CPU; those
+  release gates remain UNKNOWN. The existing staging dry run measured 13,749.19
+  KiB uncompressed and 144 assets, below the Workers Free size/file limits.
+- Proposed production resources remain uncreated: Worker `trace-production`,
+  D1 `trace-production-db`, and Queue `trace-production-jobs`. The isolated
+  `trace-restore-rehearsal-20260921` database remains unbound and retained.
+- Documentation: production topology, staging local/deployed boundaries,
+  Free-plan gates, recovery procedure, and release checklist were updated.
+
+### Phase CF4.10 staging no-fallback regression and capacity evidence
+
+- Status: Local no-fallback regression proof and read-only staging/capacity
+  evidence completed. No push, staging deployment, production resource,
+  migration, route, callback, or secret change was performed.
+- Guard coverage: request-database tests now exercise valid production D1
+  selection, missing D1 binding, and incorrect production driver rejection.
+  Webhook route tests prove that production without D1 returns 503 before
+  pg-boss/PostgreSQL construction, while the normal staging D1 path remains
+  Queue-backed.
+- Remote read-only evidence: staging D1
+  `c4df63bc-8270-4500-9dab-c1c6439efa64` has 23 tables and no pending
+  migrations; active Worker version remains
+  `7cfc8de1-0291-47dc-a180-cb691bef2943` at 100%. The Pages project
+  `trace-code.pages.dev` and workers.dev endpoint
+  `trace-test-staging.mathofdynamic2.workers.dev` both serve health checks.
+- Capacity limits: eight D1 databases are currently listed. Wrangler exposes
+  rolling database metrics, but exact account-wide current-UTC-day row totals,
+  aggregate Worker CPU distribution, and Queue backlog/retry metrics were not
+  available. Those gates remain UNKNOWN; no load test or quota-consuming probe
+  was run.
+
+### Phase CF4.12 operational evidence and production integration decision
+
+- Status: Staging evidence was refreshed read-only; no staging or production
+  mutation was performed.
+- Source/deployment: local and deployed source is
+  `6daa74568846f0313010797a38b49d0e097f5fb6`; active staging Worker is
+  `5930a184-d797-4b70-9aee-d7f0647ab1fa` with deployment
+  `cfa6e971-7406-4c34-a629-f3f202ca6564`.
+- D1 readback: fixture issues `#1` and `#2` remain open in the expected
+  workspace/repository. Delivery
+  `45efb6c0-b5c3-11f1-8385-adc2e6c87a39` is processed. The read was
+  sanitized and did not include payloads, sessions, or tokens.
+- Operational limits: the account has eight D1 databases and the staging D1
+  exposes only rolling 24-hour metrics (784 read queries, 41 write queries,
+  20,947 rows read, 185 rows written). Current-UTC-day account totals,
+  aggregate Worker CPU/limit errors, and Queue backlog/retry metrics remain
+  UNKNOWN through the available authorized surfaces.
+- Integration decision: production should use a separate GitHub App and OAuth
+  App with the exact production routes documented in
+  `DOC/production-architecture.md` and `DOC/production-canary.md`; staging
+  callbacks remain unchanged.
+- Live owner recovery GET: UNVERIFIED because the browser path returned
+  `ERR_BLOCKED_BY_CLIENT`; local owner and tenant-isolation evidence remains
+  valid.
+
+### Phase CF4.13 isolated production canary configuration
+
+- Status: Production configuration and validation tooling implemented locally;
+  no production resource, migration, deployment, secret, or GitHub setting
+  changed.
+- Configuration: Added `apps/web/production-canary.json` with the dedicated
+  Worker/D1/Queue names, D1-only variables, closed-canary mode, migration
+  allowlist, and secret names. No production IDs or secret values are tracked.
+- Preflight: Added `scripts/production-canary-preflight.ts`. Validate-only mode
+  checks the manifest and bundle. Deploy mode requires real provisioned IDs,
+  rejects staging/rehearsal identity reuse, and materializes an ignored
+  Wrangler config without Hyperdrive.
+- Safety: Production webhook, install, reconciliation, and setup routes return
+  a cache-disabled 503 while `TRACE_CANARY_MODE=closed`. Staging has no canary
+  variable and its webhook path remains Queue-backed.
+- Workflow: Added the manual-only
+  `.github/workflows/validate-production-canary.yml`; validate-only is the
+  default and deploy mode requires explicit confirmation plus provisioned
+  resources. The workflow was not dispatched.
+- Verification: Production canary helper, webhook, setup, reconciliation,
+  request-database, and no-fallback tests passed. Production resources remain
+  uncreated and customer cutover remains blocked on provisioning and
+  operational evidence.
+
+### Phase CF4.14 isolated production D1 and Queue provisioning
+
+- Status: Partial and blocked after one authorized D1 creation. The account
+  identity matched `mathofdynamic2` and the pre-provision inventory contained
+  eight D1 databases; both target names were absent.
+- D1: `trace-production-db` was created as the isolated ID
+  `7a566f2e-da27-46e7-8c3f-271e5566f225`, distinct from staging and the
+  retained restore-rehearsal database. It is unbound and contains no confirmed
+  application schema or data.
+- Migration: The corrected remote migration attempt reached Cloudflare but
+  failed with API error `7003` while routing the new database `/query` endpoint.
+  No migration state is claimed and no retry was made.
+- Queue: `trace-production-jobs` was not created because the migration failure
+  required stopping before further remote mutation. No producer, consumer,
+  message, or deployment was attached.
+- Safety: Staging, rehearsal, GitHub configuration, secrets, legacy runtime,
+  and customer traffic were unchanged. The production Worker remains
+  undeployed. A fresh production bookmark was not captured because schema
+  application did not complete.
+
+### Phase CF4.14B production D1 provisioning recovery
+
+- Identity: Account `mathofdynamic2` was revalidated. The existing production
+  D1 remained `trace-production-db`
+  (`7a566f2e-da27-46e7-8c3f-271e5566f225`), with staging and rehearsal IDs
+  excluded. Inventory contained nine D1 databases after the prior creation.
+- Diagnosis: `wrangler d1 info` and a minimal `SELECT 1` succeeded on the
+  production database, and the remote migration list showed both migrations
+  pending. This rules out a persistent identity or authorization failure; the
+  original `7003` is recorded as transient control-plane routing/propagation,
+  although Cloudflare supplied no request identifier proving the precise cause.
+- Migrations: `0000_cheerful_legion.sql` and `0001_goofy_lester.sql` were
+  applied exactly once. Wrangler reported both successful.
+- Validation stop: The subsequent read-only schema/index/foreign-key/count
+  pass failed with transport error `fetch failed`. No further remote retry was
+  made. The schema result, empty application counts, and bookmark are not yet
+  independently verified.
+- Queue: `trace-production-jobs` was not created. Bookmark capture and Queue
+  creation remain gated on a successful read-only schema validation pass. No
+  Worker, consumer, message, staging resource, secret, or customer traffic
+  changed.
+
+### Phase CF4.14C production D1 verification stop
+
+- Identity: Production D1 `trace-production-db`
+  (`7a566f2e-da27-46e7-8c3f-271e5566f225`) remained distinct from staging and
+  rehearsal. The account inventory contained nine D1 databases.
+- Migration history: A bounded remote read confirmed migration rows for
+  `0000_cheerful_legion.sql` and `0001_goofy_lester.sql` at
+  `2026-09-22 09:24:57` and `2026-09-22 09:25:02`.
+- Verification stop: The following schema query used double-quoted string
+  literals and returned Cloudflare API code `7500` with SQLite syntax error
+  `near "table": syntax error`. The code is recorded exactly; it is not
+  interpreted as a quota failure. Per the task boundary, no corrected query,
+  bookmark capture, or further remote mutation was attempted.
+- Queue: `trace-production-jobs` remains uncreated and isolated from staging.
+  Production Worker deployment and customer intake remain disabled.
+
+### Phase CF4.14D completed production D1 and Queue provisioning
+
+- SQL correction: The prior `7500` validation was caused by double-quoted
+  SQLite string literals. Corrected `sqlite_master` SQL uses
+  `type IN ('table', 'index')`; local validation passed against a fresh D1
+  with both migrations and standalone zero-row count statements.
+- Remote D1 verification: Production ID
+  `7a566f2e-da27-46e7-8c3f-271e5566f225` has exactly migrations `0000` and
+  `0001`, all 22 application tables, recovery columns and indexes,
+  zero `PRAGMA foreign_key_check` violations, and zero rows in the checked
+  users, sessions, workspace, GitHub, issue, and delivery tables.
+- Recovery: Time Travel bookmark
+  `00000003-00000000-000050ee-ba60b7e52d232df30b5f7d22fafb7c14` captured at
+  `2026-09-22T10:10:03.5758536Z`; no restore performed. Workers Free retention
+  is seven days.
+- Queue: Created exactly one isolated Queue
+  `trace-production-jobs` with ID `9ef092975a554ba296a63b162b16522f` and
+  one-day retention. It has zero producers and zero consumers; no messages or
+  DLQ were created.
+- Handoff: Production validate-only preflight passed with the real resource
+  identities and closed-canary/D1-only settings. Staging remained at Worker
+  version `5930a184-d797-4b70-9aee-d7f0647ab1fa`, health 200, and its existing
+  D1/Queue bindings. Production Worker, secrets, GitHub App/OAuth, and public
+  intake remain disabled.
+
+### Phase CF4.16 production D1 and Queue canary acceptance
+
+- Production runtime identity: Worker `trace-production` remained at version
+  `ead868f1-0f5d-4e45-939c-3e6349ed8f86` and 100% traffic. Its D1 and Queue
+  bindings resolve to the dedicated production resources. Queue inventory
+  lists this Worker as the only producer and consumer; staging remains
+  isolated on `trace-staging-jobs`.
+- D1 read-only validation: Production database
+  `7a566f2e-da27-46e7-8c3f-271e5566f225` returned `SELECT 1`; migrations 0000
+  and 0001 are recorded; all 22 application tables, expected indexes, and
+  recovery columns exist; `PRAGMA foreign_key_check` returned zero violations.
+  All 22 application tables were empty before and after route checks; remote
+  query metadata showed zero writes. No migration or restore was performed.
+- Closed canary: Health returned 200; webhook, setup, installation, and
+  reconciliation routes returned cache-disabled 503; anonymous recovery
+  returned 401. No business records were created.
+- Queue healthcheck: The strict `system.healthcheck` contract and side-effect-
+  free handler were verified in source. No message was sent: Wrangler has no
+  send command, the Dashboard presented a security-verification interstitial,
+  and no authorized local API token was available. No CI credential was
+  retrieved. Queue invocation, completion, acknowledgment, errors, backlog,
+  and retries remain unverified.
+- Other telemetry: Worker runtime tail emitted no entries but did not confirm
+  a live stream, so runtime error status is unknown. Current UTC-day
+  account-wide D1 usage and CPU distribution were not measured. One staging
+  health request failed and one timed out; staging version and binding
+  identities were read-only verified unchanged, but public health is
+  unverified for this pass.
+- Result: Partial acceptance. D1 integrity/emptiness and closed route guards
+  passed; one authorized healthcheck delivery with independent consumer
+  completion evidence remains outstanding. No code, deployment, binding,
+  migration, or remote data was changed.
+
+### Phase CF4.16B one-shot production Queue healthcheck
+
+- Workflow registration: Added the manual-only workflow through workflow-only
+  PR #6; it is registered on the default branch and restricted to the existing
+  `production-canary` environment and feature branch.
+- Run: GitHub Actions run
+  [35965671051](https://github.com/mathofdynamic/TRACE/actions/runs/35965671051)
+  checked out workflow source
+  `3744a11dfe1699b3e9372c91355cb9d109542ca1` and pinned runtime source
+  `221606dcd57f8191ff2263a68b74d79eb6a45688`. Contract and local migration-
+  backed D1 SQL validation passed.
+- First failing gate: Read-only staging Worker metadata contained its expected
+  legacy Hyperdrive binding `2d1e4821c1484d6299d88e29f2884310`. The preflight
+  incorrectly applied production's no-Hyperdrive invariant to staging and
+  stopped before checking the Queue, D1, routes, logs, or issuing a Queue push.
+  No probe ID was generated and no message was submitted.
+- Correction prepared locally: The healthcheck verifier now rejects all
+  Hyperdrive bindings for production and requires the exact known legacy
+  `HYPERDRIVE` ID for staging. Local contract validation covers production
+  rejection, valid staging preservation, wrong staging ID, and duplicate
+  staging bindings. This does not change either deployed Worker.
+- Runtime evidence: A single production health request returned HTTP 200. One
+  bounded staging health request timed out from this workstation; staging
+  outage is not established. The single authorized operational workflow run
+  was consumed, so Queue publication and consumer/acknowledgment evidence are
+  not available in this phase. No Worker deployment, migration, Queue change,
+  or application-data write occurred. Customer traffic and GitHub intake
+  remain disabled.
+- Result: Partial; no Queue message was sent. A future separately authorized
+  one-shot run must use the corrected verifier. Do not retry this run.
+
+### Phase CF4.16D Queue API response contract correction
+
+- Baseline: `47a74f3232307b3cf177493a1edd79b2db6ba29f` on the existing
+  feature-branch lineage.
+- Root cause: The one-shot acceptance script validated Wrangler-style
+  `max_batch_size` and `max_batch_timeout` fields, while Cloudflare's Get Queue
+  API returns `batch_size` and `max_wait_time_ms`. It also treated optional
+  redundant producer/consumer counts and `consumer.queue_name` as mandatory.
+- Correction: The control-plane response model now uses the documented
+  settings fields and validates worker identity, queue identity, multiplicity,
+  optional metadata when present, and each setting with field-specific errors.
+  Expected wait time is compared in milliseconds (`5000`). No Worker runtime,
+  Queue configuration, or D1 behavior changed.
+- Local verification: Queue response fixtures cover the complete documented
+  shape, omitted total counts, omitted consumer queue name, invalid producer
+  and consumer scripts, incorrect batch/retry/wait settings, duplicate
+  producers/consumers, and incorrect optional metadata. The strict message
+  parser and migration-backed read-only D1 count query remain part of the
+  contract command. Prettier, ESLint, standalone TypeScript checking, contract
+  validation, and `git diff --check` passed.
+- Remote acceptance: The corrected source must be pushed before the one
+  authorized production Queue healthcheck workflow run. No Queue message was
+  sent during local validation; no Worker deployment, migration, or remote
+  write occurred in this implementation step.
+
+### Phase CF4.16E Queue consumer identity evidence
+
+- Baseline: `843706144e435099d4e98ff4357c6832198121a3`. The read-only
+  Wrangler JSON listing returned one array entry with `type: "worker"` and
+  `script: "trace-production"`; `queue_name` was absent. Cloudflare's Queue
+  API marks `script_name` optional, so it cannot be the only consumer identity
+  signal.
+- Correction: The Queue API check still requires the exact Queue ID/name,
+  exactly one consumer, and expected settings, and validates optional identity
+  fields when present. A second read-only Wrangler JSON check now requires
+  exactly one Worker consumer for `trace-production`; the active Worker
+  `TRACE_QUEUE` binding remains the producer identity gate. CLI diagnostics
+  are suppressed to prevent credential disclosure.
+- Local verification: Contract fixtures cover omitted and present API
+  identity, Wrangler agreement and mismatch, multiple consumers, wrong Queue
+  identity, optional producer metadata, and incorrect settings. The focused
+  TypeScript, ESLint, Prettier, contract, and diff checks are run for this
+  acceptance harness. No Worker runtime source or deployment configuration is
+  changed by this correction.
+
+### Phase CF4.16H authenticated E2E fixture baseline
+
+- Baseline: `5c19ee72de60a06d7175c956b9c7abcfa1c303ce`. PR #8 added only
+  the read-only Queue drain workflow. The six authenticated E2E failures
+  reproduced against the same application/test sources at that baseline, so
+  the workflow did not cause them.
+- Root cause: E2E fixtures created a signed `trace_session` cookie and user
+  rows but did not persist the corresponding session row. Production auth
+  correctly rejects a signed cookie without a live D1/PostgreSQL session.
+  A differing build/server secret was tested and was not the cause.
+- Correction: The fixture now uses the configured E2E auth secret consistently,
+  signs sessions through `@trace/auth`, and persists the session row. A focused
+  regression checks acceptance with the configured secret, rejection with a
+  different secret, and authenticated navigation to `/app`. No production auth
+  behavior changed.
+- Verification: The six previously failing authenticated tests and the full
+  E2E suite passed locally with retries disabled against an isolated local
+  PostgreSQL database. Final format, lint, typecheck, unit, build, and E2E gates
+  are recorded after the focused branch validation.
+
+### Phase CF4.16H read-only Queue drain workflow coverage
+
+- Added source-level regression coverage for the manually dispatched drain
+  workflow: feature-ref/environment restrictions, secret-only environment
+  consumption, fixed production resource identities, GET-only requests,
+  bounded 3-observation polling with 30/60-second waits, zero-backlog success,
+  and final nonzero-backlog failure. The test rejects message, pull, ack,
+  retry, purge, consumer-mutation, and deployment paths.
+- No Queue message, Cloudflare mutation, or Worker deployment is part of this
+  workflow. PR #8 remains responsible only for exposing and testing this
+  read-only workflow on the feature ref. The one authorized drain invocation
+  and its measured result will be recorded after merge; no observation is
+  claimed before that run.
+
+### Phase CF4.17 production GitHub registrations
+
+- Created `TRACE Production Integration` as a separate GitHub App under
+  `@mathofdynamic`; created `TRACE Production` as a separate OAuth App. The
+  existing staging registrations `TRACE GitHub Integration` and `TRACE` were
+  not modified.
+- Rechecked canonical source routes: App setup/callback
+  `/api/github/setup`, webhook `/api/github/webhooks`, OAuth start
+  `/api/auth/github`, OAuth callback `/api/auth/github/callback`, and
+  reconciliation `/api/github/reconcile`.
+- App permissions are read-only Metadata, Contents, Issues, and Pull requests.
+  The four manual event families selected are `issues`, `pull_request`,
+  `push`, and `repository`. Webhook Active remains off; no installation or
+  OAuth authorization was performed.
+- Production-canary environment variable/secret names were added and verified
+  using metadata only. `GITHUB_*` variable names were rejected by GitHub, so
+  nonsecret values use `TRACE_GITHUB_*` names and require a later explicit
+  runtime mapping. Secret values are not recorded.
+- Credential correction: the App private key generated during CF4.17 was
+  never downloaded or stored and cannot be recovered from GitHub. After
+  GitHub sudo re-authentication, one replacement row was generated, but Chrome
+  blocked its one-time PEM download at `ERR_BLOCKED_BY_CLIENT`; the downloaded
+  file was not present in the standard Downloads directory. The original key
+  fingerprint is
+  `SHA256:4H6Tw/S7lgAlkT2HjCL5m6tlXfdfVZHrkM5AosB2hqg=` and creation time
+  Sep 26, 2026 at 9:42 AM GMT+3:30. The failed replacement fingerprint is
+  `SHA256:5mjJInXDVzQWjLOpkoXdNsCMwwgpM5bE8IVkO3o4vfQ=` and creation time
+  Sep 26, 2026 at 1:39 PM GMT+3:30. Neither private key is stored and neither
+  row has been revoked. No additional key was generated. Human action required:
+  generate/download one usable replacement PEM in GitHub App settings and
+  save it to a local path accessible to Codex; do not paste it into chat.
+  After securely storing and verifying `TRACE_GITHUB_APP_PRIVATE_KEY`, revoke
+  both unusable rows by fingerprint, verify their removal, and delete the
+  temporary PEM.
+- Webhook correction: GitHub requires webhook activation before its URL and
+  secret can be configured. Production remains inactive; URL/secret setup is
+  deferred until a server-side fixture-only gate is deployed and verified.
+  Treat activation as potentially traffic-generating. Do not activate to
+  persist configuration before that gate.
+- CF4.18A implements and tests the Worker-side allowlist for owner
+  `mathofdynamic` and repository ID `1378441300` (`trace-staging-fixture`). The
+  implementation is local and pending the focused PR; it is not deployed.
+  Before webhook activation, App installation, or any switch from closed
+  mode, require review, merge, deployment, and live verification of the gate.
+  App repository selection or operator procedure alone is insufficient.
+- Verification: production health `200`; setup/install/reconcile GET routes
+  `503` with `no-store`; anonymous recovery `401`. One staging health request
+  timed out within five seconds; no staging configuration or runtime was
+  changed. No Worker deployment, migration, Queue operation, installation,
+  webhook delivery, or OAuth login occurred.
+- Status: CF4.17 is partial. Keep `TRACE_CANARY_MODE=closed` and customer
+  traffic disabled. CF4.18 cannot open intake until a usable replacement key
+  is securely stored, both unusable keys are revoked, the server-side
+  fixture-only gate is merged/deployed and verified, webhook configuration is
+  activated under that gate, and runtime-name mapping is reviewed.
+
+### Phase CF4.18A fixture-only production canary gate
+
+- Added explicit production modes. Only `closed` and `fixture` are recognized;
+  missing, unknown, malformed, or non-canonical fixture configuration fails
+  closed. Non-production behavior is unchanged. The production manifest still
+  selects `closed` and contains no fixture values.
+- Centralized the exact fixture allowlist: owner `mathofdynamic`, repository
+  `trace-staging-fixture`, ID `1378441300`. Fixture mode requires all three
+  bounded, strictly parsed values. Runtime variables are emitted only when
+  those values match the exact allowlist. Production preflight continues to
+  require closed mode.
+- Added centralized user, installation-snapshot, and raw webhook eligibility
+  gates. OAuth callback checks GitHub login before user upsert, session
+  persistence, or cookie issuance. Install and reconcile require the signed-in
+  owner before redirect/state-cookie generation. Setup and existing-install
+  reconciliation validate an exact single-repository snapshot before D1
+  creation or persistence. Signed repository, pull-request, push, issue,
+  installation, and installation-repo events are checked before normalization,
+  delivery insertion, or Queue send.
+- Fixture denials return generic `403` with `no-store`; closed/invalid
+  production modes return `503` with `no-store`. The live Worker remains
+  unchanged; this implementation has not been deployed.
+- Tests cover mode/configuration, users, snapshot identity/cardinality,
+  supported webhook payloads, OAuth no-persist behavior, blocked
+  install/reconcile redirects, and signed non-fixture webhook rejection before
+  D1/Queue work. The manifest remains closed; no fixture values are present.
+- Production remained closed. No webhook activation, App installation, OAuth,
+  Queue probe, production D1 mutation, or staging change occurred.
+  `TRACE_GITHUB_APP_PRIVATE_KEY` remains absent; the two unusable public-key
+  rows were not touched.
+- Verification: eight focused canary/route test files passed (76 tests), the
+  full `pnpm check` passed, `pnpm cf:build` passed, isolated D1 GitHub-ingestion
+  and reconciliation tests passed, and production validate-only preflight
+  passed with the dedicated production resource IDs. The local D1 Playwright
+  suite was attempted on port 8789 and timed out waiting for the existing
+  `Authorized Computers` settings heading (`scripts/test-d1-e2e.ts:599`), an
+  untouched UI path. The PostgreSQL-backed `pnpm test:e2e` was not run because
+  no local PostgreSQL listener was present on port 3002; PR CI runs that suite.
+- Status: local implementation pending normal focused PR review/checks against
+  `feat/cloudflare-native-runtime`. Fixture mode is not deployed and cannot be
+  opened until credentials, webhook setup, deployment, and separate
+  authorization prerequisites are satisfied.
+
+### Phase CF4.18A.1 production GitHub mutation-route closure
+
+- Addressed the P1 review on PR #11 by applying the centralized production
+  canary mode and user gates to `POST /api/github/repositories` and
+  `POST /api/github/webhooks/recovery`. Closed, missing, unknown, or malformed
+  production mode is rejected with `503` and `no-store` before the route opens
+  its database or reaches GitHub/Queue mutation paths. Fixture user denial is
+  cache-disabled and occurs before repository selection work.
+- Repository selection now requires the complete workspace repository
+  projection to be exactly the authorized fixture: provider ID `1378441300`,
+  owner `mathofdynamic`, repository `trace-staging-fixture`, matching full name,
+  and installation account. Any additional or mismatched row is rejected
+  before repository updates, audit writes, or GitHub head refresh.
+- Recovery POST retains origin validation and delegates final owner-only replay
+  authorization to the existing D1 recovery function. In fixture mode it first
+  joins the delivery's internal repository and installation references and
+  verifies provider ID/name, organization linkage, installation linkage, and
+  account login. Missing or ambiguous links fail closed before replay state
+  mutation or Queue send. Existing `repository_id` and installation identity
+  fields provide sufficient trusted evidence; no migration or schema change
+  was needed.
+- Recovery GET is unchanged: signed-in owner-scoped listing remains
+  read-only and available in closed mode. This phase closes repository
+  selection and replay/requeue mutations only.
+- Tests cover closed/invalid mode short-circuiting, non-allowlisted users,
+  exact fixture selection, extra/mismatched repositories, no database writes,
+  no GitHub refresh, recovery identity rejection, no replay/Queue send, the
+  preserved owner-only denial, and non-production behavior. Nine focused
+  GitHub/canary test files passed (98 tests). `pnpm check`, `pnpm cf:build`,
+  production validate-only preflight with the dedicated D1/Queue/Worker IDs,
+  Prettier, and `git diff --check` passed. No Worker deployment, database
+  migration/write, Queue send, webhook activation, App installation, OAuth
+  execution, or staging change occurred.
+- The fix updates existing PR #11. It changes no production configuration;
+  `TRACE_CANARY_MODE` remains `closed`, the App private-key blocker remains,
+  and no production code has been deployed.
+
+### Phase CF4.18B credential recovery closeout
+
+- Date: 2026-09-26
+- The replacement private key for production GitHub App
+  `TRACE Production Integration` (App ID `5082884`) was validated with a
+  short-lived local JWT and read-only `GET /app`. GitHub identified the
+  intended App. Active key fingerprint:
+  `SHA256:V5aDpLGus8aqiio09O3D1Ostwqr7pE7MnK8+7altAII=`.
+- The two unusable key fingerprints
+  `SHA256:4H6Tw/S7lgAlkT2HjCL5m6tlXfdfVZHrkM5AosB2hqg=` and
+  `SHA256:5mjJInXDVzQWjLOpkoXdNsCMwwgpM5bE8IVkO3o4vfQ=` are no longer
+  active. Only the validated key remains active. The PEM is stored as the
+  `production-canary / TRACE_GITHUB_APP_PRIVATE_KEY` environment secret;
+  the temporary local PEM path is absent.
+- Metadata confirms all required production environment secret names are
+  present: `CLOUDFLARE_API_TOKEN`, `TRACE_AUTH_SECRET`,
+  `TRACE_GITHUB_APP_CLIENT_SECRET`, `TRACE_GITHUB_APP_PRIVATE_KEY`,
+  `TRACE_GITHUB_OAUTH_CLIENT_SECRET`, and `TRACE_GITHUB_WEBHOOK_SECRET`.
+  None of those names exists as an environment variable. Secret values were
+  not read.
+- Production remained in closed canary mode. The webhook remained inactive,
+  the App remained uninstalled, and production OAuth was not attempted.
+  No Worker deployment, Queue operation, D1 mutation, or staging change
+  occurred. Fixture-gate deployment is the next phase; opening intake is not
+  authorized.
+
+### Phase CF4.18C — deploy hardened fixture gate, retain closed mode
+
+- Date: 2026-09-26. Dispatched exactly one production-canary workflow run from
+  the environment-allowed feature ref: run `36256013325`, source
+  `a2068a15a8434b0b828651846ef03572f4bdc952`. The run passed exact-SHA input
+  validation, build, Cloudflare bundle/type checks, artifact validation,
+  production preflight/identity, generated-config dry run, and deployment.
+- Cloudflare reports deployment `2f7613dc-8a90-46e1-ac8d-9cab2fc7eb91`,
+  version `066397d4-60c8-4826-b13f-175935cf04a7`, 100% traffic, and a
+  `workers/message` annotation containing the exact SHA. Rollback target:
+  deployment `8d7306ce-a385-49cd-b095-0ebb2c3dc30d`, version
+  `ead868f1-0f5d-4e45-939c-3e6349ed8f86`.
+- Live version metadata confirms production/d1/closed, D1 ID
+  `7a566f2e-da27-46e7-8c3f-271e5566f225`, Queue
+  `trace-production-jobs`, no Hyperdrive, and no fixture allowlist variables.
+  Queue identity is `9ef092975a554ba296a63b162b16522f`; its sole producer and
+  consumer are `trace-production`, with batch 10, max wait 5000 ms, max
+  retries 3, and retry delay 60 seconds.
+- Health returned 200. OAuth start, install, setup, reconcile, repository
+  mutation POST, recovery replay POST, and unsigned webhook POST returned 503
+  with `no-store`; anonymous recovery GET returned 401. A fresh error-filtered
+  tail showed no error entries during the closed-route probe window.
+- Read-only production D1 verification confirmed migrations
+  `0000_cheerful_legion.sql` and `0001_goofy_lester.sql`, no foreign-key
+  violations, and zero rows in all 22 application tables after the route
+  matrix. Read queries reported zero rows written. No D1 mutation or restore
+  occurred.
+- Read-only Queue drain run `36256628318` verified the dedicated Queue and
+  observed `backlog_count=0`, `backlog_bytes=0`, and
+  `oldest_message_timestamp_ms=0`. No Queue message was sent; individual
+  acknowledgment remains unobservable through this path.
+- Staging remains on version `5930a184-d797-4b70-9aee-d7f0647ab1fa` at 100%
+  with its original D1, Queue, and legacy Hyperdrive bindings. The bounded
+  staging health request timed out; this does not establish an outage.
+- No webhook activation, production App installation, OAuth authorization,
+  or GitHub integration setting change occurred. Production remains closed;
+  fixture mode and customer traffic are not enabled. The production webhook
+  and installation state were not changed by the deployment workflow.
+
+### Phase CF4.18D production GitHub credential binding, closed mode retained
+
+- Date: 2026-09-27. PR #14 merged into `feat/cloudflare-native-runtime` as
+  `12c0ea321d235e621bccddde4cf575bab62aba06`. Production-canary workflow run
+  `36300492010` deployed that exact SHA successfully. Cloudflare reports
+  deployment `868cc8d4-ce0f-42d3-b1e2-a9f9c30dc05f`, Worker version
+  `b64aec75-81c4-4146-964d-8ff456bbe726`, at 100% traffic. Immediate rollback
+  target: deployment `2f7613dc-8a90-46e1-ac8d-9cab2fc7eb91`, version
+  `066397d4-60c8-4826-b13f-175935cf04a7`.
+- The reviewed mapper converts six `TRACE_GITHUB_*`/OAuth source variable
+  names to the six runtime `GITHUB_*` names required by TRACE. Deployment
+  supplied exactly five Worker secret names: `GITHUB_APP_CLIENT_SECRET`,
+  `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET`,
+  `GITHUB_OAUTH_CLIENT_SECRET`, and `TRACE_AUTH_SECRET`. The Cloudflare
+  deployment token was not included as a Worker secret. Workflow logs confirm
+  the temporary secrets file cleanup check passed. No secret values are
+  recorded.
+- Before upload, read-only GitHub `GET /app` identity verification matched App
+  ID `5082884`, name `TRACE Production Integration`, and the configured client
+  ID. Live Worker metadata confirms production/D1/closed mode, all six
+  nonsecret GitHub runtime binding names, all five secret names, the dedicated
+  production D1 and Queue, no Hyperdrive, and no fixture allowlist variables.
+- Live health returned `200`. OAuth start, install, setup, reconcile,
+  repository mutation POST, recovery replay POST, and unsigned webhook POST
+  returned `503` with `no-store`; anonymous recovery GET returned `401`. A
+  bounded error-filtered tail around a health request contained no error
+  entries.
+- Read-only D1 checks before and after deployment confirmed migrations
+  `0000_cheerful_legion.sql` and `0001_goofy_lester.sql`, 25 schema table
+  entries, 67 indexes, no foreign-key violations, and zero rows in all 22
+  application tables. Query metadata reported zero rows written. The GET-only
+  Queue drain workflow `36300904973` verified identity and observed backlog,
+  bytes, and oldest-message timestamp all zero. No Queue message was sent.
+- Staging remained on deployment `cfa6e971-7406-4c34-a629-f3f202ca6564`,
+  version `5930a184-d797-4b70-9aee-d7f0647ab1fa` at 100%, with its original D1,
+  Queue, and expected legacy Hyperdrive binding; staging health returned
+  `200`.
+- No GitHub webhook activation, App installation, OAuth authorization,
+  production D1 mutation/restore, Queue message, staging change, or customer
+  traffic occurred. The authenticated installation-list API was unavailable,
+  so GitHub installation and webhook-active state were not independently
+  refreshed; settings were not changed. Production remains closed.
+- Validation: PR CI run `36299698102` passed the full quality/E2E job before
+  merge. Production workflow build, Cloudflare bundle, generated types,
+  typecheck, artifact validation, closed production preflight, App identity
+  check, secret-name checks, Wrangler dry run, deployment, and post-deploy
+  secret-name check all passed. Live route, binding, D1, Queue, and staging
+  read-only checks passed.
+- Status: credential binding is deployed in closed mode. Fixture mode,
+  webhook activation, App installation, OAuth, and customer cutover remain
+  disabled and require a separate approved phase.
+
+### Phase CF4.18E.0 - protected read-only GitHub App state check
+
+- Date: 2026-09-27. Added a bounded state checker for the production GitHub
+  App. It reuses the existing short-lived JWT signer and permits only GET
+  requests to `/app`, `/app/installations` (validated pagination), and
+  `/app/hook/config`. It validates App ID/name/client ID, installation count
+  parity, and the unconfigured webhook requirement.
+- The structured report contains only nonsecret identity/count/configuration
+  metadata. Installation records, JWTs, private keys, authorization headers,
+  webhook secrets, response bodies, and credential-bearing error details are
+  not returned or printed. Pagination is bounded to 100 pages; redirects are
+  rejected.
+- Added a manual-only, exact-SHA GitHub Actions workflow restricted to the
+  `feat/cloudflare-native-runtime` ref and `production-canary` environment.
+  It receives only the App ID/client ID variables and App private-key secret,
+  runs focused contract tests, then executes the GET-only check. It has no
+  Cloudflare credential, deployment step, artifact upload, or GitHub mutation
+  path.
+- Local `pnpm check` passed, including the focused 14-test state-check suite.
+  Feature implementation PR #16 merged as
+  `d4856eb9012c4128460dbacdd012639eb5833d8f`; CI run `36305753465` passed.
+  Workflow-only registration PR #17 merged to `main` as
+  `6d089cbbf7f3b86a5ba1a1b298e75d57aee4cfc4`; CI run `36315758164` passed.
+  GitHub recognizes the workflow, and its workflow-file blob is identical on
+  `main` and `feat/cloudflare-native-runtime`.
+- The one manual run, `36316016589`, checked out feature SHA
+  `d4856eb9012c4128460dbacdd012639eb5833d8f`; exact-SHA validation and focused
+  contract tests passed. App identity checks completed, but
+  `GET /app/hook/config` returned HTTP 404. The run failed closed before
+  emitting its summary, so installation-count/list acceptance and webhook URL
+  state remain unverified. No retry was dispatched and no GitHub mutation,
+  installation, webhook, OAuth, Cloudflare resource, production Worker, D1,
+  Queue, or staging state was changed.
+
+### Phase CF4.18E.0A - scoped absent webhook-config handling
+
+- Date: 2026-09-27. Updated the protected checker to accept HTTP `404` only
+  from `GET /app/hook/config`, and only after strict App identity validation
+  and a complete installation read proving `installations_count` equals the
+  list size and both are zero. A `200` empty URL is reported as
+  `PRESENT_EMPTY`; a nonempty URL is reported as `CONFIGURED` and fails the
+  safety assertion. Other statuses, including 401/403/5xx, and 404 responses
+  from `/app` or `/app/installations` still fail.
+- The safe report distinguishes `ABSENT_NOT_FOUND`, `PRESENT_EMPTY`, and
+  `CONFIGURED`; includes installation count/list independently; omits URL
+  details when configured; and labels the GitHub UI Active state
+  `NOT_INDEPENDENTLY_VERIFIED`. No mutation method or endpoint was added.
+- Focused tests: 22 passed. The new exact-404 case reproduced the prior
+  `GET /app/hook/config failed (HTTP 404)` behavior with the exception enabled,
+  then passed with scoped handling. `pnpm check` passed (format, lint,
+  typecheck, unit tests, and build); `git diff --check` passed. PR #19 merged
+  to `feat/cloudflare-native-runtime` at
+  `e1c3f4cecb7b62d9f4a754c439361987bd192238`; its quality check passed in run
+  `36320782395`.
+- The one protected read-only state run `36321027640` passed on that merged
+  SHA. App ID/name/client ID matched; `/app` reported zero installations and
+  `/app/installations` returned an empty list. `/app/hook/config` returned
+  HTTP `404`, reported as `ABSENT_NOT_FOUND`, with no configured URL. This does
+  not verify the GitHub UI Active toggle. The workflow used GET requests only
+  and made no integration or infrastructure mutation. CF4.18E precheck passes;
+  fixture-mode deployment, GitHub activation, and customer traffic remain
+  outside this phase.
+
+### Phase CF4.18E - explicit fixture runtime deployment path (not deployed)
+
+- Date: 2026-09-27. Added a separate `runtime_mode` workflow choice with a
+  closed default and distinct deploy confirmations. The checked-in production
+  manifest remains closed. Fixture materialization is pinned to
+  `AUTHORIZED_FIXTURE_REPOSITORY`; caller-supplied identities are ignored.
+- Fixture deployment now requires a fresh read-only App identity/installations/
+  webhook-config check, the captured closed Worker deployment, exact D1 and
+  Queue bindings, absent Hyperdrive/fixture bindings, 22 empty application
+  tables, and zero Queue backlog before Wrangler deployment. Post-deploy route
+  checks use manual redirects, an unsigned webhook only, read-only D1/Queue
+  verification, and a bounded error-filtered Worker tail. Failure recovery
+  inspects Cloudflare's active source annotation and rolls back only the exact
+  attempted fixture SHA to the captured closed Worker version; an unrecognized
+  concurrent deployment is not mutated.
+- Focused canary/preflight/transition/route/workflow tests: 115 passed. A standalone
+  strict TypeScript check for the new scripts and tests passed; Prettier,
+  ESLint, and workspace typecheck passed. Local `pnpm check` stopped in the
+  unit-test startup because a workspace Vitest process could not resolve
+  `vite-node/client`. Separate local workspace/Cloudflare builds reached Next
+  prerendering but failed in the incomplete local Next package tree
+  (`useContext` null on `/404`; missing
+  `next/dist/compiled/@vercel/og/index.node.js` on `/opengraph-image`). These
+  are unresolved local validation failures; clean Linux PR CI must pass before
+  merge. No production or staging resource was queried or changed by this
+  implementation, and fixture mode has not been deployed.
+- Review follow-up: full hexadecimal source SHAs are canonicalized to
+  lowercase for post-deployment evidence and rollback classification;
+  regression coverage includes uppercase SHA inputs.
+
+### Phase CF4.18E - fixture deploy attempt rolled back
+
+- Date: 2026-09-27. Implementation SHA `f344f4b141363442a8627fabbdbc3ac97851b77a`
+  merged through PR #21; workflow registration PR #22 merged as
+  `b15a0e336e214fc83fbab038c101d5eb5b0232f6`. Predeploy App-state run
+  `36327140893` passed with zero installations and no retrievable webhook
+  config. Queue drain run `36327204043` verified backlog zero.
+- Deploy run `36327248428` uploaded version
+  `fc4be1e1-699b-4a3b-bd18-8c1757aab277` in fixture mode. The route/error-tail
+  step failed at `Bounded production error tail did not start.` before route
+  probes. The underlying tail stderr and transient deployment ID were not
+  retained. The failure handler completed rollback to version
+  `b64aec75-81c4-4146-964d-8ff456bbe726` via deployment
+  `473864fd-83b8-42ac-800d-2ea173c9649e`.
+- Rollback verification passed closed mode, production D1/Queue identity,
+  empty application tables, and zero Queue backlog. Postrollback health was
+  HTTP 200; OAuth-start route was HTTP 503 with `no-store`. The fixture route
+  matrix and postdeploy App-state check did not run. No Queue message, D1
+  write, external GitHub mutation, or staging operation occurred. The
+  fixture transition acceptance is FAIL; no retry or second deployment was
+  dispatched.
+
+### Phase CF4.18E.1 - initial tail diagnostic implementation
+
+- Date: 2026-09-28. The failed fixture run's bounded tail subprocess exited
+  before its five-second liveness check. The workflow's exit trap removed its
+  captured stderr before reporting it, so the tail failure class is unknown;
+  no cause is inferred from the generic step error. The route matrix did not
+  run, and the recorded automatic rollback restored the closed Worker.
+- Added a manual-only, feature-ref-restricted diagnostic workflow and a
+  bounded tail harness. It first verifies the recorded rollback deployment,
+  closed runtime bindings, production D1/Queue identities, empty application
+  tables, zero Queue backlog, health, and closed OAuth start. The first tail
+  uses an explicit Worker/version without generated config or `--env`; only
+  after readiness does it request `/api/health`. It then builds the exact
+  closed generated Wrangler config and tests the former config/`--env`
+  invocation against the same version.
+- The harness stores stdout/stderr only in a private runner-temp directory,
+  reports a bounded sanitized diagnostic before cleanup on failure, and
+  removes temporary files. The live result and follow-up corrections are
+  recorded in the next CF4.18E.1 entry below.
+
+### Phase CF4.18E.1 - live closed-tail proof and fixture harness repair (no deployment)
+
+- Date: 2026-09-28. PR #24 merged the feature-ref-restricted, read-only tail
+  diagnostic; PR #25 registered the same workflow-only file on `main`.
+  Feature SHA tested: `6e8fdd73b1258fbafd362b6305dca0c2b6a9092c`. Smoke run
+  `36396694888` verified rollback deployment
+  `473864fd-83b8-42ac-800d-2ea173c9649e`, version
+  `b64aec75-81c4-4146-964d-8ff456bbe726` at 100%, closed mode, dedicated D1
+  and Queue, absent Hyperdrive/fixture vars, 22/22 empty tables, backlog zero,
+  health `200`, and OAuth-start `503 no-store`.
+- Wrangler `4.120.1` established the simple explicit Worker/version error
+  tail. Health returned `200` during the bounded session; no error events were
+  observed. The config/`--env` comparison was not reached because the smoke
+  script unnecessarily ran `pnpm cf:build` without first building workspace
+  packages; OpenNext reported unresolved `@trace/db` and `@trace/auth` modules.
+  This does not establish why the prior config/`--env` tail exited, nor any
+  Cloudflare authorization defect. The simple pinned-version form is proven;
+  the previous invocation form remains unverified.
+- The fixture acceptance step now uses the proven simple tail,
+  starts route probes only from its readiness callback, preserves and reports
+  bounded sanitized stderr after pipe closure, and captures exact Worker
+  version/deployment/source/traffic plus fixture bindings before probes. The
+  smoke comparison no longer runs the unrelated Cloudflare build. The
+  transition preflight recognizes only the current rollback-created closed
+  deployment/version as its retry baseline. Wrangler version, tail stdout,
+  stderr, and exit code are saved in the private runner-temp directory and
+  diagnostics are printed before cleanup. Automatic rollback safeguards remain
+  in place.
+- No fixture route matrix, Worker deployment, rollback, Queue send, D1 write,
+  GitHub mutation, or staging operation occurred in this phase. Follow-up PR
+  changes implement only the retry harness; CF4.18E remains failed pending a
+  separate controlled retry, and this phase does not authorize it.
+
+### Phase CF4.18E.2 - single authorized fixture-mode retry failed and rolled back
+
+- Date: 2026-09-28. The only authorized retry deployed exact feature SHA
+  `391657c5f9c929ace8712dfe8cfa381166d822ba` in run `36404357739`, job
+  `108869418439`. Predeploy App-state run `36403430839` verified App ID
+  `5082884`, `TRACE Production Integration`, zero installations, and
+  `ABSENT_NOT_FOUND` / no configured webhook URL. GET-only Queue run
+  `36403438289` observed backlog zero at `2026-09-28T09:25:59.753Z`.
+- The protected deploy preflight passed against the expected closed Worker
+  version `b64aec75-81c4-4146-964d-8ff456bbe726` and deployment
+  `473864fd-83b8-42ac-800d-2ea173c9649e`, at 100% traffic. It verified closed
+  mode, exact production D1/Queue, no Hyperdrive or fixture variables, 22/22
+  empty application tables, zero Queue backlog, and the five Worker secret
+  names. The exact source was uploaded as version
+  `94b005f1-4e4f-47b7-a1b9-350a504a1267`, deployment
+  `029825a6-cd17-4f7f-8f65-c93f35ae6194`, at 100%; captured source SHA and
+  fixture identity matched the requested release and authorized repository.
+- Acceptance stopped before tail startup and before all route probes. The
+  `Record Wrangler version for bounded tail diagnostics` step expected
+  `wrangler <version>`, but the locked Wrangler `4.120.1` emits `4.120.1`.
+  The step exited with `Wrangler version output had an unexpected format.`
+  Thus tail readiness, route results, and error-event count are unobserved; no
+  inference is made about tail connectivity. No route request ran.
+- Automatic rollback completed as deployment
+  `599ec20b-b90b-4499-af73-21024e8b5e19`, restoring version
+  `b64aec75-81c4-4146-964d-8ff456bbe726` at 100% in closed mode. Postrollback
+  health was HTTP 200; OAuth start was HTTP 503 with `no-store`. Read-only
+  production D1 queries confirmed all 22 application tables remained empty,
+  zero foreign-key violations, and zero rows written. GET-only Queue run
+  `36405048138` verified backlog zero at `2026-09-28T09:41:07.038Z`.
+- No Queue message, D1 mutation/migration/restore, GitHub mutation, staging
+  operation, route probe, or completed OAuth occurred. The predeploy App-state
+  result remains the latest read-only state evidence; the postdeploy state
+  workflow did not run. CF4.18E result: FAIL. The single authorized retry is
+  consumed; this phase authorizes no further retry.
+
+### Phase CF4.18E.3 - Wrangler version capture repair (no deployment)
+
+- Run `36404357739` was inspected through the failed step and skipped-step
+  list. Deployment identity capture and Worker secret-name verification had
+  passed. The bare output `4.120.1` failed only because the matcher required
+  the `wrangler ` prefix. Tail startup, route probes, and post-probe checks
+  were skipped; automatic rollback completed as documented above.
+- Added bounded `normalizeWranglerVersionOutput` handling for CRLF, safe
+  printable text, control characters, and output length. It accepts bare or
+  prefixed version text without semver/prefix policy. The workflow records
+  only this sanitized value; the exact Worker/version tail command does not
+  consume or branch on it. The tail's diagnostic fallback also prevents an
+  unsafe diagnostic environment value from being logged.
+- Added regression coverage for bare/prefixed/future-compatible output,
+  CRLF, empty/control/oversized input, diagnostic-only behavior, deployment
+  and tail ordering, readiness before routes, diagnostic preservation, and
+  the unchanged rollback guard. The production workflow keeps the simple
+  exact-version form without `--config` or `--env production`.
+- Focused observability, fixture-tail, and transition suites passed (49 tests).
+  The exact installed-CLI capture pipeline returned and accepted `4.120.1`.
+  `pnpm cf:build` and `git diff --check` passed. `pnpm check` passed formatting,
+  lint, and workspace typecheck; its unit stage reported a Windows timeout in
+  the CLI credential-storage test and a missing login fixture in a CLI sync
+  test. Linux CI/E2E remains the merge gate.
+- No production deployment, Worker/version change, GitHub mutation, Queue
+  message, D1 mutation, or staging change occurred. CF4.18E remains failed;
+  this remediation does not authorize or dispatch another retry.
+
+### Phase CF4.18E.5 - closed-baseline identity invariant repair (no deployment)
+
+- Date: 2026-09-29. Before editing source, independently verified the active
+  production deployment `599ec20b-b90b-4499-af73-21024e8b5e19` assigns 100%
+  traffic to the expected closed Worker version
+  `b64aec75-81c4-4146-964d-8ff456bbe726`. Runtime remained production/D1/closed;
+  fixture vars were absent; the DB and Queue producer bindings matched the
+  dedicated production resources; Hyperdrive was absent; GitHub runtime vars
+  and approved Worker secret names were present; health was 200 and OAuth
+  start was 503/no-store.
+- Removed the historical deployment ID from the transition baseline. The
+  `before` and rollback phases now require one active version at 100% and the
+  exact immutable baseline version, then verify its current bindings and
+  closed configuration. They capture/log the active deployment ID as
+  metadata. The baseline source annotation is not required after rollback;
+  new fixture deployment annotation matching remains strict.
+- Rollback classification now uses the single-version/100%-traffic baseline
+  version regardless of deployment ID. A baseline-active state is fully
+  reverified before rollback is considered unnecessary. Automatic rollback
+  still targets the immutable baseline Worker version and verifies closed
+  bindings, D1 emptiness, Queue identity, and backlog afterward.
+- Added regression tests for the previous deployment `473864fd-83b8-42ac-800d-2ea173c9649e`,
+  current rollback deployment `599ec20b-b90b-4499-af73-21024e8b5e19`, wrong
+  versions/traffic, multiple active versions, fixture vars/mode, wrong D1 or
+  Queue, Hyperdrive, nonempty D1, nonzero backlog, and two repeated
+  fixture-to-rollback cycles with new deployment IDs.
+- Read-only D1 queries confirmed all 22 application tables empty and
+  `PRAGMA foreign_key_check` returned zero rows. The count query reported no
+  rows written and `changed_db=false`. GET-only Queue drain run `36526877932`
+  observed backlog zero at `2026-09-29T05:35:33.412Z`; Wrangler reported one
+  production Worker producer and consumer. No Queue message or D1 write was
+  issued.
+- Focused canary/transition/tail suites passed (123 tests); `pnpm check`
+  passed (format, lint, typecheck, unit suite, and build); `pnpm cf:build`
+  passed; changed-file Prettier and `git diff --check` passed. Linux PR #30
+  quality/E2E run `36530882405` passed; PR #30 merged to the feature branch as
+  `e6ac65b5708e4bc9973e7e806978d79f1840c547`. The production deploy workflow
+  remained unchanged. Added a separate manual-only, feature-ref-restricted
+  workflow that invokes only the verifier's `before` phase with the sealed
+  environment credential; the input SHA must match the dispatch ref, and the
+  workflow has no deploy, Queue-write, or D1-write command. Workflow-only PR
+  #31 passed CI run `36531319063` and merged to `main` as
+  `ed7577c5df503c9d2439b43991921341d9f2b463`; registered workflow blobs match.
+- Post-merge baseline-check run `36531720683` passed against feature SHA
+  `e6ac65b5708e4bc9973e7e806978d79f1840c547`. It accepted active deployment
+  `599ec20b-b90b-4499-af73-21024e8b5e19` because it assigns 100% to immutable
+  baseline version `b64aec75-81c4-4146-964d-8ff456bbe726`, with
+  `TRACE_CANARY_MODE=closed`. It independently verified fixture vars absent,
+  production D1/Queue, Hyperdrive absent, production GitHub runtime vars and
+  approved secret names, exact Queue producer/consumer checks, 22/22 D1 tables
+  empty, and backlog 0. The deployment annotation was not asserted for the
+  restored baseline. No production deployment, Queue message, D1 write,
+  GitHub mutation, OAuth, App installation, webhook activation, or staging
+  change occurred. CF4.18E.5 passes; CF4.18E remains failed pending a separate
+  explicit deployment decision, and CF4.18F is not ready.
+- CF4.18E.6: fresh baseline run `36534787327` accepted the immutable closed
+  version `b64aec75-81c4-4146-964d-8ff456bbe726` at 100%, recording current
+  deployment `599ec20b-b90b-4499-af73-21024e8b5e19` as metadata. It verified
+  production/D1/closed mode, fixture-variable absence, exact D1/Queue identity,
+  no Hyperdrive, 22/22 empty application tables, and zero Queue backlog. The
+  requested runtime SHA `e6ac65b5708e4bc9973e7e806978d79f1840c547` is on the
+  feature ref; only docs differ at dispatch head `23cf2d586dfbfe244c2434b7c5bc95983a58e8d8`.
+  The registered deployment workflows on `main` and feature were identical.
+- Predeploy App-state run `36534899062` passed for App `5082884`:
+  `TRACE Production Integration`, zero installations/list entries, and no
+  retrievable webhook configuration (`ABSENT_NOT_FOUND`, no configured URL).
+  The UI Active state was not independently verified.
+- Exactly one fixture deployment run `36535066901` deployed source
+  `e6ac65b5708e4bc9973e7e806978d79f1840c547` as version
+  `c37568b9-247e-498a-b066-7cb6e97c26bb`, deployment
+  `226a32c7-174e-4a75-939f-7a316e34e632`, at 100%. Runtime was
+  production/D1/fixture with the exact allowlist `mathofdynamic/trace-staging-fixture/1378441300`,
+  correct D1 and Queue, no Hyperdrive, exact GitHub runtime variable names,
+  and exactly the approved five Worker secret names. Wrangler diagnostic was
+  `4.120.1`; exact-version tail readiness passed and zero error events were
+  observed.
+- Fixture route matrix passed: health 200; OAuth authorization redirect and
+  three install/setup/reconcile sign-in redirects were not followed;
+  unauthenticated repository POST, recovery GET/POST returned 401; unsigned
+  webhook returned 401 Invalid webhook signature. No valid webhook or Queue
+  message was sent. Post-probe D1 remained 22/22 tables empty and Queue backlog
+  remained zero. Postdeploy App-state run `36535388787` again reported zero
+  installations and no retrievable/configured webhook URL. No GitHub mutation,
+  OAuth completion, D1 mutation, Queue message, staging change, or rollback
+  occurred. CF4.18E.6 acceptance passed; webhook activation, App installation,
+  and customer cutover remain unauthorized.
+
+### Phase CF4.18F.0 — signed ping transport acknowledgement
+
+- Date: 2026-09-29. Implementation PR #34 merged as
+  `eba409078774d427b7b7b52933b9f05b25761b60`; workflow registration PR #35
+  merged as `b5e46ae0387f217bcc73a49797be65e20b7b2916`. The `main` and feature
+  production workflow definitions match.
+- A production fixture-mode `ping` is acknowledged with HTTP 200 and
+  `Cache-Control: no-store` only after the canary gate, content/body-size
+  checks, configured webhook secret, raw-body HMAC verification, required
+  GitHub delivery/event headers, and JSON parsing pass. It returns before
+  fixture payload eligibility, normalization, D1 scope/delivery persistence,
+  Queue send, audit, or business ingestion. Closed mode remains closed before
+  webhook processing; ping is not a TRACE domain event or Queue job. No valid
+  signed ping was sent to production.
+- Focused route/canary/transition/deployment tests passed (122 tests).
+  `pnpm check`, `pnpm cf:build`, `git diff --check`, and Linux CI including E2E
+  passed.
+- Fresh baseline run `36560457735` verified the existing fixture version
+  `c37568b9-247e-498a-b066-7cb6e97c26bb` at 100%, exact fixture bindings,
+  22/22 empty application tables, and Queue backlog 0. Fresh App-state run
+  `36560456790` verified App `5082884`, zero installations, and hook config
+  `ABSENT_NOT_FOUND` / no URL.
+- Exactly one fixture deployment run `36560585268` deployed source
+  `eba409078774d427b7b7b52933b9f05b25761b60` as Worker version
+  `16055223-3a33-43a3-8d09-fafddb8abe72`, deployment
+  `d963ea4c-5bf5-412e-a7a7-4704bc7ecb4d`, at 100%. Runtime is production/D1/
+  fixture with exact allowlist `mathofdynamic/trace-staging-fixture/1378441300`,
+  correct D1 and Queue, no Hyperdrive, six expected GitHub runtime variable
+  names, and exactly the approved five Worker secret names. Wrangler was
+  `4.120.1`; exact-version tail was ready and observed zero error events.
+- The fixture route matrix passed: health 200; OAuth/install/setup/reconcile
+  redirects were not followed; unauthenticated repository POST and recovery
+  GET/POST returned 401; unsigned webhook returned 401 Invalid webhook
+  signature. Post-probe D1 remained 22/22 tables empty and Queue backlog
+  remained zero. Postdeployment App-state run `36560947857` again reported
+  zero installations and `ABSENT_NOT_FOUND` / no configured webhook URL. The
+  GitHub UI Active state was not independently verified. No rollback, webhook
+  configuration/activation, App installation, OAuth completion, valid
+  webhook, Queue message, D1 mutation, or staging change occurred. CF4.18F.0
+  acceptance passed; controlled external activation remains a separate
+  authorized phase.
+
+### CF4.18F.1 controlled OAuth and fixture-installation preparation
+
+- Date: 2026-09-29.
+- Added a protected post-install verifier for the production GitHub App. It
+  requires exactly one unsuspended, selected-only installation for
+  `mathofdynamic`, mints an installation token only to enumerate repositories,
+  requires the sole repository to be `mathofdynamic/trace-staging-fixture`
+  (`1378441300`), and rejects any retrievable webhook URL. The original
+  zero-installation preactivation verifier is unchanged.
+- Added a separate protected D1 state verifier for the pre-OAuth, post-OAuth,
+  and post-install checkpoints. It uses fixed read-only count/identity SQL,
+  checks all 22 application tables, cross-links the expected user/workspace/
+  installation/repository/audit rows, checks foreign keys, health, and Queue
+  backlog, and emits no email or credential material.
+- Focused contracts passed (29 tests), as did `pnpm check`, `pnpm cf:build`,
+  direct strict TypeScript checking for the verifier scripts, and
+  `git diff --check`. Local build verification required repairing an
+  incomplete dependency link inside this isolated worktree; the original
+  checkout was not modified. Protected Linux CI/E2E and workflow registration
+  are pending.
+- No production OAuth or App installation has been attempted. No Worker
+  deployment, webhook configuration/activation, Queue operation, D1 mutation,
+  or staging change occurred. The user-facing authorization sequence remains
+  pending fresh protected prechecks and the same-session browser handoff.
+
+### CF4.18F.1 preflight baseline repair
+
+- Date: 2026-09-29. The first post-merge read-only baseline check rejected the
+  active production fixture Worker because the verifier still recognized only
+  an older fixture version. No OAuth or installation flow had started.
+- Updated the verifier to pin the currently deployed immutable fixture Worker
+  version `16055223-3a33-43a3-8d09-fafddb8abe72` and source SHA
+  `eba409078774d427b7b7b52933b9f05b25761b60`. Fixture baseline validation
+  now checks that source annotation, while deployment IDs remain observed
+  metadata. The previous historical fixture version is no longer accepted as
+  the active baseline. The immutable closed rollback baseline remains intact.
+- Added regression coverage for the current fixture baseline, stale historical
+  version rejection, and incorrect fixture source annotation. No production
+  deployment, GitHub mutation, OAuth, App installation, Queue operation, D1
+  mutation, or staging change occurred; protected baseline verification and
+  the user-facing authorization sequence remain pending.
+
+### CF4.18F.1B read-only OAuth persistence diagnostic
+
+- Date: 2026-09-29. Added a dedicated protected manual diagnostic that prints
+  all 22 production application-table counts before identity analysis, then
+  reports aggregate GitHub-account counts, expected `mathofdynamic` account
+  links, safe account/user/session timestamps, foreign-key violations, Queue
+  backlog, and production health.
+- SQL is fixed and read-only (`SELECT` plus `PRAGMA foreign_key_check`). The
+  diagnostic never selects email, session tokens, OAuth credentials, account
+  tokens, internal IDs, or unexpected account identities. Queue observability
+  is GET-only; health is GET-only. Workflow registration and one protected
+  read-only run are pending. No OAuth retry, installation, webhook change,
+  Worker deployment, D1 mutation, Queue message, or staging change occurred.
+
+### CF4.18F.1C read-only OAuth and onboarding state classification
+
+- Date: 2026-09-29. Added an `after-onboarding` state to the protected
+  production D1 verifier without changing the existing `before-oauth`,
+  `after-oauth`, or `after-installation` expected-count contracts.
+- The new stage requires exactly one expected GitHub OAuth user/account/session,
+  an active linked session, one completed profile with valid usage/execution
+  values, and the single `workspace.profile.completed` audit event linked to
+  that user with `organization_id` NULL. Installation and unrelated business
+  tables remain required to be empty.
+- The read-only report includes safe UTC timestamps and ordering/window
+  indicators. It does not select or emit email, session tokens, OAuth
+  credentials, or internal row identifiers. Queue observation remains GET-only;
+  D1 SQL remains limited to `SELECT` and `PRAGMA foreign_key_check`.
+- Focused tests cover exact stage counts, cross-links, invalid profile/audit
+  states, secret-safe output, and read-only query validation. `pnpm check`,
+  `pnpm cf:build`, and `git diff --check` passed locally; Linux CI/E2E passed
+  on PR #42. Workflow-only registration PR #43 merged to `main`, and its
+  workflow definition is byte-identical to the feature-ref workflow.
+- The single protected after-onboarding run `36599973760` passed against
+  implementation SHA `fa2cca8b637656490b991544fb06cdbd2bd56c73`. It verified
+  1 user, GitHub account, active session, completed onboarding profile, and
+  exactly one `workspace.profile.completed` audit event linked to the same
+  expected GitHub user, with `organization_id` NULL. The profile and audit
+  timestamps were `2026-09-29T14:24:01Z`; user, account, and session timestamps
+  were `2026-09-29T14:23:52Z`. The profile/audit occurred after OAuth rows and
+  inside the observed 14:12–14:33 UTC window; timestamps alone do not prove
+  causality.
+- All installation/workspace tables and other unrelated application tables
+  were zero, foreign-key violations were zero, Queue backlog was zero, and
+  production health was 200. No OAuth retry, App installation, webhook change,
+  production D1 mutation, Queue message, Worker deployment, or staging change
+  occurred.
+
+### CF4.18F.2 — consolidated production fixture activation preparation
+
+- Date: 2026-09-30. Operations-only preparation for the already-deployed
+  production/D1/fixture runtime. No Worker application code or migrations change.
+- Corrected `after-installation` to preserve the accepted OAuth/session and
+  completed onboarding state, with exactly two independent onboarding and
+  `github.connected` audit identities. Added `after-selection` with the third
+  `repositories.selection.updated` audit, active fixture repository, and selected
+  installation mapping. Added `after-live-issue` with exactly one fixture-linked
+  issue and processed delivery, positive attempts, no last error, and a processed
+  timestamp. Remote head lookup is intentionally not required.
+- Added a protected, feature-ref-only, exact-SHA webhook workflow for configure,
+  bounded inspection, and one redelivery of a discovered eligible attempt. It
+  reuses the exact App/sole selected fixture installation verifier before control,
+  permits only the fixed production webhook URL, keeps TLS verification, and
+  emits only safe delivery metadata. The default installation verifier still
+  requires an unconfigured webhook; only control accepts the exact production URL.
+- Added an exact-version protected tail wrapper that reuses the existing bounded
+  fixture-tail harness without deployment or synthetic Queue/webhook probes.
+- Focused SQL and webhook-control contracts passed (99 tests), including actual
+  SQLite execution against the repository's D1 migrations and negative identity,
+  selection, extra-row, endpoint, redelivery, and secret-output cases.
+- `pnpm check`, `pnpm cf:build`, direct strict script type checks with the
+  repository-compatible ESNext/Bundler module settings, `git diff --check`, and
+  the additional tail-wrapper workflow test passed locally. Linux CI/E2E,
+  workflow registration, fresh protected prechecks, and the existing-session
+  installation handoff are pending. No
+  production OAuth retry, installation, webhook change, issue, D1 mutation,
+  Queue message, Worker deployment, staging change, or customer cutover occurred.
+
+### Production fixture continuation — safe installation rejection evidence
+
+- Date: 2026-10-01. The existing fixture installation verifier rejected the
+  repository-selection requirement before retrieving repositories. Its previous
+  failure output did not distinguish GitHub's `all` value from unavailable
+  metadata, so no new installation or reconciliation was attempted.
+- Added opt-in CLI evidence before restrictive installation validation: expected
+  App identity, reported/list counts, safe installation IDs, account match flags,
+  bounded repository-selection enums, and suspension flags. Unrelated usernames,
+  arbitrary metadata, credentials, and timestamps are omitted. Unsafe or unknown
+  scope still stops before an installation token is minted or repositories read.
+- Regression tests cover safe output and all-repository rejection before token
+  issuance. Focused/local validation and Linux CI results are recorded in the PR;
+  protected evidence will be rerun only after the reviewed fix merges. No runtime,
+  workflow, migration, production data, staging, or external App change is included.
+
+### Production fixture scope-policy correction — 2026-10-01
+
+- Accepted the owner's external all-repositories installation policy for the
+  pinned unsuspended installation `166179374` and account `mathofdynamic`.
+- Added trusted-snapshot filtering before both setup and reconciliation persistence;
+  TRACE receives only fixture repository `1378441300` even when GitHub returns many.
+- Preserved rejection before D1 delivery persistence and Queue send for nonfixture
+  repository events; pinned installation identity and supported GitHub's ID-only
+  repository-event installation metadata.
+- Added real SQLite/Drizzle D1 persistence regression coverage, snapshot eligibility
+  and filtering tests, external verifier regressions and explicit connected versus
+  reconciled audit acceptance. Updated protected deployment checks to preserve the
+  already accepted OAuth/onboarding state and support the reviewed existing App.
+- Validation: focused suites and strict operational-script typechecks passed;
+  full check, Cloudflare build and CI verification follow before merge/deployment.
+- No customer cutover. Activation remains pending production deployment and owner
+  browser reconciliation; no production D1 mutation has been made by this fix.
+
+### Protected webhook delivery metadata diagnostics — 2026-10-03
+
+- Protected configuration verified the production webhook URL, JSON/TLS settings
+  and existing protected secret. Pre-issue D1 acceptance passed with the active
+  fixture, preserved reconciliation/onboarding audits, no delivery rows, valid
+  foreign keys, empty Queue and healthy runtime.
+- Delivery inspection rejected metadata before reporting the ping. Added bounded
+  validity/type/status diagnostics to the existing fail-closed verifier so the
+  unexpected field can be identified without exposing raw strings, payloads or
+  credentials. Regression coverage exercises transport status zero and redaction.
+- No controlled fixture issue has been created; live processing proof is pending.
+  Validation and CI outcomes are recorded in the focused PR before merge.
+
+### Exact protected webhook delivery identifiers — 2026-10-03
+
+- Protected diagnostics isolated rejection to delivery ID validation; GUID,
+  timestamp, redelivery flag and HTTP status metadata were valid.
+- Preserve opaque decimal IDs, including JSON int64 values, before parsing can
+  round them. Discovery, detail verification and redelivery use the same exact
+  string; unsafe numeric identifiers remain rejected. Workflow input accepts
+  bounded 20-digit IDs without numeric conversion.
+- Exclude verified HTTP 403 deliveries outside the fixture from the inspection
+  and redelivery set for the approved external all-repositories installation.
+  Accepted nonfixture deliveries and wrong installation identities still fail.
+- Regression tests cover exact large-ID discovery/redelivery, arbitrary-string
+  preservation, endpoint mismatch rejection and nonfixture exclusion. No Worker
+  deployment or business-processing gate change is included.
+
+### Bounded rejected webhook event identity — 2026-10-03
+
+- Exact-ID inspection exposed a further event outside the authorized fixture
+  issue/ping set. Added bounded event/action and validated numeric scope metadata
+  to the fail-closed diagnostic; payloads and arbitrary strings remain excluded.
+- No processing or redelivery eligibility changed. No issue has been created.
+- Focused tests cover diagnostic scope and arbitrary metadata redaction.
+
+### Rejected App administration delivery metadata — 2026-10-03
+
+- Protected run `37097558979` identified `installation_repositories.added`
+  with null installation/repository metadata and HTTP 403. GitHub App-level
+  administration notifications do not necessarily expose those summary IDs.
+- Exclude only rejected installation/installation-repositories notifications with
+  null repository and either null or pinned installation metadata from the
+  protected fixture inspection set. They remain ineligible for redelivery.
+- Accepted administration events, wrong installation IDs, and null-scope business
+  events still stop activation. The runtime gate and persistence are unchanged.
+
+### Historical pre-secret nonfixture delivery rejection — 2026-10-03
+
+- Protected run `37097972981` identified a historical nonfixture push for the
+  pinned installation rejected with HTTP 401 before secret configuration.
+- Inspection excludes HTTP 401 as well as 403 only under the same narrow
+  nonfixture/administrative scope rules. Accepted nonfixture events still stop
+  activation; excluded events cannot be selected for redelivery.
+- Regression tests exercise both rejection statuses and wrong-installation
+  rejection. No production runtime or persistence behavior changes.
+
+### Production fixture live acceptance — 2026-10-03
+
+- Owner browser reconciliation and active fixture selection were verified in D1.
+  Installation `166179374` remains unsuspended/all-selection for mathofdynamic;
+  external access spans 89 repositories, while TRACE persists only fixture
+  repository `1378441300`, its installation and selected mapping.
+- Protected configuration run `37096013712` verified production URL, JSON, TLS
+  and existing secret. Lossless delivery-ID and narrow rejected-event inspection
+  fixes were merged after full local checks and CI; final verifier has 47 tests.
+- Recovered only the pre-secret 401 ping once. Verification `37098388520`
+  confirmed HTTP 200; `37098391361` confirmed zero delivery rows/Queue backlog.
+- Created exactly one controlled fixture issue #3 (`5686722719`). Signed issue
+  delivery returned 202. D1 run `37098478158` proved one processed delivery and
+  one fixture issue, valid links, no error, empty Queue and health 200.
+- Requested exactly one issue redelivery (`37098549152`); `37098658864`
+  confirmed the same GUID and HTTP 202. D1 `37098658849` retained exactly one
+  issue/delivery, foreign-key violations 0, Queue backlog 0 and health 200.
+- Recorded source/version, protected run links, lossless delivery IDs, scope
+  boundaries and idempotency evidence in `DOC/production-canary.md`.
+- Customer cutover remains NO; no runtime secret entered Codex Cloud, no direct
+  D1 mutation or synthetic Queue probe, and no customer/staging repository change.
+- Final exact-version bounded tail `37098658908` passed with zero errors.
+  TRACE FIXTURE OPERATIONAL=YES; CUSTOMER CUTOVER=NO.
+
+### Explicit owner production implementation — 2026-10-03
+
+- Added an explicit owner mode for mathofdynamic and installation `166179374`,
+  preserving closed and exact-fixture modes. Owner discovery uses trusted GitHub
+  metadata; new repositories remain available/unselected, and stale access can
+  revoke selection without automatic activation.
+- Owner selection validates installation/account and workspace linkage. Signed
+  unselected repository events are successful no-ops before delivery persistence
+  or Queue send. Queue consumption rechecks current selection. Administrative
+  notifications can revoke access/suspend processing but never activate or queue.
+- Preserved authenticated persisted-session/browser-origin boundaries, added
+  owner CLI credential checks, and required active selected recovery scope.
+- Protected deployment supports owner confirmation, preserves accepted fixture
+  data and pins the verified fixture rollback baseline. Added read-only trusted
+  owner catalog/D1/Queue acceptance. Live owner acceptance follows CI/deployment
+  and the existing authenticated browser session; customer cutover remains NO.
+
+- Validation: focused owner/route/persistence/transition tests, full `pnpm check`,
+  Cloudflare build and diff checks passed locally. Linux CI/E2E runs before merge
+  and protected owner deployment. CLI now defaults to the production Worker URL.

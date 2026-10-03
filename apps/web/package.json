@@ -10,11 +10,13 @@
     "test:unit": "vitest run --config vitest.config.ts",
     "cf:build": "opennextjs-cloudflare build",
     "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "cf:dev:d1": "opennextjs-cloudflare build && wrangler dev --env local-d1 --config wrangler.jsonc",
     "cf:deploy:test": "opennextjs-cloudflare build && opennextjs-cloudflare deploy --env staging",
     "cf:typegen": "wrangler types --config wrangler.jsonc --env staging"
   },
   "dependencies": {
     "@trace/auth": "workspace:*",
+    "@trace/core": "workspace:*",
     "@trace/db": "workspace:*",
     "@trace/env": "workspace:*",
     "@trace/github": "workspace:*",

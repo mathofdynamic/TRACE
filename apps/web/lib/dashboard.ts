@@ -1,6 +1,9 @@
 import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm';
-import { schema } from '@trace/db';
+import { isD1Database, schema } from '@trace/db';
+import type { TraceD1Database } from '@trace/db';
+import type { createDatabaseClient } from '@trace/db';
 import type { RequestDatabase } from './workspace';
+import { getD1DashboardSummary } from './dashboard-d1';
 
 export type AnalysisState =
   | 'unavailable'
@@ -125,7 +128,7 @@ export type DashboardSyncedRecord = {
 };
 
 export type DashboardSummary = {
-  source: 'postgresql';
+  source: 'postgresql' | 'd1';
   preferredRepositoryId: string | null;
   workspace: {
     name: string;
@@ -204,6 +207,17 @@ export function deriveSetupState(input: {
 
 export async function getDashboardSummary(
   db: RequestDatabase,
+  userId: string,
+): Promise<DashboardSummary> {
+  if (isD1Database(db)) return getD1DashboardSummary(db as unknown as TraceD1Database, userId);
+  return getPostgresDashboardSummary(
+    db as Awaited<ReturnType<typeof createDatabaseClient>>['db'],
+    userId,
+  );
+}
+
+async function getPostgresDashboardSummary(
+  db: Awaited<ReturnType<typeof createDatabaseClient>>['db'],
   userId: string,
 ): Promise<DashboardSummary> {
   const [profile] = await db

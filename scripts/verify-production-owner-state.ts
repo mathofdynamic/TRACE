@@ -1,0 +1,143 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { readProductionGitHubFixtureInstallation } from './verify-production-github-fixture-installation.js';
+import { productionFixtureTransitionBaseline as target } from './verify-production-fixture-transition.js';
+
+type CatalogEntry = { id: number; fullName: string };
+type CatalogRow = {
+  provider_id: string;
+  full_name: string;
+  state: string;
+  selected: number;
+  tenant_matches: number;
+  installation_id: string;
+  account_login: string;
+  installation_state: string;
+  suspended_at: unknown;
+};
+export const ownerCatalogSql = `SELECT r.github_repository_id AS provider_id, r.full_name, r.state, ir.selected, (r.organization_id = gi.organization_id) AS tenant_matches, gi.github_installation_id AS installation_id, gi.account_login, gi.state AS installation_state, gi.suspended_at FROM github_repositories r JOIN github_installations gi ON gi.id = r.installation_id LEFT JOIN github_installation_repositories ir ON ir.installation_id = gi.id AND ir.github_repository_id = r.github_repository_id ORDER BY r.github_repository_id`;
+export const ownerIdentitySql = `SELECT (SELECT COUNT(*) FROM github_installations WHERE github_installation_id = '166179374' AND account_login = 'mathofdynamic' AND state = 'active' AND suspended_at IS NULL) AS installation_count, (SELECT COUNT(*) FROM memberships m JOIN accounts a ON a.user_id = m.user_id JOIN github_installations gi ON gi.organization_id = m.organization_id WHERE m.role = 'owner' AND a.provider_id = 'github' AND a.account_id = 'mathofdynamic' AND gi.github_installation_id = '166179374') AS owner_links, (SELECT COUNT(*) FROM github_webhook_deliveries d JOIN github_repositories r ON r.id = d.repository_id WHERE r.state <> 'active' AND r.github_repository_id <> '1378441300') AS inactive_deliveries`;
+export function assertOwnerCatalog(
+  catalog: CatalogEntry[],
+  rows: CatalogRow[],
+  requireActive: boolean,
+) {
+  if (!catalog.length || rows.length !== catalog.length)
+    throw new Error('Owner catalog count differs from trusted GitHub snapshot.');
+  const trusted = new Map(catalog.map((r) => [String(r.id), r.fullName]));
+  const ids = new Set<string>();
+  for (const row of rows) {
+    if (
+      ids.has(row.provider_id) ||
+      trusted.get(row.provider_id) !== row.full_name ||
+      row.tenant_matches !== 1 ||
+      row.installation_id !== '166179374' ||
+      row.account_login !== 'mathofdynamic' ||
+      row.installation_state !== 'active' ||
+      row.suspended_at !== null ||
+      ![0, 1].includes(row.selected) ||
+      (row.selected === 1 ? row.state !== 'active' : row.state !== 'available')
+    )
+      throw new Error('Owner catalog, selection or tenant identity is invalid.');
+    ids.add(row.provider_id);
+    if (
+      row.selected === 1 &&
+      !['mathofdynamic/TRACE', 'mathofdynamic/trace-staging-fixture'].includes(row.full_name)
+    )
+      throw new Error('An unrelated repository is active during owner acceptance.');
+  }
+  const trace = rows.find((r) => r.full_name === 'mathofdynamic/TRACE');
+  if (!trace || (requireActive && (trace.state !== 'active' || trace.selected !== 1)))
+    throw new Error('Trusted TRACE repository is missing or not active.');
+  return {
+    available: rows.filter((r) => r.selected === 0).length,
+    active: rows.filter((r) => r.selected === 1).map((r) => r.full_name),
+    traceId: trace.provider_id,
+  };
+}
+export async function verifyOwnerState(
+  environment: Record<string, string | undefined>,
+  fetcher: typeof fetch = fetch,
+) {
+  if (!['catalog', 'active'].includes(environment.OWNER_ACCEPTANCE_STAGE ?? ''))
+    throw new Error('Unsupported owner acceptance stage.');
+  if (
+    environment.CLOUDFLARE_ACCOUNT_ID !== target.accountId ||
+    environment.TRACE_PRODUCTION_D1_ID !== target.d1Id ||
+    !environment.CLOUDFLARE_API_TOKEN
+  )
+    throw new Error('Protected owner verification identity is invalid.');
+  const installation = await readProductionGitHubFixtureInstallation(
+    environment.TRACE_GITHUB_APP_ID,
+    environment.TRACE_GITHUB_APP_CLIENT_ID,
+    environment.TRACE_GITHUB_APP_PRIVATE_KEY,
+    fetcher,
+    true,
+    undefined,
+    'owner',
+  );
+  async function api(endpoint: string, sql?: string) {
+    const response = await fetcher(
+      `https://api.cloudflare.com/client/v4/accounts/${target.accountId}/${endpoint}`,
+      {
+        method: sql ? 'POST' : 'GET',
+        redirect: 'error',
+        headers: {
+          authorization: `Bearer ${environment.CLOUDFLARE_API_TOKEN}`,
+          ...(sql ? { 'content-type': 'application/json' } : {}),
+        },
+        ...(sql ? { body: JSON.stringify({ sql, params: [] }) } : {}),
+        signal: AbortSignal.timeout(15000),
+      },
+    );
+    const body = (await response.json()) as { success?: boolean; result?: unknown };
+    if (!response.ok || body.success !== true || body.result === undefined)
+      throw new Error('Protected read-only owner API request failed.');
+    return body.result;
+  }
+  async function query(sql: string) {
+    const result = (await api(`d1/database/${target.d1Id}/query`, sql)) as {
+      results?: unknown[];
+    }[];
+    if (!Array.isArray(result) || result.length !== 1 || !Array.isArray(result[0]?.results))
+      throw new Error('Owner query result is invalid.');
+    return result[0].results;
+  }
+  const catalog = assertOwnerCatalog(
+    installation.catalog!,
+    (await query(ownerCatalogSql)) as CatalogRow[],
+    environment.OWNER_ACCEPTANCE_STAGE === 'active',
+  );
+  const identity = (await query(ownerIdentitySql))[0] as {
+    installation_count: number;
+    owner_links: number;
+    inactive_deliveries: number;
+  };
+  if (
+    identity.installation_count !== 1 ||
+    identity.owner_links !== 1 ||
+    identity.inactive_deliveries !== 0
+  )
+    throw new Error('Owner identity or nonselected repository delivery boundary is invalid.');
+  if ((await query('PRAGMA foreign_key_check')).length)
+    throw new Error('Owner D1 foreign-key violations detected.');
+  const metrics = (await api(`queues/${target.queueId}/metrics`)) as { backlog_count: number };
+  if (metrics.backlog_count !== 0)
+    throw new Error('Owner Queue backlog is unavailable or nonzero.');
+  const health = await fetcher(`${target.productionBaseUrl}/api/health`, {
+    redirect: 'error',
+    signal: AbortSignal.timeout(15000),
+  });
+  if (health.status !== 200) throw new Error('Production owner health failed.');
+  return `OWNER_INSTALLATION=166179374 VERIFIED\nEXTERNAL_REPOSITORIES=${installation.repositoryCount}\nAVAILABLE_REPOSITORIES=${catalog.available}\nACTIVE_REPOSITORIES=${catalog.active.join(',')}\nTRACE_REPOSITORY_ID=${catalog.traceId}\nTRACE_REPOSITORY=${environment.OWNER_ACCEPTANCE_STAGE === 'active' ? 'ACTIVE' : 'CATALOGUED'}\nOWNER_IDENTITY=VERIFIED\nUNSELECTED_DELIVERIES=0\nFOREIGN_KEY_VIOLATIONS=0\nQUEUE_BACKLOG=0\nHEALTH=200`;
+}
+if (
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+)
+  verifyOwnerState(process.env)
+    .then(console.log)
+    .catch((error) => {
+      console.error(error instanceof Error ? error.message : 'Owner verification failed');
+      process.exitCode = 1;
+    });

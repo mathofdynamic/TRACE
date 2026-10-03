@@ -214,6 +214,12 @@ export function RepositorySelector({
             >
               Connect GitHub ↗
             </Link>
+            <Link
+              className="trace-button trace-button--secondary"
+              href="/api/github/reconcile?next=/app/repositories"
+            >
+              Refresh GitHub access
+            </Link>
           </div>
         </div>
       </header>
@@ -637,6 +643,12 @@ export function RepositorySelector({
               href="/api/github/install?next=/app/repositories"
             >
               Configure GitHub App permissions ↗
+            </Link>
+            <Link
+              className="trace-button trace-button--secondary"
+              href="/api/github/reconcile?next=/app/repositories"
+            >
+              Refresh GitHub access
             </Link>
           </div>
         </section>

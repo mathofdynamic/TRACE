@@ -44,6 +44,12 @@ jobs:
           node-version: 22.14.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Verify installed Wrangler version is diagnostic-safe
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(pnpm exec wrangler --version | pnpm exec tsx scripts/production-fixture-tail-acceptance.ts normalize-version)"
+          printf 'WRANGLER_VERSION=%s\n' "$version"
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm db:migrate
       - run: pnpm format:check

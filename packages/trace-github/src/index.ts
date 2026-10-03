@@ -1,6 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { Octokit } from '@octokit/rest';
 import { importPKCS8, SignJWT } from 'jose';
+import type { TraceGitHubEvent } from '@trace/core';
 
 export type GitHubDelivery = {
   deliveryId: string;
@@ -9,30 +10,7 @@ export type GitHubDelivery = {
   payload: unknown;
 };
 
-export type NormalizedGitHubEvent =
-  | {
-      type: 'InstallationCreated';
-      installationId: number;
-      accountLogin: string;
-      accountType: string;
-    }
-  | { type: 'InstallationRepositoriesChanged'; installationId: number; repositoryIds: number[] }
-  | {
-      type: 'RepositoryConnected';
-      repositoryId: number;
-      fullName: string;
-      owner: string;
-      name: string;
-    }
-  | {
-      type: 'PullRequestOpened' | 'PullRequestUpdated' | 'PullRequestClosed' | 'PullRequestMerged';
-      repositoryId: number;
-      pullRequestId: number;
-      number: number;
-      action: string;
-    }
-  | { type: 'BranchPushed'; repositoryId: number; ref: string; before: string; after: string }
-  | { type: 'IssueUpdated'; repositoryId: number; issueId: number; number: number; action: string };
+export type NormalizedGitHubEvent = TraceGitHubEvent;
 
 export function isReplaySafeDelivery(
   delivery: GitHubDelivery,
@@ -57,11 +35,21 @@ function asRecord(value: unknown): Record<string, unknown> {
 }
 
 function asNumber(value: unknown) {
-  return typeof value === 'number' ? value : 0;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : 0;
 }
 
 function asString(value: unknown) {
   return typeof value === 'string' ? value : '';
+}
+
+function optionalString(value: unknown, maximum = 4_000) {
+  const result = asString(value);
+  return result.length > 0 && result.length <= maximum ? result : undefined;
+}
+
+function optionalTimestamp(value: unknown) {
+  const result = optionalString(value, 64);
+  return result && !Number.isNaN(Date.parse(result)) ? result : undefined;
 }
 
 export function normalizeGitHubEvent(
@@ -76,6 +64,14 @@ export function normalizeGitHubEvent(
   const installationId = asNumber(installation.id);
   const normalizedAction = action ?? '';
 
+  if (
+    (eventName === 'installation' || eventName === 'installation_repositories') &&
+    !installationId
+  )
+    return null;
+  if (['repository', 'pull_request', 'push', 'issues'].includes(eventName) && !repositoryId)
+    return null;
+
   if (eventName === 'installation' && normalizedAction === 'created') {
     const account = asRecord(installation.account);
     return {
@@ -89,10 +85,14 @@ export function normalizeGitHubEvent(
     eventName === 'installation_repositories' &&
     ['added', 'removed'].includes(normalizedAction)
   ) {
+    const repositoryAction =
+      normalizedAction === 'added' || normalizedAction === 'removed' ? normalizedAction : null;
+    if (!repositoryAction) return null;
     const repositories = Array.isArray(root.repositories) ? root.repositories : [];
     return {
       type: 'InstallationRepositoriesChanged',
       installationId,
+      action: repositoryAction,
       repositoryIds: repositories.map((item) => asNumber(asRecord(item).id)).filter(Boolean),
     };
   }
@@ -102,10 +102,17 @@ export function normalizeGitHubEvent(
   ) {
     return {
       type: 'RepositoryConnected',
+      ...(installationId ? { installationId } : {}),
       repositoryId,
       fullName: asString(repository.full_name),
       owner: asString(asRecord(repository.owner).login),
       name: asString(repository.name),
+      ...(optionalString(repository.default_branch, 255)
+        ? { defaultBranch: optionalString(repository.default_branch, 255) }
+        : {}),
+      ...(optionalString(repository.visibility, 64)
+        ? { visibility: optionalString(repository.visibility, 64) }
+        : {}),
     };
   }
   if (
@@ -113,6 +120,14 @@ export function normalizeGitHubEvent(
     ['opened', 'synchronize', 'edited', 'closed', 'reopened'].includes(normalizedAction)
   ) {
     const pullRequest = asRecord(root.pull_request);
+    const pullRequestId = asNumber(pullRequest.id);
+    const pullRequestNumber = asNumber(pullRequest.number);
+    if (!pullRequestId || !pullRequestNumber) return null;
+    const head = asRecord(pullRequest.head);
+    const base = asRecord(pullRequest.base);
+    const user = asRecord(pullRequest.user);
+    const merged = Boolean(asString(pullRequest.merged_at));
+    const state = merged ? 'merged' : asString(pullRequest.state);
     return {
       type:
         normalizedAction === 'opened'
@@ -123,14 +138,31 @@ export function normalizeGitHubEvent(
               : 'PullRequestClosed'
             : 'PullRequestUpdated',
       repositoryId,
-      pullRequestId: asNumber(pullRequest.id),
-      number: asNumber(pullRequest.number),
+      pullRequestId,
+      number: pullRequestNumber,
       action: normalizedAction,
+      ...(installationId ? { installationId } : {}),
+      ...(optionalString(pullRequest.title) ? { title: optionalString(pullRequest.title) } : {}),
+      ...(state === 'open' || state === 'closed' || state === 'merged' ? { state } : {}),
+      ...(optionalString(head.sha, 64) ? { headSha: optionalString(head.sha, 64) } : {}),
+      ...(optionalString(base.sha, 64) ? { baseSha: optionalString(base.sha, 64) } : {}),
+      ...(optionalString(base.ref, 255) ? { baseBranch: optionalString(base.ref, 255) } : {}),
+      ...(optionalString(user.login, 255) ? { authorLogin: optionalString(user.login, 255) } : {}),
+      ...(optionalString(pullRequest.html_url, 2_000)
+        ? { url: optionalString(pullRequest.html_url, 2_000) }
+        : {}),
+      ...(optionalTimestamp(pullRequest.created_at)
+        ? { createdAt: optionalTimestamp(pullRequest.created_at) }
+        : {}),
+      ...(optionalTimestamp(pullRequest.updated_at)
+        ? { updatedAt: optionalTimestamp(pullRequest.updated_at) }
+        : {}),
     };
   }
   if (eventName === 'push')
     return {
       type: 'BranchPushed',
+      ...(installationId ? { installationId } : {}),
       repositoryId,
       ref: asString(root.ref),
       before: asString(root.before),
@@ -141,12 +173,30 @@ export function normalizeGitHubEvent(
     ['opened', 'edited', 'closed', 'reopened', 'transferred'].includes(normalizedAction)
   ) {
     const issue = asRecord(root.issue);
+    const issueId = asNumber(issue.id);
+    const issueNumber = asNumber(issue.number);
+    if (!issueId || !issueNumber) return null;
+    const user = asRecord(issue.user);
+    const state = asString(issue.state);
     return {
       type: 'IssueUpdated',
+      ...(installationId ? { installationId } : {}),
       repositoryId,
-      issueId: asNumber(issue.id),
-      number: asNumber(issue.number),
+      issueId,
+      number: issueNumber,
       action: normalizedAction,
+      ...(optionalString(issue.title) ? { title: optionalString(issue.title) } : {}),
+      ...(state === 'open' || state === 'closed' ? { state } : {}),
+      ...(optionalString(user.login, 255) ? { authorLogin: optionalString(user.login, 255) } : {}),
+      ...(optionalString(issue.html_url, 2_000)
+        ? { url: optionalString(issue.html_url, 2_000) }
+        : {}),
+      ...(optionalTimestamp(issue.created_at)
+        ? { createdAt: optionalTimestamp(issue.created_at) }
+        : {}),
+      ...(optionalTimestamp(issue.updated_at)
+        ? { updatedAt: optionalTimestamp(issue.updated_at) }
+        : {}),
     };
   }
   return null;
@@ -162,11 +212,25 @@ export type GitHubAppConfig = {
 };
 
 export type GitHubInstallationSnapshot = {
+  repositorySelection?: 'selected' | 'all';
   id: number;
   accountLogin: string;
   accountType: string;
   suspendedAt: string | null;
   permissions: Record<string, string>;
+};
+
+export type GitHubAuthenticatedUser = {
+  id: number;
+  login: string;
+};
+
+export type GitHubUserInstallation = {
+  id: number;
+  accountLogin: string;
+  accountType: string;
+  appId: number;
+  suspendedAt: string | null;
 };
 
 export type GitHubRepositorySnapshot = {
@@ -313,6 +377,52 @@ export async function verifyUserInstallationAccess(accessToken: string, installa
   return true;
 }
 
+export async function getGitHubAuthenticatedUser(accessToken: string) {
+  const user = await githubRequest<{ id?: unknown; login?: unknown }>(
+    'https://api.github.com/user',
+    {
+      token: accessToken,
+    },
+  );
+  const id = asNumber(user.id);
+  const login = asString(user.login);
+  if (!id || !login) throw new Error('GitHub authenticated user response invalid');
+  return { id, login } satisfies GitHubAuthenticatedUser;
+}
+
+export async function listGitHubUserInstallations(accessToken: string, appId: number) {
+  const installations: GitHubUserInstallation[] = [];
+  for (let page = 1; page <= 10; page += 1) {
+    const response = await githubRequest<{ installations?: unknown[] }>(
+      `https://api.github.com/user/installations?per_page=100&page=${page}`,
+      { token: accessToken },
+    );
+    const rawInstallations = response.installations ?? [];
+    const pageInstallations = rawInstallations
+      .map((value): GitHubUserInstallation | null => {
+        const installation = asRecord(value);
+        const id = asNumber(installation.id);
+        const candidateAppId = asNumber(installation.app_id);
+        const account = asRecord(installation.account);
+        const accountLogin = asString(account.login);
+        const accountType = asString(account.type);
+        if (!id || candidateAppId !== appId || !accountLogin || !accountType) return null;
+        const suspendedAt = installation.suspended_at;
+        return {
+          id,
+          accountLogin,
+          accountType,
+          appId: candidateAppId,
+          suspendedAt: typeof suspendedAt === 'string' ? suspendedAt : null,
+        };
+      })
+      .filter((value): value is GitHubUserInstallation => value !== null);
+    installations.push(...pageInstallations);
+    if (rawInstallations.length < 100) break;
+  }
+  return installations;
+}
+
 function permissionMap(value: unknown) {
   const record = asRecord(value);
   const permissions: Record<string, string> = {};
@@ -396,12 +506,14 @@ export async function getGitHubInstallationSnapshot(
     id?: number;
     account?: { login?: string; type?: string };
     suspended_at?: string | null;
+    repository_selection?: 'selected' | 'all';
     permissions?: Record<string, string>;
   }>(`https://api.github.com/app/installations/${installationId}`, { token: appJwt });
   if (
     installation.id !== installationId ||
     typeof installation.account?.login !== 'string' ||
-    typeof installation.account.type !== 'string'
+    typeof installation.account.type !== 'string' ||
+    (installation.suspended_at !== null && typeof installation.suspended_at !== 'string')
   ) {
     throw new Error('GitHub App installation response invalid');
   }
@@ -423,9 +535,10 @@ export async function getGitHubInstallationSnapshot(
   return {
     installation: {
       id: installationId,
+      repositorySelection: installation.repository_selection,
       accountLogin: installation.account.login,
       accountType: installation.account.type,
-      suspendedAt: installation.suspended_at ?? null,
+      suspendedAt: installation.suspended_at,
       permissions: permissionMap(installation.permissions),
     } satisfies GitHubInstallationSnapshot,
     repositories,
