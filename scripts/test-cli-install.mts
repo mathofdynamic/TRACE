@@ -6,12 +6,20 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 // Exercise the installed executable, never the workspace CLI or its node_modules.
-const [archiveArgument, checkoutArgument] = process.argv.slice(2);
+const [releaseArgument, checkoutArgument] = process.argv.slice(2);
 assert(
-  archiveArgument && checkoutArgument,
-  'Usage: test-cli-install <tarball> <fresh TRACE checkout>',
+  releaseArgument && checkoutArgument,
+  'Usage: test-cli-install <release directory> <fresh TRACE checkout>',
 );
-const archive = resolve(archiveArgument);
+const release = resolve(releaseArgument);
+const checksumLine = (await readFile(join(release, 'SHA256SUMS'), 'utf8')).trim();
+const checksumMatch =
+  /^([a-f0-9]{64})  (mathofdynamic-trace-cli-(\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?).tgz)$/.exec(
+    checksumLine,
+  );
+assert(checksumMatch, 'Release must contain one safe versioned archive checksum');
+const [, checksum, archiveName, expectedVersion] = checksumMatch;
+const archive = join(release, archiveName!);
 const checkout = resolve(checkoutArgument);
 const prefix = await mkdtemp(join(tmpdir(), 'trace-install-'));
 const config = await mkdtemp(join(tmpdir(), 'trace-acceptance-config-'));
@@ -27,7 +35,6 @@ const run = (command: string, args: string[], cwd = checkout) =>
 assert.equal(run('git', ['status', '--porcelain']), '', 'Acceptance needs a clean checkout');
 await assert.rejects(access(join(checkout, '.trace')));
 await assert.rejects(access(join(checkout, 'node_modules')));
-const checksum = (await readFile(join(archive, '..', 'SHA256SUMS'), 'utf8')).split(/\s+/)[0];
 assert.equal(
   createHash('sha256')
     .update(await readFile(archive))
@@ -43,7 +50,7 @@ run(windows ? 'npm.cmd' : 'npm', [
   archive,
 ]);
 const executable = windows ? join(prefix, 'trace.cmd') : join(prefix, 'bin', 'trace');
-assert.equal(run(executable, ['--version']), 'trace 0.1.0');
+assert.equal(run(executable, ['--version']), `trace ${expectedVersion}`);
 const manifest = JSON.parse(
   await readFile(
     join(

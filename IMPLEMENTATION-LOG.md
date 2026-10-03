@@ -2034,3 +2034,4 @@
 - Document Node/Git prerequisites, Windows execution-policy guidance, local analysis and optional safe dashboard synchronization.
 - Local validation: `pnpm check` PASS; focused CLI/Skill tests 26 PASS; `pnpm cf:build` PASS (build only); `git diff --check` PASS; installed archive initializes/analyzes/validates a fresh TRACE checkout with clean provenance and no credentials. Windows results are supplied by distribution CI, not inferred from Linux.
 - Fresh Windows acceptance caught a case-sensitive executable-path comparison that suppressed npm shim execution; compare Windows paths case-insensitively while retaining POSIX semantics. Windows focused CLI/Skill tests (including DPAPI) passed before this correction.
+- Review correction: published-release acceptance derives the archive and expected version from its validated checksum entry instead of hardcoding the first release filename.

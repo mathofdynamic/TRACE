@@ -73,4 +73,4 @@ jobs:
         working-directory: tooling
       - name: Install release and analyze fresh TRACE checkout
         working-directory: tooling
-        run: pnpm exec tsx scripts/test-cli-install.mts ../release/mathofdynamic-trace-cli-0.1.0.tgz ../fresh-trace
+        run: pnpm exec tsx scripts/test-cli-install.mts ../release ../fresh-trace
