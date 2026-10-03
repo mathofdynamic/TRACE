@@ -1958,3 +1958,70 @@
 - Local validation passed: 13 CLI tests (3 fixture/init regressions), 31 guarded
   transition tests, pnpm check, pnpm cf:build and git diff --check. Root/runtime
   ignore checks passed. CI/E2E and protected publication follow the consolidated PR.
+
+### Reconciled public TRACE Agent Skill — 2026-10-03
+
+- Independently review all 13 files in the supplied candidate patch against main
+  74450fd and the existing Skill history (foundation commit 6a60b7d). Evolve
+  skills/trace as the single canonical public package; integrate the candidate's
+  SKILL and seven progressive references here rather than importing a competing
+  working-with-trace package. Preserve and correct existing workflow files.
+- Retain CLI-only execution, initialization guard, explicit sync dry-run/privacy
+  gate, state-based operation, two data planes, real remote-HEAD freshness and
+  human/browser boundaries. Correct stale daily write flags and unsupported PR URL/
+  provider-fetch claims; qualify CLI visibility of cloud facts and installation
+  instructions (private 0.1.0 workspace CLI, no verified public installer).
+- Confirm product gaps through source and isolated temporary Git repository tests:
+  analyze without init writes a partial .trace; even analyze --dry-run creates an
+  empty root; PR briefs omit a dashboard projection and are excluded from sync.
+  Record these as separate product follow-ups, without changing runtime contracts
+  or synthesizing projections/scaffolding. Reports/init preview without --yes;
+  analyze writes by default. Rules explain/diff remain advertised but unimplemented;
+  no watcher/daemon/auto/monitor/hook installer or first-class CI sync is available.
+- Rework candidate drift protection around public usage, executable offline CLI
+  behavior and exported schema contracts. Restrict source checks to flag literals
+  (no public flag registry) and stable external error/exclusion text; no dispatch
+  formatting matching. Mutation-check fake commands/subcommands/flags, versions,
+  artifact types, projection fields, privacy literals and limits; enforce schema
+  count/byte/payload boundaries. No production contact or credential reads.
+- Public-content review strips unnecessary deployment/installation details; CLI
+  is the executor, Skill is an operational guide. Existing root runtime state is
+  preserved. Changes remain uncommitted; no push/PR/publication is authorized.
+- Validation passed: focused CLI suite 25 tests (including 12 drift tests with
+  deliberate documentation mutations and offline temporary Git lifecycle),
+  pnpm check, pnpm cf:build, changed-file formatting, CLI typecheck and diff checks.
+  Include README and preserved workflows in the final drift/public-content audit.
+  GitHub Actions/E2E were not run; no commit, push, PR, production contact or deployment.
+
+### Public Skill repository submission — 2026-10-03
+
+- Owner explicitly authorized one commit, branch push and focused main PR after
+  reviewing the reconciled implementation; merge remains unauthorized.
+- Confirm only canonical Skill/docs/drift-test changes. Re-run focused CLI tests:
+  25 passed, including 12 Skill drift checks and offline temporary Git lifecycle.
+  Re-run pnpm check and pnpm cf:build: passed; git diff --check: passed.
+- Preserve documented product gaps for separate bug reports; no runtime contract,
+  production infrastructure, credentials or root .trace state changes. PR CI/E2E
+  results will be recorded in the PR after execution; no deployment is requested.
+
+### PR #64 review corrections — 2026-10-03
+
+- P1: dirty-tree analysis is local exploratory output only. Every publication path
+  requires empty git status --porcelain, fresh clean committed re-analysis,
+  validation and privacy dry-run, with cleanliness/HEAD rechecked before sync.
+  Matching HEAD after reverting edits cannot rehabilitate dirty same-HEAD output.
+- P2: verify CLI does not pass modelProvider; --with-ai uses the fake/no-provider
+  fixture path. Correct AI capability claims and preserve deterministic/provenance
+  distinctions; no provider integration or runtime enforcement added.
+- Extend public Skill policy drift checks with dirty/untracked/clean-but-stale/clean-
+  regenerated cases, policy mutations, offline same-HEAD dirty/reverted behavior,
+  and actual --with-ai provenance. Runtime follow-ups remain separate product issues.
+- Local validation: 26 CLI tests passed (13 drift checks, including new policy
+  mutations and provenance/dirty-revert behavior); pnpm check, pnpm cf:build and
+  git diff --check passed. Product follow-ups #69/#70 opened without runtime fixes.
+  Correction is submitted to the same PR branch; review resolution follows verified CI.
+- Tighten P1 for multi-artifact sync: every eligible analysis must be known clean;
+  a fresh current-HEAD artifact does not make older dirty/unverified records safe.
+  Reject the whole batch and report it without artifact/policy manipulation.
+  New batch case and policy mutations pass; re-run 26 focused tests, pnpm check,
+  pnpm cf:build and diff checks successfully before pushing this addition.

@@ -1,6 +1,12 @@
 # Validation workflow
 
-1. Run `trace status --json`.
-2. Run `trace validate --json`.
-3. Inspect individual artifacts with `trace inspect <path>`.
-4. Repair front matter or unsafe content; never bypass validation.
+1. Check `config.yml` and `schema-version` using SKILL.md; initialize with the real CLI if needed and authorized.
+2. Run `trace status --json` and `trace validate --json`.
+3. Inspect individual artifacts with `trace inspect <path> --json`.
+4. Regenerate CLI-supported artifacts with their generator or report the product issue.
+   For explicitly hand-authored artifacts, follow the schema and task authorization.
+   Never bypass validation or edit a projection to force synchronization.
+
+Dirty checkout output is local exploratory work only; DO NOT sync it. Any later
+publication must follow SKILL.md: clean committed checkout, fresh clean analysis,
+validation, privacy dry-run, and a final cleanliness/HEAD check.
