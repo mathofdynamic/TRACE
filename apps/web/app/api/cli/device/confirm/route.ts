@@ -1,3 +1,4 @@
+import { getTracePublicUrl } from '@trace/auth';
 import { and, eq } from 'drizzle-orm';
 import { d1Schema, isD1Database, schema } from '@trace/db';
 import type { TraceD1Database } from '@trace/db';
@@ -7,7 +8,7 @@ import { isTrustedBrowserMutation } from '../../../../../lib/browser-origin';
 
 export async function POST(request: Request) {
   const session = await getRequestTraceSession(request.headers);
-  if (!session?.user) return Response.redirect(new URL('/sign-in', request.url), 303);
+  if (!session?.user) return Response.redirect(new URL('/sign-in', getTracePublicUrl()), 303);
   if (!isTrustedBrowserMutation(request)) {
     return Response.json({ error: 'Cross-origin request rejected.' }, { status: 403 });
   }
@@ -15,7 +16,7 @@ export async function POST(request: Request) {
   const code = form.get('code');
   const organizationId = form.get('organizationId');
   if (typeof code !== 'string' || typeof organizationId !== 'string') {
-    return Response.redirect(new URL('/cli/authorize?error=invalid', request.url), 303);
+    return Response.redirect(new URL('/cli/authorize?error=invalid', getTracePublicUrl()), 303);
   }
   const { db, client } = await createRequestDatabase();
   try {
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
           )
           .limit(1);
     if (!membership) {
-      return Response.redirect(new URL('/cli/authorize?error=forbidden', request.url), 303);
+      return Response.redirect(new URL('/cli/authorize?error=forbidden', getTracePublicUrl()), 303);
     }
     const approved = await approveDeviceAuthorization(db, {
       code: code.trim().toUpperCase(),
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
       organizationId,
     });
     if (!approved) {
-      return Response.redirect(new URL('/cli/authorize?error=expired', request.url), 303);
+      return Response.redirect(new URL('/cli/authorize?error=expired', getTracePublicUrl()), 303);
     }
     if (d1) {
       await d1.insert(d1Schema.auditEvents).values({
@@ -69,7 +70,7 @@ export async function POST(request: Request) {
         subjectId: approved.id,
       });
     }
-    return Response.redirect(new URL('/cli/authorize?approved=1', request.url), 303);
+    return Response.redirect(new URL('/cli/authorize?approved=1', getTracePublicUrl()), 303);
   } finally {
     await client.end();
   }

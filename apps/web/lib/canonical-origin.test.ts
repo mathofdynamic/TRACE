@@ -78,6 +78,7 @@ describe('canonical browser versus operational backend', () => {
     '/api/github/setup',
     '/api/github/reconcile',
     '/cli/authorize',
+    '/api/cli/device/confirm',
   ])('redirects direct backend browser route before state generation: %s', (path) => {
     expect(canonicalBrowserLocation(new Request(`${backend}${path}`), env)).toBe(`${pages}${path}`);
     expect(
@@ -136,6 +137,12 @@ describe('canonical browser versus operational backend', () => {
     expect(manifest.backendUrl).toBe(backend);
     vi.stubEnv('TRACE_PUBLIC_URL', pages);
     expect(getTracePublicUrl()).toBe(pages);
+    const deviceConfirm = readFileSync(
+      new URL('../app/api/cli/device/confirm/route.ts', import.meta.url),
+      'utf8',
+    );
+    expect(deviceConfirm).not.toContain(', request.url)');
+    expect(deviceConfirm).toContain("new URL('/cli/authorize?approved=1', getTracePublicUrl())");
     expect(cookieAttributes(600, true)).toContain('HttpOnly; SameSite=Lax;');
     expect(cookieAttributes(600, true)).toContain('; Secure');
     expect(cookieAttributes(600, true)).not.toContain('Domain=');

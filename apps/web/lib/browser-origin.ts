@@ -16,7 +16,7 @@ export function canonicalBrowserLocation(
     return null;
   const url = new URL(request.url);
   const browserApi =
-    /^\/api\/(auth\/(github(?:\/callback)?|sign-out)|github\/(install|setup|reconcile))\/?$/.test(
+    /^\/api\/(auth\/(github(?:\/callback)?|sign-out)|github\/(install|setup|reconcile)|cli\/device\/confirm)\/?$/.test(
       url.pathname,
     );
   if (url.pathname.startsWith('/api/') && !browserApi) return null;
