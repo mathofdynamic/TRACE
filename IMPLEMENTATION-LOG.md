@@ -1940,3 +1940,21 @@
   landing/sign-in logo markup, generated favicon/PNG/Apple metadata links and all
   four image routes returning 200 with correct MIME types. Asset byte identity,
   derived dimensions, scaffold structure, ignore rules and repo reference audit passed.
+
+### Durable init fixture and branding publication — 2026-10-03
+
+- Publish the previously verified branding commit on fix/trace-branding. Generate
+  tests/fixtures/trace-project/.trace with the real CLI in an isolated trace-project
+  directory; track only README, schema-version and safe deterministic config.
+  Keep root runtime .trace ignored and preserve its local state. Narrow fixture
+  exceptions never allow dashboard bindings, credentials or sync acknowledgements.
+- Add regression tests comparing a fresh real initialization byte-for-byte to the
+  committed fixture, validating schema/config, expected directories, repeatability,
+  and absence of runtime/credential content. Connect now rejects missing initialization
+  before credential/network access with an explicit trace init --yes instruction.
+- Correct the first-use documentation sequence to include init before login/connect.
+  Pin the existing verified canonical Worker version/source as a guarded owner rollback
+  baseline before publishing branding through the existing protected deployment.
+- Local validation passed: 13 CLI tests (3 fixture/init regressions), 31 guarded
+  transition tests, pnpm check, pnpm cf:build and git diff --check. Root/runtime
+  ignore checks passed. CI/E2E and protected publication follow the consolidated PR.

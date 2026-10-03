@@ -7,12 +7,16 @@ TRACE analyzes source code in the repository. The dashboard receives only explic
 From the repository root:
 
 ```text
+trace init --yes
 trace login
 trace connect
 trace analyze
 trace sync --dry-run
 trace sync
 ```
+
+`trace init --yes` creates the local repository scaffold without overwriting existing files.
+Initialize before connecting; `.trace/` is local runtime output and stays ignored.
 
 `trace login` opens a device-authorization page. Browser authentication is used only to approve a separate CLI credential. The CLI credential is scoped to repository discovery and artifact sync, expires after 30 days, is stored outside the repository, and is stored by the server only as a SHA-256 hash.
 
@@ -36,6 +40,7 @@ Select the real repository in production Dashboard → Repositories before conne
 Newly discovered repositories are available metadata until explicitly selected.
 
 ```text
+trace init --yes
 trace login --server https://trace-production.mathofdynamic2.workers.dev
 trace whoami
 trace connect
@@ -88,6 +93,7 @@ The local acknowledgement is written to `.trace/state/sync.json`. It contains no
 
 ## Failure recovery
 
+- `TRACE is not initialized`: run `trace init --yes` before connecting.
 - `Run trace login`: the local credential is absent, expired, revoked, or belongs to another server.
 - `Repository is not selected`: install/configure the TRACE GitHub App and select the exact repository in the dashboard, then rerun `trace connect`.
 - `Sync divergence requires review`: the server has a conflicting artifact identity, path, equal/newer revision, or a newer completed snapshot than this checkout acknowledged. No local artifact is changed. Inspect both histories. If the dashboard snapshot is the correct base, run `trace sync status --accept-dashboard-base`; otherwise create an explicit superseding artifact.

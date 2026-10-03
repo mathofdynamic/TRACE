@@ -307,6 +307,35 @@ describe('production fixture transition state gate', () => {
       }),
     ).rejects.toThrow(/source annotation/);
   });
+  it('pins the current canonical owner rollback version and rejects a mismatched source', async () => {
+    const ownerVersion = '550a5214-4e46-4023-a330-7d042be4ea7c';
+    const source = '22b98cf2224a31403c9ea403e34137562f7076d8';
+    const input = {
+      phase: 'before' as const,
+      environment: {
+        ...commonEnvironment,
+        TRACE_GITHUB_APP_CALLBACK_URL: 'https://trace-code.pages.dev/api/github/setup',
+      },
+      fetchImplementation: fakeCloudflare('before', source, {
+        activeVersionId: ownerVersion,
+        mode: 'owner',
+        workerBindings: bindings('owner'),
+      }).fetchImplementation,
+      consumerOutput: consumerList,
+    };
+    expect((await verifyProductionFixtureTransitionState(input)).canaryMode).toBe('owner');
+    await expect(
+      verifyProductionFixtureTransitionState({
+        ...input,
+        fetchImplementation: fakeCloudflare('before', source, {
+          activeVersionId: ownerVersion,
+          mode: 'owner',
+          workerBindings: bindings('owner'),
+          deploymentMessage: 'TRACE production canary ' + 'f'.repeat(40),
+        }).fetchImplementation,
+      }),
+    ).rejects.toThrow(/source annotation/);
+  });
   it('verifies explicit owner mode without fixture variables while preserving accepted fixture state', async () => {
     const source = 'd'.repeat(40);
     const identity = Object.fromEntries(

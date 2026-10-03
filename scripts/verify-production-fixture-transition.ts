@@ -89,6 +89,8 @@ type KnownBaseline =
   | { versionId: string; mode: 'fixture' | 'owner'; sourceSha: string };
 
 function knownBaselineForVersion(versionId: string): KnownBaseline | undefined {
+  if (versionId === '550a5214-4e46-4023-a330-7d042be4ea7c')
+    return { versionId, mode: 'owner', sourceSha: '22b98cf2224a31403c9ea403e34137562f7076d8' };
   if (versionId === 'a118f111-0bcb-4662-b864-c8587ca29567')
     return { versionId, mode: 'owner', sourceSha: '72f71ff4f597c0a18abaa2eaec837ff4892266d0' };
   if (versionId === '14e30410-d83b-4de6-90cc-6ba0356957ed')

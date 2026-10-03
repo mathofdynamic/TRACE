@@ -45,3 +45,10 @@ postgres-data/
 .env.*
 *.key
 *.pem
+
+# Only the deterministic fresh-init fixture is tracked; runtime .trace stays ignored.
+!tests/fixtures/trace-project/.trace/
+tests/fixtures/trace-project/.trace/*
+!tests/fixtures/trace-project/.trace/README.md
+!tests/fixtures/trace-project/.trace/schema-version
+!tests/fixtures/trace-project/.trace/config.yml

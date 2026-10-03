@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { chmod, mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises';
+import { access, chmod, mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { promisify } from 'node:util';
@@ -317,6 +317,13 @@ export function normalizeGitHubRemote(remote: string) {
 }
 
 export async function connect(root: string, remote: string) {
+  try {
+    await Promise.all(
+      ['config.yml', 'schema-version'].map((file) => access(join(root, '.trace', file))),
+    );
+  } catch {
+    throw new Error('TRACE is not initialized in this repository. Run `trace init --yes` first.');
+  }
   const repository = normalizeGitHubRemote(remote);
   if (!repository)
     throw new Error('remote.origin.url is not an unambiguous GitHub repository URL.');
