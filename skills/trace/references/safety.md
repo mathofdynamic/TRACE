@@ -33,3 +33,23 @@ Whole-sync limits (schema): 64 artifacts, 2,097,152 bytes total. These are enfor
 - Do not switch cloud targets (`TRACE_CLOUD_URL`, `TRACE_ENVIRONMENT`, `--server`) unless instructed. `staging` without a URL fails closed by design.
 - Do not use production for tests; use the repo's fixtures/mocks.
 - Do not weaken allowlists, exclusions, or validation to make a sync succeed.
+
+## Publication policy (Skill requirements, not runtime enforcement)
+
+```yaml
+publication_policy:
+  dirty_analysis_sync: false
+  clean_worktree_required: true
+  fresh_clean_analysis_required: true
+  real_cli_semantic_provider: false
+```
+
+Dirty working-tree analysis is local exploratory work only; DO NOT sync it.
+Require empty `git status --porcelain`, then re-analyze the clean committed checkout,
+validate, and run the sync privacy dry-run. Recheck clean status and matching HEAD
+immediately before authorized sync. Even reverted edits can leave a dirty same-HEAD
+artifact: never skip clean regeneration merely because recorded HEAD matches.
+Do not commit/reset/pull or change ignore policy without task authorization.
+The current CLI does not enforce this attribution gate; never imply otherwise.
+`--with-ai` currently uses a fixture/no-provider path, not real AI capability;
+provenance must not be presented as model-backed intelligence.

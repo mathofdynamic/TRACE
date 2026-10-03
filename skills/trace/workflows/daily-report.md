@@ -6,3 +6,7 @@
 4. Review known versus unknown sections.
 5. If authorized, run `trace report daily --yes`.
 6. Run `trace validate`.
+
+Dirty checkout output is local exploratory work only; DO NOT sync it. Any later
+publication must follow SKILL.md: clean committed checkout, fresh clean analysis,
+validation, privacy dry-run, and a final cleanliness/HEAD check.

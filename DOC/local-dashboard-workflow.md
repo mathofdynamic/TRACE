@@ -15,6 +15,11 @@ trace sync --dry-run
 trace sync
 ```
 
+Before commit-attributed synchronization, require empty `git status --porcelain`,
+regenerate analysis from the clean committed checkout, validate, then dry-run and
+sync. Dirty analysis stays local; reverting edits does not make its same-HEAD
+artifact safe to publish. The CLI does not yet enforce this Skill policy.
+
 `trace init --yes` creates the local repository scaffold without overwriting existing files.
 Initialize before connecting; `.trace/` is local runtime output and stays ignored.
 

@@ -6,3 +6,7 @@
 4. Regenerate CLI-supported artifacts with their generator or report the product issue.
    For explicitly hand-authored artifacts, follow the schema and task authorization.
    Never bypass validation or edit a projection to force synchronization.
+
+Dirty checkout output is local exploratory work only; DO NOT sync it. Any later
+publication must follow SKILL.md: clean committed checkout, fresh clean analysis,
+validation, privacy dry-run, and a final cleanliness/HEAD check.

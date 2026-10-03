@@ -38,3 +38,16 @@ An empty or partial `.trace` after analysis (including an empty root after dry-r
 is not initialized state. Use `trace init --yes` to adopt missing scaffold files;
 do not assume directory existence or a successful `trace validate` proves config
 and schema-version exist.
+
+## Commit attribution gate
+
+Every path to synchronization requires empty `git status --porcelain`, fresh
+analysis of that clean committed checkout, validation and the privacy dry-run.
+Recheck cleanliness and matching HEAD immediately before sync. Dirty analysis
+is local exploratory work only and MUST NOT sync. Reverting edits is insufficient:
+regenerate the clean analysis even when HEAD has not changed. This Skill policy
+is not currently enforced by TRACE runtime. See safety.md for the publication policy.
+
+`--with-ai` is not a configured real AI capability in this CLI release. Its
+fixture/no-provider output must not be presented as model-backed intelligence;
+check provenance and do not imply source was sent to a model.

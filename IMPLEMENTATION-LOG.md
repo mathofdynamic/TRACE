@@ -2003,3 +2003,20 @@
 - Preserve documented product gaps for separate bug reports; no runtime contract,
   production infrastructure, credentials or root .trace state changes. PR CI/E2E
   results will be recorded in the PR after execution; no deployment is requested.
+
+### PR #64 review corrections — 2026-10-03
+
+- P1: dirty-tree analysis is local exploratory output only. Every publication path
+  requires empty git status --porcelain, fresh clean committed re-analysis,
+  validation and privacy dry-run, with cleanliness/HEAD rechecked before sync.
+  Matching HEAD after reverting edits cannot rehabilitate dirty same-HEAD output.
+- P2: verify CLI does not pass modelProvider; --with-ai uses the fake/no-provider
+  fixture path. Correct AI capability claims and preserve deterministic/provenance
+  distinctions; no provider integration or runtime enforcement added.
+- Extend public Skill policy drift checks with dirty/untracked/clean-but-stale/clean-
+  regenerated cases, policy mutations, offline same-HEAD dirty/reverted behavior,
+  and actual --with-ai provenance. Runtime follow-ups remain separate product issues.
+- Local validation: 26 CLI tests passed (13 drift checks, including new policy
+  mutations and provenance/dirty-revert behavior); pnpm check, pnpm cf:build and
+  git diff --check passed. Product follow-ups #69/#70 opened without runtime fixes.
+  Correction is submitted to the same PR branch; review resolution follows verified CI.

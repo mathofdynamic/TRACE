@@ -35,3 +35,12 @@ No CLI command generates `decision`, `risk`, `debt`, `conflict`, `rule`, `index`
 - Never hand-edit CLI-generated artifacts to alter findings, classification, evidence, or projection.
 - Evidence locators (paths, commit SHAs) are allowed; code content is not.
 - Re-running `trace analyze` for the same HEAD overwrites the same file; other generators refuse to overwrite existing files except where the command documents it.
+
+## Commit attribution gate
+
+Every path to synchronization requires empty `git status --porcelain`, fresh
+analysis of that clean committed checkout, validation and the privacy dry-run.
+Recheck cleanliness and matching HEAD immediately before sync. Dirty analysis
+is local exploratory work only and MUST NOT sync. Reverting edits is insufficient:
+regenerate the clean analysis even when HEAD has not changed. This Skill policy
+is not currently enforced by TRACE runtime. See safety.md for the publication policy.

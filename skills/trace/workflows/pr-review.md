@@ -6,3 +6,7 @@
 3. Keep verified provider facts separate from interpretation; cite evidence.
 4. If a durable brief is authorized, use `trace pr <number> --base <ref> --base-sha <sha> --write --yes`.
 5. Run `trace validate`. The current PR brief has no dashboard projection and is excluded from sync; do not add one manually.
+
+Dirty checkout output is local exploratory work only; DO NOT sync it. Any later
+publication must follow SKILL.md: clean committed checkout, fresh clean analysis,
+validation, privacy dry-run, and a final cleanliness/HEAD check.

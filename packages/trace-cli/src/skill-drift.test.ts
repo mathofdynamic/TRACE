@@ -120,6 +120,21 @@ function assertReferenceContract(files: Map<string, string>, cliVersion: string)
   expect(files.get('references/safety.md')).toContain('codeSnippetsIncluded: false');
 }
 
+function publicationPolicy(text: string) {
+  const block = text
+    .match(/```yaml\n([\s\S]*?)```/g)
+    ?.find((part) => part.includes('publication_policy:'));
+  expect(block).toBeDefined();
+  const policy = parse(block!.replace(/^```yaml\n|```$/g, '')).publication_policy;
+  expect(policy).toEqual({
+    dirty_analysis_sync: false,
+    clean_worktree_required: true,
+    fresh_clean_analysis_required: true,
+    real_cli_semantic_provider: false,
+  });
+  return policy;
+}
+
 describe('TRACE Skill drift checks', () => {
   it('has valid front matter and the expected package files', async () => {
     const skill = await read('SKILL.md');
@@ -183,6 +198,34 @@ describe('TRACE Skill drift checks', () => {
     }
   });
 
+  it('protects clean publication and no real AI claims, including policy mutations', async () => {
+    const safety = await read('references/safety.md');
+    const policy = publicationPolicy(safety);
+    const eligible = (status: string, freshlyAnalyzedClean: boolean) =>
+      (!policy.clean_worktree_required || status === '') &&
+      (!policy.fresh_clean_analysis_required || freshlyAnalyzedClean);
+    expect(eligible(' M sample.ts', true)).toBe(false);
+    expect(eligible('?? new.ts', false)).toBe(false);
+    expect(eligible('', false)).toBe(false);
+    expect(eligible('', true)).toBe(true);
+    for (const [key, value] of Object.entries(policy))
+      expect(() =>
+        publicationPolicy(safety.replace(`${key}: ${value}`, `${key}: ${!value}`)),
+      ).toThrow();
+    for (const name of [
+      'SKILL.md',
+      'references/lifecycle.md',
+      'references/automation.md',
+      'references/troubleshooting.md',
+      'references/safety.md',
+    ]) {
+      const doc = await read(name);
+      expect(doc).toContain('git status --porcelain');
+      expect(doc).toMatch(/(?:DO NOT|MUST NOT) sync/);
+    }
+    expect(await read('SKILL.md')).not.toContain('enables optional semantic analysis');
+  });
+
   it('exercises CLI lifecycle, initialization gap, PR exclusion and privacy entirely offline', async () => {
     const root = await mkdtemp(join(tmpdir(), 'trace-skill-contract-'));
     const previous = process.cwd();
@@ -203,6 +246,7 @@ describe('TRACE Skill drift checks', () => {
         ],
         { cwd: root },
       );
+      await writeFile(join(root, '.git', 'info', 'exclude'), '.trace/\n');
       process.chdir(root);
       const value = async (args: string[]) => (await main(args)).value as Record<string, unknown>;
       expect((await value(['analyze', '--dry-run'])).artifact).toMatchObject({ dryRun: true });
@@ -242,6 +286,23 @@ describe('TRACE Skill drift checks', () => {
       await expect(sync(root, 'main', 'a'.repeat(40), false)).rejects.toThrow(
         'Run trace connect before trace sync.',
       );
+      const head = (await run('git', ['rev-parse', 'HEAD'], { cwd: root })).stdout.trim();
+      await writeFile(join(root, 'sample.ts'), 'export const value = 2;\n');
+      expect((await run('git', ['status', '--porcelain'], { cwd: root })).stdout).not.toBe('');
+      const dirty = await value(['analyze']);
+      expect(
+        (await value(['inspect', (dirty.artifact as { path: string }).path])).dashboard,
+      ).toMatchObject({ head_commit: head });
+      await writeFile(join(root, 'sample.ts'), 'export const value = 1;\n');
+      expect((await run('git', ['status', '--porcelain'], { cwd: root })).stdout).toBe('');
+      // Reverting contents leaves the same-HEAD artifact in place; policy still requires regeneration.
+      expect(
+        (await value(['inspect', (dirty.artifact as { path: string }).path])).dashboard,
+      ).toMatchObject({ head_commit: head });
+      const withAi = await value(['analyze', '--with-ai']);
+      expect(withAi.analysis).toMatchObject({
+        provenance: { semanticProvider: 'fake', sourceCodeSentToProvider: false },
+      });
       expect((await main(['config', 'show'])).code).toBe(0);
       expect((await main(['rules', 'test'])).code).toBe(0);
     } finally {

@@ -25,3 +25,7 @@ behavior, schema/protocol/types/projections, sync privacy/limits, and stable err
 Update this package when changing those contracts; never compensate for product gaps
 inside the Skill. The current analyze-before-init partial-directory behavior and
 PR-brief missing-projection gap are documented in references and exercised locally.
+
+Dirty analyses remain local exploratory work; synchronization requires a clean
+committed checkout and freshly regenerated clean analysis. The current CLI
+`--with-ai` flag has no configured real semantic provider and is not an AI feature.

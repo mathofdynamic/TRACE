@@ -24,14 +24,23 @@ Future runtime: none to rely on today.
 
 ## Recommended trigger policy (Skill recommendation, not product feature)
 
-| Event                    | Recommended action                                                  | Supported by TRACE today?               |
-| ------------------------ | ------------------------------------------------------------------- | --------------------------------------- |
-| User asks analyze/update | analyze if needed -> dry-run -> sync                                | Yes (manual CLI)                        |
-| Local commit             | update local analysis; do not auto-publish                          | Analysis yes; automation is user-built  |
-| Push                     | analyze if changed -> dry-run -> sync (after the push has happened) | Manual only                             |
-| PR opened/updated        | `trace pr ... --write --yes` (+ `analyze`)                          | Manual command; no event hook           |
-| PR merged/closed         | final `analyze`/report on request, then dry-run -> sync             | Manual only                             |
-| Remote GitHub change     | cloud updates remote state; dashboard may say Needs refresh         | Cloud side yes; local refresh is manual |
-| Needs refresh            | analyze current checkout -> dry-run -> sync                         | Yes (manual)                            |
+| Event                    | Recommended action                                                                                                 | Supported by TRACE today?               |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------- |
+| User asks analyze/update | clean committed checkout -> fresh analysis -> validate -> dry-run -> authorized sync                               | Yes (manual CLI)                        |
+| Local commit             | update local analysis; do not auto-publish                                                                         | Analysis yes; automation is user-built  |
+| Push                     | clean committed checkout -> fresh analysis -> validate -> dry-run -> authorized sync (after the push has happened) | Manual only                             |
+| PR opened/updated        | `trace pr ... --write --yes` (+ `analyze`)                                                                         | Manual command; no event hook           |
+| PR merged/closed         | clean committed checkout -> fresh `analyze`/report -> validate -> dry-run -> authorized sync                       | Manual only                             |
+| Remote GitHub change     | cloud updates remote state; dashboard may say Needs refresh                                                        | Cloud side yes; local refresh is manual |
+| Needs refresh            | clean committed checkout -> fresh analysis -> validate -> dry-run -> authorized sync                               | Yes (manual)                            |
 
 Mark in your answer which parts are manual so the user does not assume background behavior.
+
+## Commit attribution gate
+
+Every path to synchronization requires empty `git status --porcelain`, fresh
+analysis of that clean committed checkout, validation and the privacy dry-run.
+Recheck cleanliness and matching HEAD immediately before sync. Dirty analysis
+is local exploratory work only and MUST NOT sync. Reverting edits is insufficient:
+regenerate the clean analysis even when HEAD has not changed. This Skill policy
+is not currently enforced by TRACE runtime. See safety.md for the publication policy.

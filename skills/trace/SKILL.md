@@ -47,10 +47,10 @@ Then pick a branch:
 | `trace validate` reports issues                               | Stop; read `references/troubleshooting.md`; repair or ask.                                                                             |
 | `dashboard.connected: false`                                  | Authenticate/connect if the user wants dashboard sync; otherwise local-only is valid.                                                  |
 | Connected, no analysis file                                   | Analyze.                                                                                                                               |
-| Tree dirty, or latest analysis `head_commit` != `HEAD`        | Re-analyze.                                                                                                                            |
-| Tree clean and latest analysis `head_commit` == `HEAD`, valid | Skip analysis; go to dry-run/sync if sync was requested.                                                                               |
+| Tree dirty                                                    | Local exploratory analysis only; DO NOT sync. Commit relevant changes, obtain a clean tree, then re-analyze before publication.        |
+| Tree clean and latest analysis `head_commit` == `HEAD`, valid | For requested sync, always re-analyze the clean committed checkout; matching HEAD alone cannot prove a prior analysis was clean.       |
 
-Latest analysis head: `trace inspect .trace/analyses/<file>.md --json` -> `dashboard.head_commit`. The analysis filename is derived from repo + HEAD, so re-analysis of the same HEAD overwrites the same file; it does not distinguish uncommitted edits, hence "dirty -> re-analyze".
+Latest analysis head: `trace inspect .trace/analyses/<file>.md --json` -> `dashboard.head_commit`. The analysis filename is derived from repo + HEAD, so re-analysis of the same HEAD overwrites the same file; it does not distinguish uncommitted edits, so a dirty analysis can retain the same HEAD even after edits are reverted. A clean tree alone does not rehabilitate that artifact; regenerate clean before synchronization.
 
 ## Initialize
 
@@ -82,16 +82,22 @@ trace analyze --dry-run --json    # preview, no artifact write (can create an em
 trace validate --json
 ```
 
-`--with-ai` enables optional semantic analysis; use it only if the user asks, and read `analysis.provenance` (`sourceCodeSentToProvider`) in the output. Plain `analyze` is deterministic. Never describe deterministic output as semantic/model analysis.
+`--with-ai` exists, but the current CLI supplies no configured semantic provider. It uses a development fixture/no-provider path, not real model-backed AI analysis. Do not recommend the flag as an AI capability. Inspect `analysis.provenance`: current output reports provider `fake` and `sourceCodeSentToProvider: false`; never present it as semantic intelligence or claim source was sent to a model. Plain analysis is deterministic.
 
 ## "Update TRACE" workflow
 
-1. Detect state (above). 2. `trace validate --json`. 3. Analyze only if needed. 4. `trace validate --json`. 5. `trace sync --dry-run --json`; inspect `eligible`, `excluded`, `totalBytes`, both flags. 6. If the user asked to update/sync and the dry-run is safe: `trace sync --json`. 7. Verify: `trace sync status --json` and inspect the returned sync operation and commit information, comparing it with `git rev-parse HEAD` when supplied. Do not infer freshness from a successful upload alone.
+1. Detect initialized state and validate. For local-only requests, analyze if useful and report any uncommitted changes; stop without syncing.
+2. For requested synchronization, require `git status --porcelain` to be empty. If dirty, DO NOT sync; the user must authorize committing the relevant changes or otherwise obtaining a clean committed checkout.
+3. Always re-analyze that clean checkout before publication, even if an old artifact has the same HEAD. This replaces any prior dirty same-HEAD analysis; validate again.
+4. Recheck `git status --porcelain` is empty and verify analyzed HEAD equals current HEAD. If analysis output is tracked or other files changed, stop; do not hide changes by altering ignore rules.
+5. Run `trace sync --dry-run --json`; inspect eligible/excluded entries and both privacy flags. Require a clean tree again immediately before the authorized `trace sync --json`.
+6. Verify with `trace sync status --json`. Successful upload alone does not prove freshness.
 
-If not connected, stop after step 4/5 and say what is needed. Local-only update is a valid outcome.
+If not connected, report the necessary login/selection action. Local-only analysis is valid. The clean-checkout gate is Skill policy; current runtime does not enforce it. See references/safety.md.
 
 ## Safe synchronization
 
+- Dirty analysis is local exploratory work only. Never synchronize it as a commit-attributed record. Require clean checkout and fresh clean analysis before any sync path.
 - Sync happens only via `trace sync`; it sends only allowlisted, source-free artifacts that carry a `dashboard` projection. Limits: 256 KiB per artifact, 64 artifacts, 2 MiB total.
 - Read every entry in `excluded`. Each has a reason (see `references/safety.md`). Do not "fix" an exclusion by weakening policy, editing sensitivity/sync_policy, or enabling `include_code_snippets`.
 - Sync uses the current branch and `HEAD`. On a detached HEAD the branch is empty and the manifest requires one, so a connected sync is expected to fail; ask the user to check out a branch.
@@ -118,7 +124,7 @@ trace report daily  [--date YYYY-MM-DD] --yes --json     # without --yes it is a
 trace report weekly --yes --json
 ```
 
-Reports are deterministic drafts. `--with-ai` (daily) adds an analysis snapshot only. Reports are syncable but sync still requires dry-run first.
+Reports are deterministic drafts. `--with-ai` (daily) adds an analysis snapshot using the same fixture/no-provider path, not real AI. Reports are syncable but sync still requires dry-run first.
 
 ## Dashboard / freshness interpretation
 

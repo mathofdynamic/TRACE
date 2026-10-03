@@ -33,12 +33,21 @@ The CLI never remediates states it does not list. Do not invent fixes for GitHub
 
 Fresh repo: `trace init --yes` -> `trace validate` -> (if dashboard wanted) `trace login` [human] -> `trace connect` -> `trace analyze` -> `trace sync --dry-run` -> verify flags -> `trace sync` -> `trace sync status`.
 
-Existing current repo: valid `.trace`, clean tree, latest analysis `head_commit` == `HEAD` -> do not re-analyze; dry-run/sync only if requested.
+Existing current repo: valid `.trace`, clean tree, latest analysis `head_commit` == `HEAD` -> local-only work may skip analysis; requested synchronization always regenerates analysis from the clean committed checkout.
 
-Modified local repo: dirty tree or new HEAD -> `trace analyze` -> `trace validate` -> `trace sync --dry-run` -> `trace sync` if requested.
+Modified local repo: dirty tree -> local exploratory `trace analyze` only -> DO NOT sync. Once relevant changes are committed and the tree is clean, re-analyze clean -> validate -> privacy dry-run -> authorized sync. A reverted dirty edit still requires clean re-analysis, even at the same HEAD.
 
 Needs refresh: ask/confirm whether the local checkout should first be updated to the remote state (never pull/reset unprompted) -> `trace analyze` -> `trace validate` -> dry-run -> sync.
 
 New PR: `trace pr --base <ref> --base-sha <sha> <n>` preview -> `--write --yes` -> `trace analyze` if checkout changed -> dry-run; note the PR brief is excluded from sync today.
 
 Unsafe sync: dry-run shows a source/snippet flag true, an unexpected `eligible` entry, or surprising content -> STOP, do not run `trace sync`, report which artifact and why.
+
+## Commit attribution gate
+
+Every path to synchronization requires empty `git status --porcelain`, fresh
+analysis of that clean committed checkout, validation and the privacy dry-run.
+Recheck cleanliness and matching HEAD immediately before sync. Dirty analysis
+is local exploratory work only and MUST NOT sync. Reverting edits is insufficient:
+regenerate the clean analysis even when HEAD has not changed. This Skill policy
+is not currently enforced by TRACE runtime. See safety.md for the publication policy.
