@@ -14,7 +14,7 @@ assert(
 const release = resolve(releaseArgument);
 const checksumLine = (await readFile(join(release, 'SHA256SUMS'), 'utf8')).trim();
 const checksumMatch =
-  /^([a-f0-9]{64})  (mathofdynamic-trace-cli-(\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?).tgz)$/.exec(
+  /^([a-f0-9]{64}) {2}(mathofdynamic-trace-cli-(\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?)\.tgz)$/.exec(
     checksumLine,
   );
 assert(checksumMatch, 'Release must contain one safe versioned archive checksum');
@@ -61,6 +61,8 @@ const manifest = JSON.parse(
     'utf8',
   ),
 );
+assert.equal(manifest.name, '@mathofdynamic/trace-cli');
+assert.equal(manifest.version, expectedVersion);
 assert.equal(
   manifest.dependencies,
   undefined,
