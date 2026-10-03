@@ -148,3 +148,7 @@ The staging Worker at `https://trace-test-staging.mathofdynamic2.workers.dev` se
 ## License
 
 The project license and contribution model have not yet been finalized. Do not assume the repository or future `.trace` specification is open source until an explicit license is added.
+
+## Public Agent Skill
+
+Use the canonical [TRACE Skill](skills/trace/SKILL.md) and its [installation/review notes](skills/trace/README.md) for CLI-backed agent workflows. It is an operational guide, not a runtime.

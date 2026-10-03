@@ -1,7 +1,8 @@
 # Pull-request workflow
 
-1. Run `trace changes --json` for deterministic local context.
-2. Use `trace pr <number-or-url> --dry-run` only when GitHub access is explicitly requested.
-3. Keep provider facts separate from semantic interpretation.
-4. Cite PR, commit, file, and check references.
-5. Validate artifacts before any authorized write.
+1. Check initialized state using SKILL.md, then run `trace changes --json`.
+2. Preview with `trace pr <number> --base <ref> --base-sha <sha> --json`.
+   The CLI uses supplied local context; it does not fetch GitHub PR facts or parse a PR URL.
+3. Keep verified provider facts separate from interpretation; cite evidence.
+4. If a durable brief is authorized, use `trace pr <number> --base <ref> --base-sha <sha> --write --yes`.
+5. Run `trace validate`. The current PR brief has no dashboard projection and is excluded from sync; do not add one manually.

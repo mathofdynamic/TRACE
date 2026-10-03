@@ -159,3 +159,7 @@ Owner-authenticated visual review was completed for these staging routes:
 - `https://trace-code.pages.dev/app/settings`
 
 The review confirmed `mathofdynamic/TRACE`, real findings, Local CLI provenance, `Current` freshness, daily and weekly reports, and visible connections without credentials or token hashes. No visible layout or navigation blocker was reported during the responsive review at 1440, 1024, 768, and 390 pixels.
+
+## Agent Skill
+
+The canonical [TRACE Skill](../skills/trace/SKILL.md) encodes state detection, initialization, the sync dry-run privacy gate, dashboard freshness, and human-action boundaries. Its references and preserved workflows delegate to the real CLI. See [current installation and drift protection](../skills/trace/README.md).
