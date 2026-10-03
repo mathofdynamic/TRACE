@@ -1297,8 +1297,11 @@ implementation work.
   [37105971400](https://github.com/mathofdynamic/TRACE/actions/runs/37105971400)
   passed full checks and browser E2E before PR #59 merged. A merge-tree review
   found no integration conflicts. Main is now the integration frontier.
-- Final protected acceptance dispatched from exact main integration source:
-  [37111292984](https://github.com/mathofdynamic/TRACE/actions/runs/37111292984).
+- Final protected acceptance from exact main integration source
+  [37111292984](https://github.com/mathofdynamic/TRACE/actions/runs/37111292984)
+  passed after the owner added `main` to the existing environment branch allowlist.
+  It again verified installation/account, 91 trusted repositories, 89 available,
+  active TRACE and fixture, foreign-key violations 0, Queue backlog 0 and health 200.
 
 ### Operations and rollback
 
@@ -1318,8 +1321,8 @@ Do not rerun old empty/fixture-only D1 baseline assertions against the expanded
 owner catalog or delete records to satisfy them. Use owner-state acceptance for
 this release and the historical fixture evidence for the already-passed canary.
 
-Main protected acceptance currently awaits adding `main` to the existing
-`production-canary` deployment branch allowlist. GitHub rejected the injected
-integration policy-edit request with HTTP 403; the owner must perform that
-settings action. Fixture canary **PASS**, owner production **YES**, public
-customer cutover **NO**.
+The owner added `main` alongside the existing feature branch in the protected
+`production-canary` deployment allowlist; no runtime credentials or other
+protections changed. Final main acceptance passed. No remaining human action or
+external blocker was identified. Fixture canary **PASS**, owner production **YES**,
+public customer cutover **NO**.

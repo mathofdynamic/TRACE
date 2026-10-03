@@ -1872,10 +1872,11 @@
   CI/E2E `37105971400` and merged at main
   `94daaaa33f2b94e4b569bf74f90b74f09cfd4e40`. Entire tracked tree matches the
   deployed reviewed source (`git diff --exit-code` empty), so no redeployment.
-- Final main protected read-only owner acceptance: `37111292984`. Recorded current
+- Final main protected read-only owner acceptance `37111292984` passed after the
+  owner added main alongside the existing feature branch to the production-canary
+  deployment allowlist. Reverified 91 trusted repositories, 89 available, active
+  TRACE/fixture, FK=0, Queue backlog=0 and health=200. Recorded current
   architecture, owner CLI path, source/merge relationship, selection/webhook policy,
   preserved canary and rollback in one final documentation update.
 - FIXTURE CANARY=PASS; OWNER PRODUCTION OPERATIONAL=YES;
-  PUBLIC CUSTOMER CUTOVER=NO. Final main protected acceptance awaits owner
-  addition of main to the production-canary deployment branch allowlist; the
-  injected integration policy-edit request received HTTP 403.
+  PUBLIC CUSTOMER CUTOVER=NO. No remaining human action or external blocker.
