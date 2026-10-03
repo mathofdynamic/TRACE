@@ -2025,3 +2025,13 @@
   Reject the whole batch and report it without artifact/policy manipulation.
   New batch case and policy mutations pass; re-run 26 focused tests, pnpm check,
   pnpm cf:build and diff checks successfully before pushing this addition.
+
+## Standalone CLI distribution
+
+- Bundle the real CLI and runtime dependencies into a checksummed npm-compatible GitHub release archive. Keep private workspace packages private.
+- Preserve direct imports while making the installed Unix symlink and Windows shim execute the CLI.
+- Add Windows/Linux fresh-prefix installation acceptance using a separate clean TRACE checkout, real initialization, analysis and schema validation. No dashboard login or runtime infrastructure changes.
+- Document Node/Git prerequisites, Windows execution-policy guidance, local analysis and optional safe dashboard synchronization.
+- Local validation: `pnpm check` PASS; focused CLI/Skill tests 26 PASS; `pnpm cf:build` PASS (build only); `git diff --check` PASS; installed archive initializes/analyzes/validates a fresh TRACE checkout with clean provenance and no credentials. Windows results are supplied by distribution CI, not inferred from Linux.
+- Fresh Windows acceptance caught a case-sensitive executable-path comparison that suppressed npm shim execution; compare Windows paths case-insensitively while retaining POSIX semantics. Windows focused CLI/Skill tests (including DPAPI) passed before this correction.
+- Review correction: published-release acceptance derives the archive and expected version from its validated checksum entry instead of hardcoding the first release filename.

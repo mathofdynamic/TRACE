@@ -7,12 +7,11 @@ The Skill delegates execution to the CLI and does not provide a daemon or a sepa
 
 ## Current installation state
 
-The current `@trace/cli` package is private, version 0.1.0. No public npm package,
-registry installer or global release is verified in current source. For this checkout,
-run `pnpm install --frozen-lockfile`, then `pnpm --filter @trace/cli... build`.
-Invoke `node packages/trace-cli/dist/cli.js <command>` or root `pnpm trace <command>`;
-`trace` in the Skill means that CLI, not a guessed npm package. This is the current
-workspace installation path, not a permanent distribution promise.
+Install the standalone CLI with the GitHub release instructions in
+[the CLI README](../../packages/trace-cli/README.md). Version 0.1.0 bundles its
+runtime dependencies; no npm registry package name should be guessed.
+For source development, run `pnpm install --frozen-lockfile`, then
+`pnpm --filter @trace/cli... build` and `pnpm trace <command>`.
 
 Point the agent at this SKILL.md, with its references/workflows accessible. No
 host-specific loader or registry installation is assumed. Local work needs no cloud

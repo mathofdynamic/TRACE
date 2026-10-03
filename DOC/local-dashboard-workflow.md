@@ -168,3 +168,7 @@ The review confirmed `mathofdynamic/TRACE`, real findings, Local CLI provenance,
 ## Agent Skill
 
 The canonical [TRACE Skill](../skills/trace/SKILL.md) encodes state detection, initialization, the sync dry-run privacy gate, dashboard freshness, and human-action boundaries. Its references and preserved workflows delegate to the real CLI. See [current installation and drift protection](../skills/trace/README.md).
+
+Standalone installation and Windows command guidance are in
+[the CLI README](../packages/trace-cli/README.md). A fresh local TRACE checkout
+can run `trace init --yes`, `trace analyze`, and `trace validate` without login.

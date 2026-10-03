@@ -1,7 +1,9 @@
+#!/usr/bin/env node
 import { execFile } from 'node:child_process';
-import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
 import { parse, stringify } from 'yaml';
 import {
   analyzeChanges,
@@ -567,7 +569,13 @@ export async function main(args: string[]): Promise<CliResult> {
   };
 }
 
-const invokedDirectly = process.argv[1]?.replaceAll('\\', '/').endsWith('/cli.js');
+const invokedPath = process.argv[1] ? await realpath(process.argv[1]).catch(() => '') : '';
+const modulePath = await realpath(fileURLToPath(import.meta.url));
+// Resolve both paths: Windows npm shims may use short names and different casing.
+const invokedDirectly =
+  process.platform === 'win32'
+    ? invokedPath.toLowerCase() === modulePath.toLowerCase()
+    : invokedPath === modulePath;
 if (invokedDirectly) {
   try {
     const result = await main(process.argv.slice(2));

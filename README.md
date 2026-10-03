@@ -152,3 +152,9 @@ The project license and contribution model have not yet been finalized. Do not a
 ## Public Agent Skill
 
 Use the canonical [TRACE Skill](skills/trace/SKILL.md) and its [installation/review notes](skills/trace/README.md) for CLI-backed agent workflows. It is an operational guide, not a runtime.
+
+## Install the standalone TRACE CLI
+
+See [CLI installation and Windows guidance](packages/trace-cli/README.md).
+Use TRACE itself as a local project: `trace init --yes`, `trace analyze`, then
+`trace validate`. Root `.trace/` remains ignored repository-local memory.
