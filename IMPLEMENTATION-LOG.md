@@ -1803,3 +1803,27 @@
   activation; excluded events cannot be selected for redelivery.
 - Regression tests exercise both rejection statuses and wrong-installation
   rejection. No production runtime or persistence behavior changes.
+
+### Production fixture live acceptance — 2026-10-03
+
+- Owner browser reconciliation and active fixture selection were verified in D1.
+  Installation `166179374` remains unsuspended/all-selection for mathofdynamic;
+  external access spans 89 repositories, while TRACE persists only fixture
+  repository `1378441300`, its installation and selected mapping.
+- Protected configuration run `37096013712` verified production URL, JSON, TLS
+  and existing secret. Lossless delivery-ID and narrow rejected-event inspection
+  fixes were merged after full local checks and CI; final verifier has 47 tests.
+- Recovered only the pre-secret 401 ping once. Verification `37098388520`
+  confirmed HTTP 200; `37098391361` confirmed zero delivery rows/Queue backlog.
+- Created exactly one controlled fixture issue #3 (`5686722719`). Signed issue
+  delivery returned 202. D1 run `37098478158` proved one processed delivery and
+  one fixture issue, valid links, no error, empty Queue and health 200.
+- Requested exactly one issue redelivery (`37098549152`); `37098658864`
+  confirmed the same GUID and HTTP 202. D1 `37098658849` retained exactly one
+  issue/delivery, foreign-key violations 0, Queue backlog 0 and health 200.
+- Recorded source/version, protected run links, lossless delivery IDs, scope
+  boundaries and idempotency evidence in `DOC/production-canary.md`.
+- Customer cutover remains NO; no runtime secret entered Codex Cloud, no direct
+  D1 mutation or synthetic Queue probe, and no customer/staging repository change.
+- Final exact-version bounded tail `37098658908` passed with zero errors.
+  TRACE FIXTURE OPERATIONAL=YES; CUSTOMER CUTOVER=NO.
