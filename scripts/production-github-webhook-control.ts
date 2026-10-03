@@ -140,10 +140,11 @@ export function selectSafeDeliveries(body: unknown, installationId: number): Saf
       // Keep those rejected deliveries out of the fixture inspection/redelivery set.
       const rejectedOutsideFixture =
         entry.status_code === 403 &&
-        entry.installation_id === installationId &&
-        ((Boolean(exactDeliveryId(entry.repository_id)) &&
+        ((entry.installation_id === installationId &&
+          Boolean(exactDeliveryId(entry.repository_id)) &&
           exactDeliveryId(entry.repository_id) !== '1378441300') ||
-          (entry.repository_id === null &&
+          ((entry.installation_id === null || entry.installation_id === installationId) &&
+            entry.repository_id === null &&
             (entry.event === 'installation' || entry.event === 'installation_repositories')));
       if (rejectedOutsideFixture) return [];
       fail(

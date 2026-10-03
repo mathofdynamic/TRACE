@@ -1782,3 +1782,14 @@
   to the fail-closed diagnostic; payloads and arbitrary strings remain excluded.
 - No processing or redelivery eligibility changed. No issue has been created.
 - Focused tests cover diagnostic scope and arbitrary metadata redaction.
+
+### Rejected App administration delivery metadata — 2026-10-03
+
+- Protected run `37097558979` identified `installation_repositories.added`
+  with null installation/repository metadata and HTTP 403. GitHub App-level
+  administration notifications do not necessarily expose those summary IDs.
+- Exclude only rejected installation/installation-repositories notifications with
+  null repository and either null or pinned installation metadata from the
+  protected fixture inspection set. They remain ineligible for redelivery.
+- Accepted administration events, wrong installation IDs, and null-scope business
+  events still stop activation. The runtime gate and persistence are unchanged.

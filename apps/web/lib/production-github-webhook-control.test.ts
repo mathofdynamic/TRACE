@@ -109,7 +109,7 @@ describe('protected production GitHub webhook control', () => {
             action: 'created',
             repository_id: null,
             installation_id: null,
-            status_code: 403,
+            status_code: 400,
           },
         ],
         166179374,
@@ -166,6 +166,26 @@ describe('protected production GitHub webhook control', () => {
         [{ ...delivery, repository_id: 7, installation_id: 9, status_code: 403 }],
         166179374,
       ),
+    ).toThrow(/nonfixture/);
+  });
+  it('excludes rejected App administration notifications with null scope without admitting accepted or wrong-installation events', () => {
+    const administrative = {
+      ...delivery,
+      event: 'installation_repositories',
+      action: 'added',
+      installation_id: null,
+      repository_id: null,
+      status_code: 403,
+    };
+    expect(selectSafeDeliveries([administrative, delivery], 166179374)).toHaveLength(1);
+    expect(() =>
+      selectSafeDeliveries([{ ...administrative, status_code: 200 }], 166179374),
+    ).toThrow(/nonfixture/);
+    expect(() =>
+      selectSafeDeliveries([{ ...administrative, installation_id: 9 }], 166179374),
+    ).toThrow(/nonfixture/);
+    expect(() =>
+      selectSafeDeliveries([{ ...administrative, event: 'issues', action: 'opened' }], 166179374),
     ).toThrow(/nonfixture/);
   });
   it('redelivers an exact int64 fixture issue ID without converting it to a number', async () => {
