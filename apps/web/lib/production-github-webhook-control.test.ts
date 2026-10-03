@@ -97,6 +97,33 @@ function run(operation: WebhookOperation, responses: ReturnType<typeof fake>, de
   });
 }
 describe('protected production GitHub webhook control', () => {
+  it('reports bounded metadata diagnostics without exposing arbitrary strings or payloads', () => {
+    expect(() => selectSafeDeliveries([{ ...delivery, status_code: 0 }], 166179374)).toThrow(
+      /"statusCode":0/,
+    );
+    let message = '';
+    try {
+      selectSafeDeliveries(
+        [
+          {
+            ...delivery,
+            guid: 'private-guid-secret',
+            delivered_at: 'private-date-secret',
+            request: { payload: 'private-payload' },
+            status_code: 'private-status-secret',
+          },
+        ],
+        166179374,
+      );
+    } catch (error) {
+      message = error instanceof Error ? error.message : '';
+    }
+    expect(message).toContain('"guidValid":false');
+    expect(message).toContain('"timestampValid":false');
+    expect(message).toContain('"statusCodeType":"string"');
+    expect(message).not.toContain('private-');
+  });
+
   it('PATCHes only the fixed production config after verifying the sole fixture installation', async () => {
     const f = fake([...prefix(), { body: config }, { body: config }]);
     const report = await run('configure', f);

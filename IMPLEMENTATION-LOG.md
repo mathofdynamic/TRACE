@@ -1746,3 +1746,16 @@
   full check, Cloudflare build and CI verification follow before merge/deployment.
 - No customer cutover. Activation remains pending production deployment and owner
   browser reconciliation; no production D1 mutation has been made by this fix.
+
+### Protected webhook delivery metadata diagnostics — 2026-10-03
+
+- Protected configuration verified the production webhook URL, JSON/TLS settings
+  and existing protected secret. Pre-issue D1 acceptance passed with the active
+  fixture, preserved reconciliation/onboarding audits, no delivery rows, valid
+  foreign keys, empty Queue and healthy runtime.
+- Delivery inspection rejected metadata before reporting the ping. Added bounded
+  validity/type/status diagnostics to the existing fail-closed verifier so the
+  unexpected field can be identified without exposing raw strings, payloads or
+  credentials. Regression coverage exercises transport status zero and redaction.
+- No controlled fixture issue has been created; live processing proof is pending.
+  Validation and CI outcomes are recorded in the focused PR before merge.
