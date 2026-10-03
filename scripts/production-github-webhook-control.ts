@@ -139,7 +139,7 @@ export function selectSafeDeliveries(body: unknown, installationId: number): Saf
       // The approved external all-repositories App may send events that TRACE rejects.
       // Keep those rejected deliveries out of the fixture inspection/redelivery set.
       const rejectedOutsideFixture =
-        entry.status_code === 403 &&
+        (entry.status_code === 401 || entry.status_code === 403) &&
         ((entry.installation_id === installationId &&
           Boolean(exactDeliveryId(entry.repository_id)) &&
           exactDeliveryId(entry.repository_id) !== '1378441300') ||

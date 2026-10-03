@@ -151,23 +151,26 @@ describe('protected production GitHub webhook control', () => {
       parseWebhookResponseJson(JSON.stringify({ body: '{"id":9223372036854775807}', id: 7 })),
     ).toEqual({ body: '{"id":9223372036854775807}', id: 7 });
   });
-  it('excludes rejected nonfixture deliveries from the redelivery set, but rejects accepted nonfixture delivery', () => {
-    expect(
-      selectSafeDeliveries(
-        [{ ...delivery, repository_id: 7, status_code: 403 }, delivery],
-        166179374,
-      ),
-    ).toHaveLength(1);
-    expect(() =>
-      selectSafeDeliveries([{ ...delivery, repository_id: 7, status_code: 200 }], 166179374),
-    ).toThrow(/nonfixture/);
-    expect(() =>
-      selectSafeDeliveries(
-        [{ ...delivery, repository_id: 7, installation_id: 9, status_code: 403 }],
-        166179374,
-      ),
-    ).toThrow(/nonfixture/);
-  });
+  it.each([401, 403])(
+    'excludes HTTP %i nonfixture deliveries from the redelivery set, but rejects accepted nonfixture delivery',
+    (statusCode) => {
+      expect(
+        selectSafeDeliveries(
+          [{ ...delivery, repository_id: 7, status_code: statusCode }, delivery],
+          166179374,
+        ),
+      ).toHaveLength(1);
+      expect(() =>
+        selectSafeDeliveries([{ ...delivery, repository_id: 7, status_code: 200 }], 166179374),
+      ).toThrow(/nonfixture/);
+      expect(() =>
+        selectSafeDeliveries(
+          [{ ...delivery, repository_id: 7, installation_id: 9, status_code: statusCode }],
+          166179374,
+        ),
+      ).toThrow(/nonfixture/);
+    },
+  );
   it('excludes rejected App administration notifications with null scope without admitting accepted or wrong-installation events', () => {
     const administrative = {
       ...delivery,
