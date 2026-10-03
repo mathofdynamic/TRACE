@@ -90,7 +90,7 @@ trace validate --json
 2. For requested synchronization, require `git status --porcelain` to be empty. If dirty, DO NOT sync; the user must authorize committing the relevant changes or otherwise obtaining a clean committed checkout.
 3. Always re-analyze that clean checkout before publication, even if an old artifact has the same HEAD. This replaces any prior dirty same-HEAD analysis; validate again.
 4. Recheck `git status --porcelain` is empty and verify analyzed HEAD equals current HEAD. If analysis output is tracked or other files changed, stop; do not hide changes by altering ignore rules.
-5. Run `trace sync --dry-run --json`; inspect eligible/excluded entries and both privacy flags. Require a clean tree again immediately before the authorized `trace sync --json`.
+5. Run `trace sync --dry-run --json`; inspect eligible/excluded entries and both privacy flags. Every eligible analysis must be known to come from clean committed contents. If an older dirty or unverified analysis remains eligible, DO NOT sync the batch; regenerating the current HEAD does not repair older records. Report the blocked plan instead of editing artifacts or policy to force eligibility. Require a clean tree again immediately before the authorized `trace sync --json`.
 6. Verify with `trace sync status --json`. Successful upload alone does not prove freshness.
 
 If not connected, report the necessary login/selection action. Local-only analysis is valid. The clean-checkout gate is Skill policy; current runtime does not enforce it. See references/safety.md.

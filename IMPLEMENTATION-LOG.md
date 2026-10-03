@@ -2020,3 +2020,8 @@
   mutations and provenance/dirty-revert behavior); pnpm check, pnpm cf:build and
   git diff --check passed. Product follow-ups #69/#70 opened without runtime fixes.
   Correction is submitted to the same PR branch; review resolution follows verified CI.
+- Tighten P1 for multi-artifact sync: every eligible analysis must be known clean;
+  a fresh current-HEAD artifact does not make older dirty/unverified records safe.
+  Reject the whole batch and report it without artifact/policy manipulation.
+  New batch case and policy mutations pass; re-run 26 focused tests, pnpm check,
+  pnpm cf:build and diff checks successfully before pushing this addition.

@@ -130,6 +130,7 @@ function publicationPolicy(text: string) {
     dirty_analysis_sync: false,
     clean_worktree_required: true,
     fresh_clean_analysis_required: true,
+    all_eligible_analysis_verified_clean: true,
     real_cli_semantic_provider: false,
   });
   return policy;
@@ -201,13 +202,15 @@ describe('TRACE Skill drift checks', () => {
   it('protects clean publication and no real AI claims, including policy mutations', async () => {
     const safety = await read('references/safety.md');
     const policy = publicationPolicy(safety);
-    const eligible = (status: string, freshlyAnalyzedClean: boolean) =>
+    const eligible = (status: string, freshlyAnalyzedClean: boolean, allEligibleClean = true) =>
       (!policy.clean_worktree_required || status === '') &&
-      (!policy.fresh_clean_analysis_required || freshlyAnalyzedClean);
+      (!policy.fresh_clean_analysis_required || freshlyAnalyzedClean) &&
+      (!policy.all_eligible_analysis_verified_clean || allEligibleClean);
     expect(eligible(' M sample.ts', true)).toBe(false);
     expect(eligible('?? new.ts', false)).toBe(false);
     expect(eligible('', false)).toBe(false);
     expect(eligible('', true)).toBe(true);
+    expect(eligible('', true, false)).toBe(false);
     for (const [key, value] of Object.entries(policy))
       expect(() =>
         publicationPolicy(safety.replace(`${key}: ${value}`, `${key}: ${!value}`)),

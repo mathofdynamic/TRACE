@@ -41,6 +41,7 @@ publication_policy:
   dirty_analysis_sync: false
   clean_worktree_required: true
   fresh_clean_analysis_required: true
+  all_eligible_analysis_verified_clean: true
   real_cli_semantic_provider: false
 ```
 
@@ -53,3 +54,8 @@ Do not commit/reset/pull or change ignore policy without task authorization.
 The current CLI does not enforce this attribution gate; never imply otherwise.
 `--with-ai` currently uses a fixture/no-provider path, not real AI capability;
 provenance must not be presented as model-backed intelligence.
+
+The gate applies to every eligible analysis in the dry-run batch, including older
+HEADs. Regenerating current HEAD does not rehabilitate older dirty or unverified
+records. If any remain eligible, DO NOT sync the batch; report the blocked plan.
+Do not delete/edit artifacts or weaken policy to force publication.
