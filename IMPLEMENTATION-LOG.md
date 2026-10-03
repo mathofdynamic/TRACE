@@ -1880,3 +1880,22 @@
   preserved canary and rollback in one final documentation update.
 - FIXTURE CANARY=PASS; OWNER PRODUCTION OPERATIONAL=YES;
   PUBLIC CUSTOMER CUTOVER=NO. No remaining human action or external blocker.
+
+### Canonical owner-production origin implementation — 2026-10-03
+
+- Separate fixed Pages browser, production Worker backend and staging origins.
+  Repoint the Pages proxy to production while retaining path/query/body/headers;
+  construct its upstream URL without protocol-relative path resolution.
+- Canonicalize direct Worker browser routes before OAuth/App state generation;
+  retain direct health/webhook/CLI APIs and authenticated origin/session gates.
+- Production manifest and callback runtime contract use Pages; direct webhook
+  and CLI contracts retain the Worker URL. Staging acceptance/configuration uses
+  the staging Worker independently.
+- Add protected exact-main Pages inspect/deploy tooling, pin the verified owner
+  rollback version, and support owner catalog/identity/session checks instead of
+  obsolete fixture-only row counts. Live cutover/owner browser acceptance follows
+  successful checks and implementation CI; public customer cutover remains NO.
+
+- Validation: full local pnpm check, pnpm cf:build, 52 focused proxy/origin/transition
+  tests, strict operational script typechecks and diff checks passed. Linux CI/E2E
+  and live protected cutover acceptance follow the implementation PR.

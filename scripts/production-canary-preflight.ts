@@ -21,6 +21,7 @@ export type CanaryManifest = {
   accountId: string;
   workerName: string;
   publicUrl: string;
+  backendUrl: string;
   runtime: {
     deploymentEnv: string;
     databaseDriver: string;
@@ -146,8 +147,11 @@ function validateStaticManifest(manifest: CanaryManifest) {
   ) {
     fail('Worker required-secret names must exactly match the production runtime secret contract.');
   }
-  if (!/^https:\/\/trace-production\.[a-z0-9-]+\.workers\.dev\/$/.test(`${manifest.publicUrl}/`)) {
-    fail('Production public URL is not an account-qualified workers.dev URL.');
+  if (
+    manifest.publicUrl !== 'https://trace-code.pages.dev' ||
+    manifest.backendUrl !== 'https://trace-production.mathofdynamic2.workers.dev'
+  ) {
+    fail('Production browser/backend origins do not match their fixed contract.');
   }
   if (manifest.d1.binding !== 'DB') fail('Production D1 binding must be DB.');
   if (manifest.queue.binding !== 'TRACE_QUEUE')

@@ -1,10 +1,12 @@
-/* global URL, Headers, fetch, Request */
+/* global URL, Headers, fetch, Request, Response */
 
-const TRACE_ORIGIN = 'https://trace-test-staging.mathofdynamic2.workers.dev';
+const TRACE_ORIGIN = 'https://trace-production.mathofdynamic2.workers.dev';
 
 export async function onRequest({ request }) {
   const incomingUrl = new URL(request.url);
-  const targetUrl = new URL(`${incomingUrl.pathname}${incomingUrl.search}`, TRACE_ORIGIN);
+  const targetUrl = new URL(TRACE_ORIGIN);
+  targetUrl.pathname = incomingUrl.pathname;
+  targetUrl.search = incomingUrl.search;
   const headers = new Headers(request.headers);
 
   headers.set('x-forwarded-host', incomingUrl.host);
@@ -18,7 +20,11 @@ export async function onRequest({ request }) {
 
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     init.body = request.body;
+    init.duplex = 'half';
   }
 
-  return fetch(new Request(targetUrl, init));
+  const upstream = await fetch(new Request(targetUrl, init));
+  const response = new Response(upstream.body, upstream);
+  response.headers.set('x-trace-proxy-upstream', TRACE_ORIGIN);
+  return response;
 }

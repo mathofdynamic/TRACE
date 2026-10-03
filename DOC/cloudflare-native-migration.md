@@ -1,5 +1,11 @@
 # Cloudflare-native runtime migration
 
+Current URL ownership: staging uses
+`https://trace-test-staging.mathofdynamic2.workers.dev` for browser access and health
+acceptance. `trace-code.pages.dev` is reserved for owner-production browser traffic;
+it must not be used by staging deployment or acceptance. Historical Pages references
+below describe the pre-migration topology, not current staging routing.
+
 Status: Phase CF2.5 GitHub ingestion and Queue business-handler parity is
 implemented for the paths exercised by the isolated D1 harness. D1 is a parity
 candidate;

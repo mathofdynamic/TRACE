@@ -71,7 +71,7 @@
         "TRACE_DEPLOYMENT_ENV": "staging",
         "TRACE_DATABASE_DRIVER": "d1",
         "NEXT_PRIVATE_MINIMAL_MODE": "1",
-        "TRACE_PUBLIC_URL": "https://trace-code.pages.dev",
+        "TRACE_PUBLIC_URL": "https://trace-test-staging.mathofdynamic2.workers.dev",
         "TRACE_FEATURE_SEMANTIC_PR_FINDINGS": "false",
         "TRACE_FEATURE_SEMANTIC_CONFLICTS": "false",
         "TRACE_FEATURE_GITHUB_COMMENTS": "false",

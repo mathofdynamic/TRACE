@@ -15,6 +15,11 @@ on:
           - catalog
           - active
 
+      pages_login_after_ms:
+        description: Optional cutover timestamp in milliseconds; require a fresh active owner session
+        required: false
+        type: string
+
 permissions:
   contents: read
 
@@ -31,6 +36,7 @@ jobs:
     env:
       EXPECTED_SHA: ${{ inputs.sha }}
       OWNER_ACCEPTANCE_STAGE: ${{ inputs.stage }}
+      PAGES_LOGIN_AFTER_MS: ${{ inputs.pages_login_after_ms }}
     steps:
       - name: Validate exact feature-ref source SHA
         shell: bash

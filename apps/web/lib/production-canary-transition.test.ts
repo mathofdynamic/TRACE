@@ -40,6 +40,7 @@ function bindings(mode: 'closed' | 'fixture' | 'owner') {
       TRACE_DEPLOYMENT_ENV: 'production',
       TRACE_DATABASE_DRIVER: 'd1',
       TRACE_CANARY_MODE: mode,
+      ...(mode === 'owner' ? { TRACE_PUBLIC_URL: 'https://trace-code.pages.dev' } : {}),
       ...(mode === 'fixture'
         ? {
             TRACE_CANARY_GITHUB_OWNER: 'mathofdynamic',
@@ -50,7 +51,10 @@ function bindings(mode: 'closed' | 'fixture' | 'owner') {
       GITHUB_APP_ID: sourceVariables.TRACE_GITHUB_APP_ID,
       GITHUB_APP_CLIENT_ID: sourceVariables.TRACE_GITHUB_APP_CLIENT_ID,
       GITHUB_APP_SLUG: sourceVariables.TRACE_GITHUB_APP_SLUG,
-      GITHUB_APP_CALLBACK_URL: sourceVariables.TRACE_GITHUB_APP_CALLBACK_URL,
+      GITHUB_APP_CALLBACK_URL:
+        mode === 'owner'
+          ? 'https://trace-code.pages.dev/api/github/setup'
+          : sourceVariables.TRACE_GITHUB_APP_CALLBACK_URL,
       GITHUB_APP_INSTALL_URL: sourceVariables.TRACE_GITHUB_APP_INSTALL_URL,
       GITHUB_OAUTH_CLIENT_ID: sourceVariables.TRACE_GITHUB_OAUTH_CLIENT_ID,
     }).map(([name, text]) => ({ type: 'plain_text', name, text })),
@@ -266,6 +270,43 @@ const commonEnvironment = {
 };
 
 describe('production fixture transition state gate', () => {
+  it('pins the accepted owner rollback version/source while preserving its legacy Worker callback', async () => {
+    const ownerVersion = 'a118f111-0bcb-4662-b864-c8587ca29567';
+    const source = '72f71ff4f597c0a18abaa2eaec837ff4892266d0';
+    const workerBindings = bindings('owner').map((binding) =>
+      binding.name === 'TRACE_PUBLIC_URL'
+        ? { ...binding, text: baseline.productionBaseUrl }
+        : binding.name === 'GITHUB_APP_CALLBACK_URL'
+          ? { ...binding, text: `${baseline.productionBaseUrl}/api/github/setup` }
+          : binding,
+    );
+    const fake = fakeCloudflare('before', source, {
+      activeVersionId: ownerVersion,
+      mode: 'owner',
+      workerBindings,
+    });
+    const input = {
+      phase: 'before' as const,
+      environment: {
+        ...commonEnvironment,
+        TRACE_GITHUB_APP_CALLBACK_URL: 'https://trace-code.pages.dev/api/github/setup',
+      },
+      fetchImplementation: fake.fetchImplementation,
+      consumerOutput: consumerList,
+    };
+    expect((await verifyProductionFixtureTransitionState(input)).canaryMode).toBe('owner');
+    await expect(
+      verifyProductionFixtureTransitionState({
+        ...input,
+        fetchImplementation: fakeCloudflare('before', source, {
+          activeVersionId: ownerVersion,
+          deploymentMessage: 'TRACE production canary fixture ' + 'f'.repeat(40),
+          mode: 'owner',
+          workerBindings,
+        }).fetchImplementation,
+      }),
+    ).rejects.toThrow(/source annotation/);
+  });
   it('verifies explicit owner mode without fixture variables while preserving accepted fixture state', async () => {
     const source = 'd'.repeat(40);
     const identity = Object.fromEntries(
@@ -304,6 +345,7 @@ describe('production fixture transition state gate', () => {
       environment: {
         ...commonEnvironment,
         RUNTIME_MODE: 'owner',
+        TRACE_GITHUB_APP_CALLBACK_URL: 'https://trace-code.pages.dev/api/github/setup',
         TRACE_FIXTURE_D1_BASELINE_STAGE: 'after-live-issue',
       },
       expectedSourceSha: source,

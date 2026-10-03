@@ -1,4 +1,5 @@
-const productionUrl = 'https://trace-production.mathofdynamic2.workers.dev';
+const backendUrl = 'https://trace-production.mathofdynamic2.workers.dev';
+const productionUrl = 'https://trace-code.pages.dev';
 
 export type FixtureRouteCheck = {
   name: string;
@@ -33,11 +34,14 @@ export async function verifyProductionFixtureRoutes(
 
   async function request(route: string, init: RequestInit = {}) {
     try {
-      return await fetchImplementation(`${productionUrl}${route}`, {
-        ...init,
-        redirect: 'manual',
-        signal: AbortSignal.timeout(10_000),
-      });
+      return await fetchImplementation(
+        `${route.startsWith('/api/auth/') || ['/api/github/install', '/api/github/setup', '/api/github/reconcile'].includes(route) ? productionUrl : backendUrl}${route}`,
+        {
+          ...init,
+          redirect: 'manual',
+          signal: AbortSignal.timeout(10_000),
+        },
+      );
     } catch {
       return fail(route, 'request failed before receiving a response');
     }

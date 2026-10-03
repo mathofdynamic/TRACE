@@ -1,5 +1,11 @@
 # Cloudflare-native staging
 
+Current URL ownership: staging uses
+`https://trace-test-staging.mathofdynamic2.workers.dev` for browser access and health
+acceptance. `trace-code.pages.dev` is reserved for owner-production browser traffic;
+it must not be used by staging deployment or acceptance. Historical Pages references
+below describe the pre-migration topology, not current staging routing.
+
 CF3 provisions an isolated Cloudflare-native staging path without changing the
 existing production or legacy PostgreSQL resources.
 
@@ -31,15 +37,15 @@ part of the Cloudflare-native staging path.
 
 ## Resources and bindings
 
-| Resource                    | Staging value                  |
-| --------------------------- | ------------------------------ |
-| Worker                      | `trace-test-staging`           |
-| D1 database                 | `trace-test-staging-db`        |
-| D1 binding                  | `DB`                           |
-| Queue                       | `trace-staging-jobs`           |
-| Queue producer binding      | `TRACE_QUEUE`                  |
-| Public authenticated origin | `https://trace-code.pages.dev` |
-| Wrangler environment        | `staging`                      |
+| Resource                    | Staging value                                           |
+| --------------------------- | ------------------------------------------------------- |
+| Worker                      | `trace-test-staging`                                    |
+| D1 database                 | `trace-test-staging-db`                                 |
+| D1 binding                  | `DB`                                                    |
+| Queue                       | `trace-staging-jobs`                                    |
+| Queue producer binding      | `TRACE_QUEUE`                                           |
+| Public authenticated origin | `https://trace-test-staging.mathofdynamic2.workers.dev` |
+| Wrangler environment        | `staging`                                               |
 
 No production D1 database, Queue, DNS record, custom domain, or GitHub App
 configuration is part of CF3.

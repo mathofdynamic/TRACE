@@ -24,7 +24,7 @@ const STAGING_WORKER_VERSION = '5930a184-d797-4b70-9aee-d7f0647ab1fa';
 const STAGING_D1_ID = 'c4df63bc-8270-4500-9dab-c1c6439efa64';
 const STAGING_QUEUE = 'trace-staging-jobs';
 const STAGING_HYPERDRIVE_ID = '2d1e4821c1484d6299d88e29f2884310';
-const STAGING_URL = 'https://trace-code.pages.dev';
+const STAGING_URL = 'https://trace-test-staging.mathofdynamic2.workers.dev';
 const API_ROOT = 'https://api.cloudflare.com/client/v4';
 type ApiEnvelope<T> = {
   success?: boolean;

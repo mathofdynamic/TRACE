@@ -33,6 +33,7 @@ on:
           - before-oauth
           - after-onboarding
           - after-live-issue
+          - owner
       confirmation:
         description: Type the confirmation required for the selected deploy runtime mode
         required: false
@@ -208,6 +209,7 @@ jobs:
           BUNDLE_DIR: ${{ runner.temp }}/trace-production-canary-bundle
           TRACE_GITHUB_APP_ID: ${{ vars.TRACE_GITHUB_APP_ID }}
           TRACE_GITHUB_APP_CLIENT_ID: ${{ vars.TRACE_GITHUB_APP_CLIENT_ID }}
+          TRACE_GITHUB_APP_PRIVATE_KEY: ${{ secrets.TRACE_GITHUB_APP_PRIVATE_KEY }}
           TRACE_GITHUB_APP_SLUG: ${{ vars.TRACE_GITHUB_APP_SLUG }}
           TRACE_GITHUB_APP_CALLBACK_URL: ${{ vars.TRACE_GITHUB_APP_CALLBACK_URL }}
           TRACE_GITHUB_APP_INSTALL_URL: ${{ vars.TRACE_GITHUB_APP_INSTALL_URL }}
@@ -227,7 +229,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "$TRACE_FIXTURE_D1_BASELINE_STAGE" == after-onboarding || "$TRACE_FIXTURE_D1_BASELINE_STAGE" == after-live-issue ]]; then
+          if [[ "$TRACE_FIXTURE_D1_BASELINE_STAGE" == after-onboarding || "$TRACE_FIXTURE_D1_BASELINE_STAGE" == after-live-issue || "$TRACE_FIXTURE_D1_BASELINE_STAGE" == owner ]]; then
             pnpm exec tsx scripts/verify-production-github-fixture-installation.ts
           else
             pnpm exec tsx scripts/verify-production-github-app-state.ts
@@ -246,6 +248,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           TRACE_GITHUB_APP_ID: ${{ vars.TRACE_GITHUB_APP_ID }}
           TRACE_GITHUB_APP_CLIENT_ID: ${{ vars.TRACE_GITHUB_APP_CLIENT_ID }}
+          TRACE_GITHUB_APP_PRIVATE_KEY: ${{ secrets.TRACE_GITHUB_APP_PRIVATE_KEY }}
           TRACE_GITHUB_APP_SLUG: ${{ vars.TRACE_GITHUB_APP_SLUG }}
           TRACE_GITHUB_APP_CALLBACK_URL: ${{ vars.TRACE_GITHUB_APP_CALLBACK_URL }}
           TRACE_GITHUB_APP_INSTALL_URL: ${{ vars.TRACE_GITHUB_APP_INSTALL_URL }}
@@ -356,6 +359,7 @@ jobs:
           TRACE_BASELINE_RUNTIME_MODE: ${{ steps.capture_transition_baseline.outputs.baseline_mode }}
           TRACE_GITHUB_APP_ID: ${{ vars.TRACE_GITHUB_APP_ID }}
           TRACE_GITHUB_APP_CLIENT_ID: ${{ vars.TRACE_GITHUB_APP_CLIENT_ID }}
+          TRACE_GITHUB_APP_PRIVATE_KEY: ${{ secrets.TRACE_GITHUB_APP_PRIVATE_KEY }}
           TRACE_GITHUB_APP_SLUG: ${{ vars.TRACE_GITHUB_APP_SLUG }}
           TRACE_GITHUB_APP_CALLBACK_URL: ${{ vars.TRACE_GITHUB_APP_CALLBACK_URL }}
           TRACE_GITHUB_APP_INSTALL_URL: ${{ vars.TRACE_GITHUB_APP_INSTALL_URL }}
@@ -412,6 +416,7 @@ jobs:
           TRACE_BASELINE_RUNTIME_MODE: ${{ steps.capture_transition_baseline.outputs.baseline_mode }}
           TRACE_GITHUB_APP_ID: ${{ vars.TRACE_GITHUB_APP_ID }}
           TRACE_GITHUB_APP_CLIENT_ID: ${{ vars.TRACE_GITHUB_APP_CLIENT_ID }}
+          TRACE_GITHUB_APP_PRIVATE_KEY: ${{ secrets.TRACE_GITHUB_APP_PRIVATE_KEY }}
           TRACE_GITHUB_APP_SLUG: ${{ vars.TRACE_GITHUB_APP_SLUG }}
           TRACE_GITHUB_APP_CALLBACK_URL: ${{ vars.TRACE_GITHUB_APP_CALLBACK_URL }}
           TRACE_GITHUB_APP_INSTALL_URL: ${{ vars.TRACE_GITHUB_APP_INSTALL_URL }}
@@ -428,6 +433,7 @@ jobs:
           TRACE_BASELINE_RUNTIME_MODE: ${{ steps.capture_transition_baseline.outputs.baseline_mode }}
           TRACE_GITHUB_APP_ID: ${{ vars.TRACE_GITHUB_APP_ID }}
           TRACE_GITHUB_APP_CLIENT_ID: ${{ vars.TRACE_GITHUB_APP_CLIENT_ID }}
+          TRACE_GITHUB_APP_PRIVATE_KEY: ${{ secrets.TRACE_GITHUB_APP_PRIVATE_KEY }}
           TRACE_GITHUB_APP_SLUG: ${{ vars.TRACE_GITHUB_APP_SLUG }}
           TRACE_GITHUB_APP_CALLBACK_URL: ${{ vars.TRACE_GITHUB_APP_CALLBACK_URL }}
           TRACE_GITHUB_APP_INSTALL_URL: ${{ vars.TRACE_GITHUB_APP_INSTALL_URL }}
