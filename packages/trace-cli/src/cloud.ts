@@ -479,6 +479,10 @@ export async function buildManifest(
   headCommit: string,
 ) {
   const target = await gitSnapshot(root);
+  if (!target.branch)
+    throw new Error(
+      'Sync requires a named Git branch; check out a branch and regenerate analysis.',
+    );
   if (target.workingTree !== 'clean')
     throw new Error(
       'Sync requires a clean working tree; commit or revert changes, then run trace analyze.',

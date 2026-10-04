@@ -10,7 +10,14 @@ export async function gitSnapshot(root: string): Promise<GitSnapshot> {
   return {
     branch: await git(['branch', '--show-current']),
     headCommit: await git(['rev-parse', 'HEAD']),
-    workingTree: (await git(['status', '--porcelain'])) ? 'dirty' : 'clean',
+    workingTree: (await git([
+      'status',
+      '--porcelain',
+      '--untracked-files=all',
+      '--ignore-submodules=none',
+    ]))
+      ? 'dirty'
+      : 'clean',
   };
 }
 export function sameSnapshot(a: GitSnapshot, b: GitSnapshot) {
@@ -21,7 +28,7 @@ export function analysisAttributionIssue(metadata: ArtifactMetadata, target: Git
   if (target.workingTree !== 'clean') return 'analysis requires a clean working tree';
   if (metadata.dashboard?.head_commit !== target.headCommit)
     return 'historical analysis: commit differs from current HEAD';
-  if (metadata.dashboard?.branch !== target.branch)
+  if ((metadata.dashboard?.branch ?? '') !== target.branch)
     return 'historical analysis: branch differs from current branch';
   const checks = metadata.evidence.filter(
     (item) => item.type === 'check' && item.locator === analysisInputCheck,

@@ -137,7 +137,10 @@ async function init(args: string[]): Promise<CliResult> {
 
 async function changes(args: string[]): Promise<NormalizedChangeSet> {
   const root = await repoRoot();
-  const status = await git(['status', '--porcelain'], root);
+  const status = await git(
+    ['status', '--porcelain', '--untracked-files=all', '--ignore-submodules=none'],
+    root,
+  );
   const branch = await git(['branch', '--show-current'], root).catch(() => '');
   const remote = await git(['config', '--get', 'remote.origin.url'], root).catch(() => '');
   const githubIdentity = normalizeGitHubRemote(remote);

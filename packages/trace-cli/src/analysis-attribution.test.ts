@@ -129,6 +129,17 @@ describe('analysis synchronization attribution', () => {
       expect(await readFile(artifact, 'utf8')).toContain('working_tree: clean');
     },
   );
+  it('does not trust Git configuration that hides untracked input', async () => {
+    await git('config', 'status.showUntrackedFiles', 'no');
+    const extra = join(root, 'extra.ts');
+    await writeFile(extra, 'export const uncommitted = 1;\n');
+    expect(await git('status', '--porcelain')).toBe('');
+    expect((await gitSnapshot(root)).workingTree).toBe('dirty');
+    const path = await generate();
+    expect(parseArtifact(await readFile(path, 'utf8')).metadata.sync_policy).toBe('local_only');
+    await rm(extra);
+    expect((await collectSyncArtifacts(root)).eligible).toHaveLength(0);
+  });
   it('still rejects dirty input provenance if an artifact is relabeled allowlisted', async () => {
     await writeFile(join(root, 'sample.ts'), 'export const value = 999;\n');
     const path = await generate();
@@ -235,6 +246,15 @@ describe('analysis synchronization attribution', () => {
     const path = await generate();
     expect(parseArtifact(await readFile(path, 'utf8')).metadata.sync_policy).toBe('local_only');
     expect((await collectSyncArtifacts(root)).eligible).toHaveLength(0);
+  });
+  it('supports detached local dry-run but refuses authoritative sync without a named branch', async () => {
+    await git('checkout', '--detach');
+    await generate();
+    expect((await collectSyncArtifacts(root)).eligible).toHaveLength(1);
+    const target = await gitSnapshot(root);
+    await expect(buildManifest(root, binding, target.branch, target.headCommit)).rejects.toThrow(
+      'named Git branch',
+    );
   });
   it('fails closed for legacy analysis without structured input provenance', async () => {
     const path = await generate();
