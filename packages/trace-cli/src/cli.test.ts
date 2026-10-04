@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -83,7 +84,7 @@ describe('source-free sync collection', () => {
     await mkdir(traceRoot, { recursive: true });
     await writeFile(
       join(root, '.trace', 'config.yml'),
-      'sync_policy:\n  enabled: true\n  allow:\n    - analysis\n  include_code_snippets: false\n',
+      'sync_policy:\n  enabled: true\n  allow:\n    - daily_report\n  include_code_snippets: false\n',
     );
     const base = {
       schema_version: '0.1' as const,
@@ -106,21 +107,31 @@ describe('source-free sync collection', () => {
     await writeFile(
       join(traceRoot, 'approved.md'),
       serializeArtifact(
-        { ...base, id: 'analysis-approved', artifact_type: 'analysis', sync_policy: 'allowlisted' },
+        {
+          ...base,
+          id: 'analysis-approved',
+          artifact_type: 'daily_report',
+          sync_policy: 'allowlisted',
+        },
         '# Analysis\n',
       ),
     );
     await writeFile(
       join(traceRoot, 'local.md'),
       serializeArtifact(
-        { ...base, id: 'analysis-local', artifact_type: 'analysis', sync_policy: 'local_only' },
+        { ...base, id: 'analysis-local', artifact_type: 'daily_report', sync_policy: 'local_only' },
         '# Local\n',
       ),
     );
     await writeFile(
       join(traceRoot, 'snippet.md'),
       serializeArtifact(
-        { ...base, id: 'analysis-snippet', artifact_type: 'analysis', sync_policy: 'allowlisted' },
+        {
+          ...base,
+          id: 'analysis-snippet',
+          artifact_type: 'daily_report',
+          sync_policy: 'allowlisted',
+        },
         '# Snippet\n\n```ts\nconst secret = 1;\n```\n',
       ),
     );
@@ -177,7 +188,7 @@ describe('sync idempotency', () => {
     const artifact = {
       schema_version: '0.1' as const,
       id: 'analysis-rotated-credential',
-      artifact_type: 'analysis' as const,
+      artifact_type: 'daily_report' as const,
       repository: { provider: 'github' as const, owner: 'mathofdynamic', name: 'TRACE' },
       created_at: '2026-08-14T00:00:00.000Z',
       updated_at: '2026-08-14T00:00:00.000Z',
@@ -197,11 +208,32 @@ describe('sync idempotency', () => {
     };
     try {
       process.env.TRACE_CONFIG_HOME = configRoot;
+      execFileSync('git', ['init', '-b', 'main'], { cwd: root });
+      await writeFile(join(root, '.gitignore'), '.trace/\n');
+      execFileSync('git', ['add', '.gitignore'], { cwd: root });
+      execFileSync(
+        'git',
+        [
+          '-c',
+          'user.name=TRACE Test',
+          '-c',
+          'user.email=trace@example.test',
+          'commit',
+          '-m',
+          'Initial',
+        ],
+        { cwd: root },
+      );
+      const head = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: root,
+        encoding: 'utf8',
+      }).trim();
+
       await mkdir(join(root, '.trace', 'state'), { recursive: true });
       await mkdir(join(root, '.trace', 'analyses'), { recursive: true });
       await writeFile(
         join(root, '.trace', 'config.yml'),
-        'sync_policy:\n  enabled: true\n  allow:\n    - analysis\n  include_code_snippets: false\n',
+        'sync_policy:\n  enabled: true\n  allow:\n    - daily_report\n  include_code_snippets: false\n',
       );
       await writeFile(
         join(root, '.trace', 'state', 'dashboard.json'),
@@ -243,7 +275,7 @@ describe('sync idempotency', () => {
         throw new Error(`Unexpected sync request: ${url}`);
       }) as typeof fetch;
 
-      const result = await sync(root, 'main', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', false);
+      const result = await sync(root, 'main', head, false);
       expect(result).toMatchObject({
         operationId: 'existing-completed-operation',
         status: 'completed',

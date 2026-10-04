@@ -17,7 +17,8 @@ Do not: upload repository files; embed raw source/fenced code to get around excl
 7. has a `dashboard` projection - "no dashboard projection"
 8. no code snippets (config flag, any ``` fence, or 2+ lines starting with import/export/const/let/var/function/class/interface/enum) - "code snippets are disabled"
 9. <= 262144 bytes - "artifact exceeds 256 KiB"
-   Also: symlinks escaping `.trace` - "symlink escapes .trace"; unparsable files are excluded with the parse error.
+10. analysis only: current branch/HEAD and verified clean input provenance; historical, dirty and unverified inputs are excluded.
+    Also: symlinks escaping `.trace` - "symlink escapes .trace"; unparsable files are excluded with the parse error.
 
 Whole-sync limits (schema): 64 artifacts, 2,097,152 bytes total. These are enforced when the manifest is built (connected dry-run and real sync); an unconnected dry-run only lists eligibility.
 
@@ -34,7 +35,7 @@ Whole-sync limits (schema): 64 artifacts, 2,097,152 bytes total. These are enfor
 - Do not use production for tests; use the repo's fixtures/mocks.
 - Do not weaken allowlists, exclusions, or validation to make a sync succeed.
 
-## Publication policy (Skill requirements, not runtime enforcement)
+## Publication policy (runtime guards and Skill requirements)
 
 ```yaml
 publication_policy:
@@ -51,7 +52,13 @@ validate, and run the sync privacy dry-run. Recheck clean status and matching HE
 immediately before authorized sync. Even reverted edits can leave a dirty same-HEAD
 artifact: never skip clean regeneration merely because recorded HEAD matches.
 Do not commit/reset/pull or change ignore policy without task authorization.
-The current CLI does not enforce this attribution gate; never imply otherwise.
+The runtime now records analysis input branch, HEAD and clean/dirty state in a
+`check` evidence record (`trace:analysis-input:v1`) using the existing schema.
+Dirty or unstable analysis is also marked `local_only`, which older clients refuse.
+Sync rejects a dirty checkout. Analysis eligibility requires recorded clean input
+and matching current branch/HEAD; historical and legacy/unverified analyses stay
+local with explicit exclusion reasons. Reverting edits does not repair the saved
+input state: regenerate clean analysis. No historical files are deleted.
 `--with-ai` currently uses a fixture/no-provider path, not real AI capability;
 provenance must not be presented as model-backed intelligence.
 

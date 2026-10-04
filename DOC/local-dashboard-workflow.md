@@ -172,3 +172,15 @@ The canonical [TRACE Skill](../skills/trace/SKILL.md) encodes state detection, i
 Standalone installation and Windows command guidance are in
 [the CLI README](../packages/trace-cli/README.md). A fresh local TRACE checkout
 can run `trace init --yes`, `trace analyze`, and `trace validate` without login.
+
+### Analysis attribution during sync
+
+Analysis records carry a schema-compatible `check` evidence entry,
+`trace:analysis-input:v1`, recording input branch, HEAD and working-tree state.
+Dirty or unstable analysis is marked `local_only`. Dry-run and real sync select only clean analyses matching the current branch and
+commit. Older records remain in `.trace` and appear in `excluded`; legacy records
+without input provenance require clean regeneration. Reverting a dirty edit does
+not turn its saved analysis into a clean record. Connected sync rejects dirty or
+changed Git context, and its dry-run exposes the manifest's `git` attribution.
+Privacy flags and exclusions remain mandatory. This change does not publish a new
+CLI release or deploy a server.

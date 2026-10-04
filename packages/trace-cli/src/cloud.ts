@@ -1,3 +1,9 @@
+import {
+  analysisAttributionIssue,
+  gitSnapshot,
+  sameSnapshot,
+  type GitSnapshot,
+} from './analysis-attribution.js';
 import { execFile } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { access, chmod, mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises';
@@ -378,7 +384,8 @@ async function markdownFiles(directory: string): Promise<string[]> {
   return files;
 }
 
-export async function collectSyncArtifacts(root: string) {
+export async function collectSyncArtifacts(root: string, snapshot?: GitSnapshot) {
+  const target = snapshot ?? (await gitSnapshot(root).catch(() => null));
   const traceRoot = join(root, '.trace');
   const traceRootReal = await (await import('node:fs/promises'))
     .realpath(traceRoot)
@@ -437,7 +444,9 @@ export async function collectSyncArtifacts(root: string) {
                       ? 'code snippets are disabled'
                       : bytes > 262_144
                         ? 'artifact exceeds 256 KiB'
-                        : null;
+                        : metadata.artifact_type === 'analysis'
+                          ? analysisAttributionIssue(metadata, target)
+                          : null;
       if (reason) excluded.push({ path: relativePath, reason });
       else
         eligible.push({
@@ -469,7 +478,16 @@ export async function buildManifest(
   branch: string,
   headCommit: string,
 ) {
-  const { eligible, excluded } = await collectSyncArtifacts(root);
+  const target = await gitSnapshot(root);
+  if (target.workingTree !== 'clean')
+    throw new Error(
+      'Sync requires a clean working tree; commit or revert changes, then run trace analyze.',
+    );
+  if (target.branch !== branch || target.headCommit !== headCommit)
+    throw new Error('Git branch or HEAD changed before sync; regenerate the analysis and dry-run.');
+  const { eligible, excluded } = await collectSyncArtifacts(root, target);
+  if (!sameSnapshot(target, await gitSnapshot(root)))
+    throw new Error('Git state changed while planning sync; regenerate the analysis and dry-run.');
   const acknowledgedState = await readFile(join(root, '.trace', 'state', 'sync.json'), 'utf8')
     .then(
       (source) =>
@@ -534,6 +552,7 @@ export async function sync(root: string, branch: string, headCommit: string, dry
       environment: cloudEnvironmentForServer(binding.server),
       server: binding.server,
       repository: binding.repository,
+      git: plan.manifest.git,
       eligible: plan.eligible.map((item) => item.manifest),
       excluded: plan.excluded,
       sourceCodeIncluded: false,
