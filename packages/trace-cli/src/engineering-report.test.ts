@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { mkdtemp, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { parse as parseYaml, stringify as yamlStringify } from 'yaml';
 import { describe, expect, it } from 'vitest';
 import { collectEngineeringReport, reportPeriod, type ReportRunner } from './engineering-report.js';
@@ -170,6 +170,62 @@ describe('period engineering reports', () => {
       'Version transitions: Not available',
     );
   });
+  it('bounds wide monorepo area summaries while preserving the verified path and area totals', async () => {
+    const root = await repository();
+    const runner: ReportRunner = async (command, args, cwd) => {
+      if (args[0] === 'diff-tree')
+        return Array.from({ length: 150 }, (_, i) => `area-${i}-${'x'.repeat(40)}/file.txt`).join(
+          '\n',
+        );
+      return git(cwd, args);
+    };
+    const doc = await collectEngineeringReport(root, weekly(), false, runner);
+    expect(engineeringReportSchema.safeParse(doc).success).toBe(true);
+    const files = doc.sections.find((section) => section.id === 'files')!;
+    expect(files.summary).toContain('150 unique paths across 150 areas');
+    expect(files.summary).toContain('area display limited');
+    expect(files.summary.length).toBeLessThan(4000);
+  });
+  it('excludes foreign records with absent or non-GitHub origin using the local repository identity', async () => {
+    const root = await repository();
+    const previous = process.cwd();
+    try {
+      process.chdir(root);
+      await main(['init', '--yes']);
+    } finally {
+      process.chdir(previous);
+    }
+    for (const name of [basename(root), 'foreign-project']) {
+      await writeArtifact({
+        traceRoot: join(root, '.trace'),
+        relativePath: `risks/${name}.md`,
+        metadata: {
+          schema_version: '0.1',
+          id: name === basename(root) ? 'risk-local' : 'risk-foreign',
+          artifact_type: 'risk',
+          repository: { provider: 'git', owner: 'local', name },
+          created_at: '2026-10-01T12:00:00.000Z',
+          updated_at: '2026-10-01T12:00:00.000Z',
+          generator: 'test',
+          execution_origin: 'local',
+          source_refs: [],
+          evidence: [],
+          review_status: 'draft',
+          sensitivity: 'internal',
+          sync_policy: 'allowlisted',
+          dashboard: { title: name, summary: 'Explicit identity test fixture', items: [] },
+        },
+        markdown: 'Explicit identity test fixture.',
+      });
+    }
+    for (const remote of [null, 'https://example.test/local/project.git']) {
+      if (remote) git(root, ['remote', 'add', 'origin', remote]);
+      const doc = await collectEngineeringReport(root, weekly());
+      expect(
+        doc.sections.find((section) => section.id === 'attention')!.items.map((i) => i.title),
+      ).toEqual([basename(root)]);
+    }
+  });
   it('does not promote confidential, local-only, foreign-repository or code-bearing records into a report', async () => {
     const root = await repository();
     git(root, ['remote', 'add', 'origin', 'https://github.com/example/project.git']);
@@ -234,7 +290,7 @@ describe('period engineering reports', () => {
             schema_version: '0.1',
             id: `risk-size-${index}`,
             artifact_type: 'risk',
-            repository: { provider: 'git', owner: 'local', name: 'fixture' },
+            repository: { provider: 'git', owner: 'local', name: basename(root) },
             created_at: '2026-10-01T12:00:00.000Z',
             updated_at: '2026-10-01T12:00:00.000Z',
             generator: 'test',

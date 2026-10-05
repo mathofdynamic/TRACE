@@ -705,6 +705,12 @@ test.describe('authenticated product journey', () => {
         .addCookies([{ name: 'trace_session', value: seeded.cookie, url: appBaseUrl }]);
       await page.goto('/app/reports');
       await page
+        .getByRole('searchbox', { name: 'Search reports library' })
+        .fill('Verified engineering report browser fixture');
+      await expect(
+        page.getByRole('link', { name: artifact.metadata.dashboard!.title, exact: true }),
+      ).toBeVisible();
+      await page
         .getByRole('link', { name: artifact.metadata.dashboard!.title, exact: true })
         .click();
       const readable = page.locator('#panel-readable');

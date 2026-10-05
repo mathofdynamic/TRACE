@@ -174,13 +174,26 @@ export function ReportsView({
             i.detail.toLowerCase().includes(q) ||
             i.evidence.some((ev) => ev.toLowerCase().includes(q)),
         );
+        const matchesDocument = report.engineeringReport?.sections.some((section) =>
+          [
+            section.title,
+            section.summary,
+            ...section.items.flatMap((item) => [
+              item.title,
+              item.detail ?? '',
+              item.url ?? '',
+              ...item.evidence,
+            ]),
+          ].some((value) => value.toLowerCase().includes(q)),
+        );
         if (
           !matchesTitle &&
           !matchesSummary &&
           !matchesRepo &&
           !matchesType &&
           !matchesCommit &&
-          !matchesItems
+          !matchesItems &&
+          !matchesDocument
         ) {
           return false;
         }

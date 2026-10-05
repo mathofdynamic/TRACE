@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { readdir, readFile, lstat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { dailyWindow } from '@trace/analysis';
 import { parseArtifact, type EngineeringReport } from '@trace/schema';
@@ -95,6 +95,8 @@ export async function collectEngineeringReport(
   } catch {
     /* local Git repository */
   }
+  const expectedIdentity = repository ?? `local/${basename(root)}`;
+  const expectedProvider = repository ? 'github' : 'git';
   let commits: Section['items'] = [];
   let files: string[] = [];
   const fileEvidence = new Map<string, string[]>();
@@ -276,8 +278,8 @@ export async function collectEngineeringReport(
           )
             continue;
           if (
-            repository &&
-            `${metadata.repository.owner}/${metadata.repository.name}` !== repository
+            metadata.repository.provider !== expectedProvider ||
+            `${metadata.repository.owner}/${metadata.repository.name}` !== expectedIdentity
           )
             continue;
           if (metadata.superseded_by || !inPeriod(metadata.updated_at) || !metadata.dashboard)
@@ -343,6 +345,13 @@ export async function collectEngineeringReport(
       ),
     ),
   ];
+  const displayedAreas: string[] = [];
+  for (const area of areas) {
+    const label = safeTitle(area);
+    if ([...displayedAreas, label].join(', ').length > 2000) break;
+    displayedAreas.push(label);
+  }
+  const areaSummary = `${displayedAreas.join(', ') || 'No changed areas'}${displayedAreas.length < areas.length ? ' (area display limited; total unchanged)' : ''}`;
   const formatDate = (value: string) =>
     new Intl.DateTimeFormat('en', { timeZone: period.timeZone, dateStyle: 'medium' }).format(
       new Date(value),
@@ -413,7 +422,7 @@ export async function collectEngineeringReport(
       'files',
       'Files / areas changed',
       gitComplete
-        ? `${files.length} unique paths. Areas: ${areas.join(', ') || 'No changed areas'}.`
+        ? `${files.length} unique paths across ${areas.length} areas. Areas: ${areaSummary}.`
         : 'Not available',
       files.map((path) => ({
         title: safeTitle(path),
