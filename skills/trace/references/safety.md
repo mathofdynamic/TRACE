@@ -17,7 +17,7 @@ Do not: upload repository files; embed raw source/fenced code to get around excl
 7. has a `dashboard` projection - "no dashboard projection"
 8. no code snippets (config flag, any ``` fence, or 2+ lines starting with import/export/const/let/var/function/class/interface/enum) - "code snippets are disabled"
 9. <= 262144 bytes - "artifact exceeds 256 KiB"
-10. analysis only: current branch/HEAD and verified clean input provenance; historical, dirty and unverified inputs are excluded.
+10. analysis: current branch/HEAD and verified clean input provenance; historical, dirty and unverified inputs are excluded. The period-report implementation applies this gate to daily/weekly reports too, including legacy reports without verified input.
     Also: symlinks escaping `.trace` - "symlink escapes .trace"; unparsable files are excluded with the parse error.
 
 Whole-sync limits (schema): 64 artifacts, 2,097,152 bytes total. These are enforced when the manifest is built (connected dry-run and real sync); an unconnected dry-run only lists eligibility.

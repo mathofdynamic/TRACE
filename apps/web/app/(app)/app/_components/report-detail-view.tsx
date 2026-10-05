@@ -1,5 +1,6 @@
 'use client';
 
+import { EngineeringReportDocument } from './engineering-report-document';
 import { useState } from 'react';
 import Link from 'next/link';
 import type {
@@ -21,7 +22,7 @@ export type ReportDetailViewProps = {
   relatedFindings: DashboardAttention[];
 };
 
-type ViewTab = 'readable' | 'raw' | 'provenance';
+type ViewTab = 'readable' | 'provenance';
 
 function formatArtifactTypeLabel(type: string): string {
   switch (type) {
@@ -49,7 +50,7 @@ function parseMarkdownDocument(content: string): ParsedSection[] {
   const sections: ParsedSection[] = [];
   let current: ParsedSection = { title: 'Overview', lines: [] };
 
-  for (const line of content.split(/\r?\n/)) {
+  for (const line of content.replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, '').split(/\r?\n/)) {
     const headingMatch = /^(#{2,3})\s+(.+?)\s*$/.exec(line);
     if (headingMatch) {
       if (current.lines.some((l) => l.trim().length > 0)) {
@@ -93,11 +94,28 @@ export function ReportDetailView({
     }, 2000);
   };
 
+  const period = report.engineeringReport?.period;
+  const dateLabel = (value: string) =>
+    new Intl.DateTimeFormat('en', {
+      timeZone: period?.timeZone ?? 'UTC',
+      dateStyle: 'medium',
+    }).format(new Date(value));
+  const timeWindow = period
+    ? `${dateLabel(period.start)} → ${dateLabel(new Date(Date.parse(period.end) - 1).toISOString())} (${period.timeZone})`
+    : (report.timeWindow ?? 'Not available');
   const parsedSections = parseMarkdownDocument(report.content);
 
   const isNeedsRefresh = report.freshness === 'needs-refresh';
   const isAttention = report.freshness === 'attention';
   const isCurrent = report.freshness === 'current';
+  const reportKind = report.artifactType === 'weekly_report' ? 'weekly' : 'daily';
+  const reportDate = period
+    ? new Intl.DateTimeFormat('en-CA', { timeZone: period.timeZone }).format(
+        new Date(Date.parse(period.end) - 1),
+      )
+    : null;
+  const regenerateCommand = `trace report ${reportKind}${reportDate ? ` --date ${reportDate} --timezone ${period!.timeZone}` : ''} --yes`;
+  const refreshWorkflow = `trace analyze && ${regenerateCommand} && trace sync --dry-run && trace sync`;
 
   return (
     <div className="report-detail-surface">
@@ -129,7 +147,8 @@ export function ReportDetailView({
           /
         </span>
         <span className="report-breadcrumb-current">
-          {report.repositoryName.split('/')[1] ?? report.repositoryName} · {report.id}
+          {report.repositoryName.split('/')[1] ?? report.repositoryName} ·{' '}
+          {formatArtifactTypeLabel(report.artifactType)}
         </span>
       </nav>
 
@@ -172,7 +191,7 @@ export function ReportDetailView({
                 <span className="doc-meta-divider" aria-hidden="true" />
                 <span className="doc-meta-item">
                   <span className="meta-label">Time Window</span>
-                  <span>{report.timeWindow ?? 'Single evaluation'}</span>
+                  <span>{timeWindow}</span>
                 </span>
                 <span className="doc-meta-divider" aria-hidden="true" />
                 <span className="doc-meta-item">
@@ -194,33 +213,25 @@ export function ReportDetailView({
                     ↻
                   </span>
                   <div>
-                    <strong>
-                      Report intelligence represents analyzed commit{' '}
-                      <code>{report.analyzedCommit?.slice(0, 12)}</code>
-                    </strong>
+                    <strong>Report needs refresh</strong>
                     <p>
-                      GitHub remote default branch has advanced to{' '}
-                      <code>{report.remoteHeadCommit?.slice(0, 12)}</code>. The synchronized record
-                      remains truthful for commit <code>{report.analyzedCommit?.slice(0, 7)}</code>,
-                      but a local refresh is recommended to incorporate subsequent pull requests.
+                      The GitHub default branch has advanced since this report was generated. The
+                      report remains a historical snapshot; regenerate it to include subsequent
+                      changes. Commit details are in Verification &amp; Provenance.
                     </p>
                   </div>
                 </div>
                 <div className="freshness-notice-actions">
                   <div className="freshness-cli-commands">
                     <code>trace analyze</code>
+                    <code>{regenerateCommand}</code>
                     <code>trace sync --dry-run</code>
                     <code>trace sync</code>
                   </div>
                   <button
                     type="button"
                     className="trace-button trace-button--secondary trace-button--sm"
-                    onClick={() =>
-                      copyToClipboard(
-                        'trace analyze && trace sync --dry-run && trace sync',
-                        'refresh-cmd',
-                      )
-                    }
+                    onClick={() => copyToClipboard(refreshWorkflow, 'refresh-cmd')}
                     aria-label="Copy refresh workflow commands"
                   >
                     {copiedText === 'refresh-cmd' ? 'Copied' : 'Copy refresh workflow'}
@@ -238,13 +249,8 @@ export function ReportDetailView({
                     !
                   </span>
                   <div>
-                    <strong>Sync Bridge Schema Alignment Required</strong>
-                    <p>
-                      Local report intelligence is valid for analyzed commit{' '}
-                      <code>{report.analyzedCommit?.slice(0, 12)}</code>. The synchronized bridge
-                      requires a CLI schema version update before newer automated artifacts can
-                      ingest cleanly.
-                    </p>
+                    <strong>Report requires attention</strong>
+                    <p>Check Verification &amp; Provenance for the available sync details.</p>
                   </div>
                 </div>
               </div>
@@ -261,8 +267,8 @@ export function ReportDetailView({
                   <div>
                     <strong>Intelligence Current with GitHub HEAD</strong>
                     <p>
-                      Analyzed commit <code>{report.analyzedCommit?.slice(0, 12)}</code> matches
-                      GitHub remote repository default branch.
+                      The report snapshot matches the GitHub default branch. This verifies
+                      freshness, not the completeness of every data source.
                     </p>
                   </div>
                 </div>
@@ -301,17 +307,6 @@ export function ReportDetailView({
               <button
                 type="button"
                 role="tab"
-                id="tab-raw"
-                aria-selected={activeTab === 'raw'}
-                aria-controls="panel-raw"
-                className={`report-view-tab ${activeTab === 'raw' ? 'report-view-tab--active' : ''}`}
-                onClick={() => setActiveTab('raw')}
-              >
-                Canonical TRACE Markdown
-              </button>
-              <button
-                type="button"
-                role="tab"
                 id="tab-provenance"
                 aria-selected={activeTab === 'provenance'}
                 aria-controls="panel-provenance"
@@ -332,191 +327,169 @@ export function ReportDetailView({
                 data-trace-motion="section"
                 data-motion-section="report-readable"
               >
-                {/* 1. Related Pull Requests */}
-                {relatedChanges.length > 0 ? (
-                  <section className="report-doc-section" aria-labelledby="section-changes-heading">
-                    <div className="doc-section-header">
-                      <span className="doc-section-eyebrow">Pull Requests</span>
-                      <h2 id="section-changes-heading" className="doc-section-title">
-                        Changes Reviewed ({relatedChanges.length})
-                      </h2>
-                    </div>
+                {report.engineeringReport ? (
+                  <EngineeringReportDocument
+                    document={report.engineeringReport}
+                    onVerify={() => {
+                      setActiveTab('provenance');
+                      requestAnimationFrame(() =>
+                        document.getElementById('tab-provenance')?.focus(),
+                      );
+                    }}
+                  />
+                ) : (
+                  <>
+                    {/* 1. Related Pull Requests */}
+                    {relatedChanges.length > 0 ? (
+                      <section
+                        className="report-doc-section"
+                        aria-labelledby="section-changes-heading"
+                      >
+                        <div className="doc-section-header">
+                          <span className="doc-section-eyebrow">Pull Requests</span>
+                          <h2 id="section-changes-heading" className="doc-section-title">
+                            Changes Reviewed ({relatedChanges.length})
+                          </h2>
+                        </div>
 
-                    <div className="doc-changes-list">
-                      {relatedChanges.map((change) => (
-                        <div className="doc-change-item" key={change.id}>
-                          <div className="doc-change-item__left">
-                            <span className="doc-pr-badge">PR #{change.number}</span>
-                            <div className="doc-change-text">
-                              <h3 className="doc-change-title">{change.title}</h3>
-                              <div className="doc-change-meta">
-                                <span>{change.authorLogin ?? 'Unknown author'}</span>
-                                <span className="doc-meta-dot" aria-hidden="true">
-                                  ·
-                                </span>
-                                <code>{change.branch ?? 'feature'}</code>
-                                {change.affectedAreas?.length ? (
-                                  <>
+                        <div className="doc-changes-list">
+                          {relatedChanges.map((change) => (
+                            <div className="doc-change-item" key={change.id}>
+                              <div className="doc-change-item__left">
+                                <span className="doc-pr-badge">PR #{change.number}</span>
+                                <div className="doc-change-text">
+                                  <h3 className="doc-change-title">{change.title}</h3>
+                                  <div className="doc-change-meta">
+                                    <span>{change.authorLogin ?? 'Unknown author'}</span>
                                     <span className="doc-meta-dot" aria-hidden="true">
                                       ·
                                     </span>
-                                    <span className="doc-area-pill">
-                                      {change.affectedAreas.join(', ')}
-                                    </span>
-                                  </>
-                                ) : null}
+                                    <code>{change.branch ?? 'feature'}</code>
+                                    {change.affectedAreas?.length ? (
+                                      <>
+                                        <span className="doc-meta-dot" aria-hidden="true">
+                                          ·
+                                        </span>
+                                        <span className="doc-area-pill">
+                                          {change.affectedAreas.join(', ')}
+                                        </span>
+                                      </>
+                                    ) : null}
+                                  </div>
+                                </div>
                               </div>
+
+                              {change.url ? (
+                                <a
+                                  href={change.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="trace-button trace-button--secondary trace-button--small doc-gh-link"
+                                >
+                                  GitHub PR ↗
+                                </a>
+                              ) : null}
                             </div>
-                          </div>
-
-                          {change.url ? (
-                            <a
-                              href={change.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="trace-button trace-button--secondary trace-button--small doc-gh-link"
-                            >
-                              GitHub PR ↗
-                            </a>
-                          ) : null}
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </section>
-                ) : null}
+                      </section>
+                    ) : null}
 
-                {/* 2. Recorded Findings & AST Evidence */}
-                {report.items.length > 0 ? (
-                  <section
-                    className="report-doc-section"
-                    aria-labelledby="section-findings-heading"
-                  >
-                    <div className="doc-section-header">
-                      <span className="doc-section-eyebrow">Intelligence</span>
-                      <h2 id="section-findings-heading" className="doc-section-title">
-                        Recorded Findings & AST Evidence ({report.items.length})
-                      </h2>
-                    </div>
-
-                    <div className="doc-findings-list">
-                      {report.items.map((item) => (
-                        <div className="doc-finding-card" key={item.id}>
-                          <div className="doc-finding-card__header">
-                            <span
-                              className="item-severity-tag"
-                              data-severity={item.severity ?? 'low'}
-                            >
-                              {item.severity ?? 'low'} severity
-                            </span>
-                            <span className="doc-finding-class">
-                              {item.classification ?? 'deterministic AST match'}
-                            </span>
-                          </div>
-
-                          <h3 className="doc-finding-card__title">{item.title}</h3>
-                          <p className="doc-finding-card__detail">
-                            {presentFindingDetail(item.detail)}
-                          </p>
-
-                          {item.evidence.length > 0 ? (
-                            <div className="doc-finding-card__evidence">
-                              <span className="evidence-title">
-                                Deterministic AST Evidence Loci:
-                              </span>
-                              <div className="evidence-tokens">
-                                {item.evidence.map((ev) => (
-                                  <code key={ev}>{ev}</code>
-                                ))}
-                              </div>
-                            </div>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                ) : null}
-
-                {/* 3. Parsed Content Sections */}
-                {parsedSections.map((section) => (
-                  <section
-                    className="report-doc-section"
-                    key={section.title}
-                    aria-labelledby={`sec-${section.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
-                  >
-                    <div className="doc-section-header">
-                      <h2
-                        id={`sec-${section.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
-                        className="doc-section-title"
+                    {/* 2. Recorded Findings */}
+                    {report.items.length > 0 ? (
+                      <section
+                        className="report-doc-section"
+                        aria-labelledby="section-findings-heading"
                       >
-                        {section.title}
-                      </h2>
-                    </div>
+                        <div className="doc-section-header">
+                          <span className="doc-section-eyebrow">Intelligence</span>
+                          <h2 id="section-findings-heading" className="doc-section-title">
+                            Recorded Findings ({report.items.length})
+                          </h2>
+                        </div>
 
-                    <div className="doc-section-content">
-                      {section.lines.map((line, idx) => {
-                        const trimmed = line.trim();
-                        if (!trimmed) return null;
+                        <div className="doc-findings-list">
+                          {report.items.map((item) => (
+                            <div className="doc-finding-card" key={item.id}>
+                              <div className="doc-finding-card__header">
+                                <span
+                                  className="item-severity-tag"
+                                  data-severity={item.severity ?? 'Not available'}
+                                >
+                                  {item.severity ?? 'Not available'} severity
+                                </span>
+                                <span className="doc-finding-class">
+                                  {item.classification ?? 'Not available'}
+                                </span>
+                              </div>
 
-                        // Bullet items
-                        if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-                          const itemText = trimmed.slice(2);
-                          return (
-                            <div className="doc-bullet-item" key={idx}>
-                              <span className="bullet-dot" aria-hidden="true">
-                                —
-                              </span>
-                              <p>{itemText}</p>
+                              <h3 className="doc-finding-card__title">{item.title}</h3>
+                              <p className="doc-finding-card__detail">
+                                {presentFindingDetail(item.detail)}
+                              </p>
                             </div>
-                          );
-                        }
+                          ))}
+                        </div>
+                      </section>
+                    ) : null}
 
-                        // Numbered items
-                        const numMatch = /^(\d+)\.\s+(.*)$/.exec(trimmed);
-                        if (numMatch) {
-                          return (
-                            <div className="doc-numbered-item" key={idx}>
-                              <span className="numbered-index">{numMatch[1]}.</span>
-                              <p>{numMatch[2]}</p>
-                            </div>
-                          );
-                        }
+                    {/* 3. Parsed Content Sections */}
+                    {parsedSections.map((section) => (
+                      <section
+                        className="report-doc-section"
+                        key={section.title}
+                        aria-labelledby={`sec-${section.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                      >
+                        <div className="doc-section-header">
+                          <h2
+                            id={`sec-${section.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                            className="doc-section-title"
+                          >
+                            {section.title}
+                          </h2>
+                        </div>
 
-                        // Regular paragraph
-                        return (
-                          <p className="doc-paragraph" key={idx}>
-                            {trimmed}
-                          </p>
-                        );
-                      })}
-                    </div>
-                  </section>
-                ))}
-              </div>
-            )}
+                        <div className="doc-section-content">
+                          {section.lines.map((line, idx) => {
+                            const trimmed = line.trim();
+                            if (!trimmed) return null;
 
-            {/* Tab 2: Raw Canonical TRACE Markdown */}
-            {activeTab === 'raw' && (
-              <div
-                className="report-doc-raw"
-                id="panel-raw"
-                role="tabpanel"
-                aria-labelledby="tab-raw"
-                data-trace-motion="section"
-                data-motion-section="report-raw"
-              >
-                <div className="raw-toolbar">
-                  <span className="raw-toolbar__label">Canonical TRACE Markdown Record</span>
-                  <button
-                    type="button"
-                    className="trace-button trace-button--secondary trace-button--small"
-                    onClick={() => copyToClipboard(report.content, 'raw-markdown')}
-                  >
-                    {copiedText === 'raw-markdown' ? 'Copied to clipboard' : 'Copy markdown'}
-                  </button>
-                </div>
-                <pre className="raw-pre">
-                  <code>{report.content}</code>
-                </pre>
+                            // Bullet items
+                            if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+                              const itemText = trimmed.slice(2).replaceAll('**', '');
+                              return (
+                                <div className="doc-bullet-item" key={idx}>
+                                  <span className="bullet-dot" aria-hidden="true">
+                                    —
+                                  </span>
+                                  <p>{itemText}</p>
+                                </div>
+                              );
+                            }
+
+                            // Numbered items
+                            const numMatch = /^(\d+)\.\s+(.*)$/.exec(trimmed);
+                            if (numMatch) {
+                              return (
+                                <div className="doc-numbered-item" key={idx}>
+                                  <span className="numbered-index">{numMatch[1]}.</span>
+                                  <p>{numMatch[2]?.replaceAll('**', '')}</p>
+                                </div>
+                              );
+                            }
+
+                            // Regular paragraph
+                            return (
+                              <p className="doc-paragraph" key={idx}>
+                                {trimmed.replaceAll('**', '')}
+                              </p>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    ))}
+                  </>
+                )}
               </div>
             )}
 
@@ -532,9 +505,23 @@ export function ReportDetailView({
               >
                 <div className="doc-section-header">
                   <span className="doc-section-eyebrow">Audit Trail</span>
-                  <h2 className="doc-section-title">Cryptographic & AST Provenance</h2>
+                  <h2 className="doc-section-title">Verification & Provenance</h2>
                 </div>
 
+                {report.engineeringReport && (
+                  <section className="report-doc-section">
+                    <h3>Source coverage and reporting boundaries</h3>
+                    <pre className="raw-pre">
+                      {JSON.stringify(report.engineeringReport.period, null, 2)}
+                    </pre>
+                  </section>
+                )}
+                <details>
+                  <summary>Canonical artifact and evidence</summary>
+                  <pre className="raw-pre">
+                    <code>{report.content}</code>
+                  </pre>
+                </details>
                 <dl className="provenance-facts-table">
                   <div className="provenance-row">
                     <dt>Artifact Identifier</dt>
@@ -576,14 +563,14 @@ export function ReportDetailView({
                   </div>
                   <div className="provenance-row">
                     <dt>Execution Origin</dt>
-                    <dd>Approved Local TRACE Daemon</dd>
+                    <dd>Local TRACE CLI</dd>
                   </div>
                   <div className="provenance-row">
                     <dt>Zero-Surveillance Guarantee</dt>
                     <dd>
-                      Verified: No developer score, rankings, or private source code snippets
-                      transmitted. Only deterministic AST syntax matches and boundary invariants are
-                      stored.
+                      TRACE sync requires sourceCodeIncluded=false and codeSnippetsIncluded=false.
+                      The source coverage and canonical artifact below describe what was recorded,
+                      not inferred completeness.
                     </dd>
                   </div>
                 </dl>
@@ -615,7 +602,7 @@ export function ReportDetailView({
               </div>
               <div className="rail-fact-item">
                 <dt>Time Window</dt>
-                <dd>{report.timeWindow ?? 'Single evaluation'}</dd>
+                <dd>{timeWindow}</dd>
               </div>
               <div className="rail-fact-item">
                 <dt>Generated</dt>
@@ -629,23 +616,27 @@ export function ReportDetailView({
                 <dt>Origin</dt>
                 <dd>Approved local sync</dd>
               </div>
-              <div className="rail-fact-item">
-                <dt>Analyzed Commit</dt>
-                <dd>
-                  <code>{report.analyzedCommit?.slice(0, 12) ?? 'Local HEAD'}</code>
-                </dd>
-              </div>
-              {report.remoteHeadCommit ? (
-                <div className="rail-fact-item">
-                  <dt>Remote HEAD</dt>
-                  <dd>
-                    <code>{report.remoteHeadCommit.slice(0, 12)}</code>
-                  </dd>
-                </div>
-              ) : null}
+              {activeTab === 'provenance' && (
+                <>
+                  <div className="rail-fact-item">
+                    <dt>Analyzed Commit</dt>
+                    <dd>
+                      <code>{report.analyzedCommit?.slice(0, 12) ?? 'Local HEAD'}</code>
+                    </dd>
+                  </div>
+                  {report.remoteHeadCommit ? (
+                    <div className="rail-fact-item">
+                      <dt>Remote HEAD</dt>
+                      <dd>
+                        <code>{report.remoteHeadCommit.slice(0, 12)}</code>
+                      </dd>
+                    </div>
+                  ) : null}
+                </>
+              )}
               <div className="rail-fact-item">
                 <dt>Privacy Guarantee</dt>
-                <dd>AST facts · Code excluded</dd>
+                <dd>Source-free engineering evidence</dd>
               </div>
               <div className="rail-fact-item">
                 <dt>Status</dt>
@@ -654,57 +645,58 @@ export function ReportDetailView({
             </dl>
           </div>
 
-          {/* 2. Local CLI Commands Module */}
-          <div className="rail-module">
-            <span className="rail-module__title">Local CLI Inspection</span>
-            <p className="rail-module__desc">
-              Inspect or re-run this artifact deterministically on your local workstation:
-            </p>
-            <div className="rail-cli-stack">
-              <div className="rail-cli-box">
-                <code>{report.path ? `trace inspect ${report.path}` : `trace report daily`}</code>
-                <button
-                  type="button"
-                  className="rail-cli-copy-btn"
-                  onClick={() =>
-                    copyToClipboard(
-                      report.path ? `trace inspect ${report.path}` : `trace report daily`,
-                      'cli-view',
-                    )
-                  }
-                  title="Copy inspect command"
-                  aria-label="Copy CLI inspect command"
-                >
-                  {copiedText === 'cli-view' ? '✓' : 'Copy'}
-                </button>
-              </div>
-
-              {isNeedsRefresh ? (
-                <div className="rail-cli-box rail-cli-box--workflow">
-                  <div className="rail-cli-workflow-lines">
-                    <code>trace analyze</code>
-                    <code>trace sync --dry-run</code>
-                    <code>trace sync</code>
+          {activeTab === 'provenance' && (
+            <>
+              {/* 2. Local CLI Commands Module */}
+              <div className="rail-module">
+                <span className="rail-module__title">Local CLI Inspection</span>
+                <p className="rail-module__desc">
+                  Inspect or re-run this artifact deterministically on your local workstation:
+                </p>
+                <div className="rail-cli-stack">
+                  <div className="rail-cli-box">
+                    <code>
+                      {report.path ? `trace inspect ${report.path}` : `trace report daily`}
+                    </code>
+                    <button
+                      type="button"
+                      className="rail-cli-copy-btn"
+                      onClick={() =>
+                        copyToClipboard(
+                          report.path ? `trace inspect ${report.path}` : `trace report daily`,
+                          'cli-view',
+                        )
+                      }
+                      title="Copy inspect command"
+                      aria-label="Copy CLI inspect command"
+                    >
+                      {copiedText === 'cli-view' ? '✓' : 'Copy'}
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    className="trace-button trace-button--secondary trace-button--sm rail-workflow-btn"
-                    onClick={() =>
-                      copyToClipboard(
-                        'trace analyze && trace sync --dry-run && trace sync',
-                        'cli-refresh',
-                      )
-                    }
-                    title="Copy refresh workflow"
-                    aria-label="Copy refresh workflow commands"
-                  >
-                    {copiedText === 'cli-refresh' ? 'Copied' : 'Copy refresh workflow'}
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          </div>
 
+                  {isNeedsRefresh ? (
+                    <div className="rail-cli-box rail-cli-box--workflow">
+                      <div className="rail-cli-workflow-lines">
+                        <code>trace analyze</code>
+                        <code>{regenerateCommand}</code>
+                        <code>trace sync --dry-run</code>
+                        <code>trace sync</code>
+                      </div>
+                      <button
+                        type="button"
+                        className="trace-button trace-button--secondary trace-button--sm rail-workflow-btn"
+                        onClick={() => copyToClipboard(refreshWorkflow, 'cli-refresh')}
+                        title="Copy refresh workflow"
+                        aria-label="Copy refresh workflow commands"
+                      >
+                        {copiedText === 'cli-refresh' ? 'Copied' : 'Copy refresh workflow'}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </>
+          )}
           {/* 3. Related Changes Summary */}
           {relatedChanges.length > 0 ? (
             <div className="rail-module">

@@ -42,3 +42,21 @@ export function analysisAttributionIssue(metadata: ArtifactMetadata, target: Git
     return 'analysis input provenance does not match current branch and HEAD';
   return null;
 }
+
+export function reportAttributionIssue(metadata: ArtifactMetadata, target: GitSnapshot | null) {
+  if (!target || target.workingTree !== 'clean') return 'report requires a clean Git context';
+  const checks = metadata.evidence.filter(
+    (e) => e.locator === 'trace:report-input:v1' && e.type === 'check',
+  );
+  if (checks.length !== 1 || checks[0]?.metadata?.working_tree !== 'clean')
+    return 'report input provenance is unverified or dirty';
+  const input = checks[0]!.metadata!;
+  if (
+    input.head_commit !== target.headCommit ||
+    input.branch !== target.branch ||
+    metadata.dashboard?.head_commit !== target.headCommit ||
+    (metadata.dashboard.branch ?? '') !== target.branch
+  )
+    return 'historical report: input differs from current branch or HEAD';
+  return null;
+}

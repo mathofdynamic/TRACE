@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { collectEngineeringReport, reportPeriod } from './engineering-report.js';
 import { analysisInputCheck, gitSnapshot, sameSnapshot } from './analysis-attribution.js';
 import { execFile } from 'node:child_process';
 import { access, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
@@ -9,15 +10,17 @@ import { parse, stringify } from 'yaml';
 import {
   analyzeChanges,
   createPullRequestBrief,
-  renderReport,
   renderPullRequestBrief,
-  weeklyWindow,
   type PullRequestInput,
 } from '@trace/analysis';
 import type { NormalizedChangeSet } from '@trace/core';
 import { evaluateRules, initialRules, mergeEffectiveRules, validateRule } from '@trace/rules';
 import {
   parseArtifact,
+  serializeArtifact,
+  type ArtifactMetadata,
+  engineeringReportSchema,
+  reportEvidenceLocator,
   stableArtifactId,
   validateTraceDirectory,
   writeArtifact,
@@ -190,108 +193,146 @@ async function changes(args: string[]): Promise<NormalizedChangeSet> {
   };
 }
 
-async function daily(args: string[]): Promise<CliResult> {
+async function engineeringReport(args: string[], kind: 'daily' | 'weekly'): Promise<CliResult> {
   const root = await repoRoot();
-  const changeSet = await changes(args);
-  const date =
-    args.find((arg, index) => args[index - 1] === '--date') ??
-    new Date().toISOString().slice(0, 10);
-  const owner = changeSet.repository.owner ?? 'local';
-  const metadata = {
-    schema_version: '0.1' as const,
-    id: `daily-${date}`,
-    artifact_type: 'daily_report' as const,
-    repository: { provider: changeSet.repository.provider, owner, name: changeSet.repository.name },
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+  if (
+    !(await access(join(root, '.trace', 'config.yml'))
+      .then(() => true)
+      .catch(() => false))
+  )
+    return {
+      code: 2,
+      value: {
+        error: 'TRACE is not initialized in this repository. Run `trace init --yes` first.',
+      },
+    };
+  const before = await gitSnapshot(root).catch(() => ({
+    branch: '',
+    headCommit: '',
+    workingTree: 'dirty' as const,
+  }));
+  const now = new Date();
+  const option = (name: string) => args.find((arg, index) => args[index - 1] === name);
+  const timeZone = option('--timezone') ?? 'UTC';
+  const localDate = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
+  const date = option('--date') ?? localDate;
+  const period = reportPeriod(kind, date, timeZone, now);
+  const document = engineeringReportSchema.parse(
+    await collectEngineeringReport(
+      root,
+      period,
+      args.includes('--github'),
+      undefined,
+      before.headCommit,
+    ),
+  );
+  const after = await gitSnapshot(root).catch(() => ({
+    branch: '',
+    headCommit: '',
+    workingTree: 'dirty' as const,
+  }));
+  const clean =
+    before.workingTree === 'clean' && sameSnapshot(before, after) && Boolean(before.headCommit);
+  const remote = await git(['config', '--get', 'remote.origin.url'], root).catch(() => '');
+  const identity = normalizeGitHubRemote(remote);
+  const [owner, name] = identity?.split('/') ?? ['local', resolve(root).split(/[\\/]/).pop()!];
+  document.sections.find((section) => section.id === 'freshness')!.summary += clean
+    ? ' Generation inputs: clean committed checkout.'
+    : ' Generation inputs: dirty or unstable checkout; local-only exploratory report.';
+  const evidence = [
+    { type: 'check' as const, locator: reportEvidenceLocator, metadata: { document } },
+    {
+      type: 'check' as const,
+      locator: 'trace:report-input:v1',
+      metadata: {
+        head_commit: before.headCommit,
+        branch: before.branch,
+        working_tree: clean ? 'clean' : 'dirty',
+      },
+    },
+  ];
+  const renderMarkdown = () =>
+    `# ${kind === 'daily' ? 'Daily' : 'Weekly'} engineering report\n\n` +
+    document.sections
+      .map(
+        (section) =>
+          `## ${section.title}\n\n${section.summary}\n\n` +
+          section.items
+            .map(
+              (item) =>
+                `- ${item.url ? `[${item.title.replace(/[[\]\n]/g, ' ')}](${item.url})` : item.title}${item.detail ? ` — ${item.detail}` : ''}`,
+            )
+            .join('\n'),
+      )
+      .join('\n\n');
+  const relativePath = `reports/${kind}/${date}.md`;
+  const previousCreatedAt = await readFile(join(root, '.trace', relativePath), 'utf8')
+    .then((content) => parseArtifact(content).metadata.created_at)
+    .catch(() => now.toISOString());
+  const metadata: ArtifactMetadata = {
+    schema_version: '0.1',
+    id: `${kind}-${date}`,
+    artifact_type: kind === 'daily' ? 'daily_report' : 'weekly_report',
+    repository: { provider: identity ? 'github' : 'git', owner: owner!, name: name! },
+    created_at: previousCreatedAt,
+    updated_at: now.toISOString(),
     generator: 'trace-cli/0.1',
-    execution_origin: 'local' as const,
-    source_refs: changeSet.evidence,
-    evidence: changeSet.evidence,
-    review_status: 'draft' as const,
-    sensitivity: 'internal' as const,
-    sync_policy: 'allowlisted' as const,
+    execution_origin: 'local',
+    source_refs: before.headCommit ? [{ type: 'commit', locator: before.headCommit }] : [],
+    evidence,
+    review_status: 'draft',
+    sensitivity: 'internal',
+    sync_policy: clean ? 'allowlisted' : 'local_only',
     dashboard: {
-      title: `Daily report — ${date}`,
-      summary: `${changeSet.commits.length} recent commits and ${changeSet.changedFiles.length} changed paths were observed locally.`,
-      branch: changeSet.headRef || undefined,
+      title: `${kind === 'daily' ? 'Daily' : 'Weekly'} report — ${date}`,
+      summary: document.sections.find((s) => s.id === 'summary')!.summary,
+      branch: before.branch || undefined,
+      head_commit: before.headCommit || undefined,
       status: 'completed',
       items: [],
     },
   };
-  const analysis = args.includes('--with-ai')
-    ? await analyzeChanges({ root, changeSet, withSemantic: true })
-    : undefined;
-  const body = `# Daily report — ${date}\n\n## Known\n\n- Working tree: **${changeSet.workingTree}**.\n- Recent commits observed: **${changeSet.commits.length}**.\n- Changed paths observed: **${changeSet.changedFiles.length}**.\n\n## Unknown\n\n- The intended product goal was not inferred from filenames or commit subjects.\n- No semantic findings or model interpretation are included in this deterministic draft.\n`;
-  const finalBody = analysis
-    ? `${body}\n## Analysis snapshot\n\n- Deterministic findings: **${analysis.findings.length}**.\n- Semantic provider: **${analysis.provenance.semanticProvider ?? 'none'}**.\n- Context items: **${analysis.context.items.length}**.\n`
-    : body;
-  const result = await writeArtifact({
-    traceRoot: join(root, '.trace'),
-    relativePath: `reports/daily/${date}.md`,
-    metadata,
-    markdown: finalBody,
-    dryRun: !args.includes('--yes') || args.includes('--dry-run'),
-  });
-  return { code: 0, value: result };
-}
-
-async function weekly(args: string[]): Promise<CliResult> {
-  const root = await repoRoot();
-  const changeSet = await changes(args);
-  const window = weeklyWindow(new Date(), 'UTC');
-  const items = changeSet.changedFiles.map((file) => ({
-    id: `change-${file.path}`,
-    kind: 'change' as const,
-    title: file.path,
-    detail: `${file.status} file observed in the local working tree`,
-    evidenceIds: [`file:${file.path}`],
-    materiality: 'medium' as const,
-    included: true,
-  }));
-  const markdown = renderReport({ window, items }, 'weekly');
-  const metadata = {
-    schema_version: '0.1' as const,
-    id: `weekly-${window.startUtc.slice(0, 10)}`,
-    artifact_type: 'weekly_report' as const,
-    repository: {
-      provider: changeSet.repository.provider,
-      owner: changeSet.repository.owner ?? 'local',
-      name: changeSet.repository.name,
-    },
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    generator: 'trace-cli/0.1',
-    execution_origin: 'local' as const,
-    source_refs: changeSet.evidence,
-    evidence: changeSet.evidence,
-    review_status: 'draft' as const,
-    sensitivity: 'internal' as const,
-    sync_policy: 'allowlisted' as const,
-    dashboard: {
-      title: `Weekly report — ${window.startUtc.slice(0, 10)}`,
-      summary: `${items.length} local change records are included in this deterministic report.`,
-      branch: changeSet.headRef || undefined,
-      status: 'completed',
-      items: items.slice(0, 100).map((item) => ({
-        id: item.id.replace(/[^a-z0-9-]/gi, '-').toLowerCase(),
-        title: item.title,
-        detail: item.detail,
-        severity: 'info' as const,
-        classification: 'deterministic' as const,
-        evidence: item.evidenceIds,
-      })),
-    },
-  };
+  let markdown = renderMarkdown();
+  const shortened = new Set<string>();
+  while (Buffer.byteLength(serializeArtifact(metadata, markdown), 'utf8') > 240_000) {
+    const largest = [...document.sections].sort((a, b) => b.items.length - a.items.length)[0]!;
+    if (!largest.items.length)
+      throw new Error('Report metadata exceeds the safe artifact size budget.');
+    largest.items.pop();
+    if (!shortened.has(largest.id)) {
+      largest.summary +=
+        ' Evidence display shortened to fit the safe artifact size budget; collected totals are unchanged.';
+      shortened.add(largest.id);
+    }
+    markdown = renderMarkdown();
+  }
   const artifact = await writeArtifact({
     traceRoot: join(root, '.trace'),
-    relativePath: `reports/weekly/${window.startUtc.slice(0, 10)}.md`,
+    relativePath,
+    overwrite: true,
     metadata,
+
     markdown,
     dryRun: !args.includes('--yes') || args.includes('--dry-run'),
   });
-  return { code: 0, value: { window, artifact } };
+  return {
+    code: 0,
+    value: {
+      window: period,
+      artifact,
+      ...(kind === 'daily' ? artifact : {}),
+      document,
+      authoritative: clean,
+    },
+  };
 }
+const daily = (args: string[]) => engineeringReport(args, 'daily');
+const weekly = (args: string[]) => engineeringReport(args, 'weekly');
 
 async function analyzeCommand(args: string[]): Promise<CliResult> {
   if (args[1] && args[1] !== 'changes' && !args[1].startsWith('--'))

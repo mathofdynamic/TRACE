@@ -593,11 +593,6 @@ export function ReportsView({
                       {/* Intelligence & Provenance Badges */}
                       <div className="report-item-card__meta">
                         <div className="report-meta-tokens">
-                          <span className="report-meta-token">
-                            <span className="token-label">Commit</span>
-                            <code>{report.analyzedCommit?.slice(0, 12) ?? 'Local HEAD'}</code>
-                          </span>
-
                           {relatedChangesCount > 0 ? (
                             <span className="report-meta-token">
                               <span className="token-label">Changes</span>
@@ -605,13 +600,15 @@ export function ReportsView({
                             </span>
                           ) : null}
 
-                          <span className="report-meta-token">
-                            <span className="token-label">Findings</span>
-                            <strong>
-                              {findingsCount} {findingsCount === 1 ? 'item' : 'items'}
-                              {highFindingsCount > 0 ? ` (${highFindingsCount} high)` : ''}
-                            </strong>
-                          </span>
+                          {!report.engineeringReport && (
+                            <span className="report-meta-token">
+                              <span className="token-label">Recorded items</span>
+                              <strong>
+                                {findingsCount} {findingsCount === 1 ? 'item' : 'items'}
+                                {highFindingsCount > 0 ? ` (${highFindingsCount} high)` : ''}
+                              </strong>
+                            </span>
+                          )}
 
                           <span className="report-meta-token">
                             <span className="token-label">Synced</span>
@@ -637,10 +634,6 @@ export function ReportsView({
                             Read report →
                           </Link>
                         </div>
-                        <details className="report-raw-disclosure">
-                          <summary>View approved TRACE record</summary>
-                          <pre className="safe-markdown">{report.content}</pre>
-                        </details>
                       </div>
                     </article>
                   );
@@ -757,8 +750,8 @@ function ReportQuickDrawer({
               >
                 <strong>Needs refresh</strong>
                 <p>
-                  Analyzed commit <code>{report.analyzedCommit?.slice(0, 12)}</code> is behind
-                  GitHub remote HEAD (<code>{report.remoteHeadCommit?.slice(0, 12)}</code>).
+                  The GitHub default branch has advanced since generation. See the full report's
+                  Verification &amp; Provenance tab for commit details.
                 </p>
               </div>
             ) : report.freshness === 'attention' ? (
@@ -816,18 +809,6 @@ function ReportQuickDrawer({
                         <strong>{item.title}</strong>
                       </div>
                       <p>{presentFindingDetail(item.detail)}</p>
-                      {item.evidence?.length ? (
-                        <div className="drawer-item-evidence">
-                          {item.evidence.slice(0, 2).map((ev) => (
-                            <code key={ev}>{ev}</code>
-                          ))}
-                          {item.evidence.length > 2 ? (
-                            <span className="evidence-more-tag">
-                              +{item.evidence.length - 2} loci
-                            </span>
-                          ) : null}
-                        </div>
-                      ) : null}
                     </div>
                   ))}
                 </div>
@@ -873,15 +854,10 @@ function ReportQuickDrawer({
                     </Link>
                   </dd>
                 </div>
-                <div>
-                  <dt>Analyzed Commit</dt>
-                  <dd>
-                    <code>{report.analyzedCommit?.slice(0, 12) ?? 'Local HEAD'}</code>
-                  </dd>
-                </div>
+
                 <div>
                   <dt>Privacy Guarantee</dt>
-                  <dd>Deterministic AST facts · Source code excluded</dd>
+                  <dd>Source-free project evidence</dd>
                 </div>
               </dl>
             </div>

@@ -1,5 +1,6 @@
 import {
   analysisAttributionIssue,
+  reportAttributionIssue,
   gitSnapshot,
   sameSnapshot,
   type GitSnapshot,
@@ -446,7 +447,9 @@ export async function collectSyncArtifacts(root: string, snapshot?: GitSnapshot)
                         ? 'artifact exceeds 256 KiB'
                         : metadata.artifact_type === 'analysis'
                           ? analysisAttributionIssue(metadata, target)
-                          : null;
+                          : ['daily_report', 'weekly_report'].includes(metadata.artifact_type)
+                            ? reportAttributionIssue(metadata, target)
+                            : null;
       if (reason) excluded.push({ path: relativePath, reason });
       else
         eligible.push({
