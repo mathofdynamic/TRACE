@@ -2042,3 +2042,13 @@
 - Publication is manual, main-only, and has contents-write permission only on its dedicated job. Ordinary PR/main checks and existing-release verification retain read permission. Refuse to overwrite published releases; allow resuming the empty draft left by the failed upload.
 - This publishes GitHub CLI assets only; no production/staging runtime workflow or credential configuration changes.
 - Publication review: serialize all CLI publishers without canceling a running upload; verify existing tags resolve to the tested source commit and create missing tags explicitly. Never silently retarget a release.
+
+## Issue #69 — analysis commit attribution
+
+- Record clean/dirty analysis inputs as a typed check evidence entry in the existing artifact schema, with Git branch/HEAD checks before and after analysis. Persist dirty/unstable input status and mark its artifact local-only so reverting changes cannot rehabilitate it (and older clients also refuse its policy).
+- Filter analyses by current branch, commit and recorded clean inputs for both dry-run and real sync. Retain historical files, exclude legacy/unverified input, and reject dirty/stale Git context before manifest creation. Expose manifest Git attribution in connected dry-run.
+- Preserve source/snippet privacy gates and schema/protocol compatibility. Update Skill/runtime guidance and regressions using real Git repositories and real CLI initialization/analysis; no production contact, deployment or direct database changes.
+- Local validation: 38 focused CLI/Skill tests PASS (12 attribution regressions), `pnpm check` PASS, `pnpm cf:build` PASS (build only), `git diff --check` PASS. Regression cases cover real Git histories, same-commit branch changes, tracked/staged/untracked dirty input and reverts, HEAD advancement, legacy provenance, privacy exclusions, mixed real-sync payloads, and unborn repositories.
+- CI correction: preserve detached checkout local-only dry-run compatibility while explicitly refusing connected authoritative sync without a named branch. Windows Git-heavy CLI tests use a bounded 15-second timeout instead of 5 seconds; no assertions or checks skipped.
+- Review correction: explicitly include all untracked input and dirty submodules in Git status, rather than trusting user/repository status configuration. Add a regression for `status.showUntrackedFiles=no`.
+- Final focused validation: 40 tests PASS, including 14 attribution regressions; `pnpm check` PASS after the review and CI compatibility corrections.

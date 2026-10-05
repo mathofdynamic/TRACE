@@ -93,7 +93,7 @@ trace validate --json
 5. Run `trace sync --dry-run --json`; inspect eligible/excluded entries and both privacy flags. Every eligible analysis must be known to come from clean committed contents. If an older dirty or unverified analysis remains eligible, DO NOT sync the batch; regenerating the current HEAD does not repair older records. Report the blocked plan instead of editing artifacts or policy to force eligibility. Require a clean tree again immediately before the authorized `trace sync --json`.
 6. Verify with `trace sync status --json`. Successful upload alone does not prove freshness.
 
-If not connected, report the necessary login/selection action. Local-only analysis is valid. The clean-checkout gate is Skill policy; current runtime does not enforce it. See references/safety.md.
+If not connected, report the necessary login/selection action. Local-only analysis is valid. The runtime rejects dirty sync and excludes historical or unverified analyses; the Skill still requires fresh clean regeneration. See references/safety.md.
 
 ## Safe synchronization
 

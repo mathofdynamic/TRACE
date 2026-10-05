@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { analysisInputCheck, gitSnapshot, sameSnapshot } from './analysis-attribution.js';
 import { execFile } from 'node:child_process';
 import { access, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -136,7 +137,10 @@ async function init(args: string[]): Promise<CliResult> {
 
 async function changes(args: string[]): Promise<NormalizedChangeSet> {
   const root = await repoRoot();
-  const status = await git(['status', '--porcelain'], root);
+  const status = await git(
+    ['status', '--porcelain', '--untracked-files=all', '--ignore-submodules=none'],
+    root,
+  );
   const branch = await git(['branch', '--show-current'], root).catch(() => '');
   const remote = await git(['config', '--get', 'remote.origin.url'], root).catch(() => '');
   const githubIdentity = normalizeGitHubRemote(remote);
@@ -293,12 +297,31 @@ async function analyzeCommand(args: string[]): Promise<CliResult> {
   if (args[1] && args[1] !== 'changes' && !args[1].startsWith('--'))
     return { code: 2, value: { error: 'Use: trace analyze [changes] [--with-ai]' } };
   const root = await repoRoot();
+  const before = await gitSnapshot(root).catch(() => null);
   const changeSet = await changes(args);
   const result = await analyzeChanges({
     root,
     changeSet,
     withSemantic: args.includes('--with-ai'),
   });
+  const after = await gitSnapshot(root).catch(() => null);
+  const verifiedClean =
+    before !== null &&
+    after !== null &&
+    before.workingTree === 'clean' &&
+    changeSet.workingTree === 'clean' &&
+    sameSnapshot(before, after) &&
+    changeSet.commits[0]?.sha === before.headCommit &&
+    changeSet.headRef === before.branch;
+  const inputEvidence = {
+    type: 'check' as const,
+    locator: analysisInputCheck,
+    metadata: {
+      head_commit: before?.headCommit ?? changeSet.commits[0]?.sha,
+      branch: before?.branch ?? changeSet.headRef,
+      working_tree: verifiedClean ? 'clean' : 'dirty',
+    },
+  };
   const now = new Date().toISOString();
   const headCommit = changeSet.commits[0]?.sha;
   const artifactId = stableArtifactId(
@@ -324,10 +347,10 @@ async function analyzeCommand(args: string[]): Promise<CliResult> {
       generator: 'trace-cli/0.1',
       execution_origin: 'local',
       source_refs: changeSet.evidence,
-      evidence: changeSet.evidence,
+      evidence: [...changeSet.evidence, inputEvidence],
       review_status: 'draft',
       sensitivity: 'internal',
-      sync_policy: 'allowlisted',
+      sync_policy: verifiedClean ? 'allowlisted' : 'local_only',
       dashboard: {
         title: `Local analysis of ${changeSet.repository.name}`,
         summary: `${result.findings.length} deterministic findings from ${result.parserCoverage.supportedFiles} supported files. Source code remains local.`,
@@ -356,6 +379,7 @@ async function analyzeCommand(args: string[]): Promise<CliResult> {
         conflicts: result.conflicts,
         warnings: result.warnings,
         provenance: result.provenance,
+        input: inputEvidence.metadata,
       },
       artifact: {
         path: artifact.path,
