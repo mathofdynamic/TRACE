@@ -475,7 +475,7 @@ async function rulesCommand(args: string[]): Promise<CliResult> {
 
 export async function main(args: string[]): Promise<CliResult> {
   const [command, subcommand] = args;
-  if (command === '--version' || command === '-v') return { code: 0, value: 'trace 0.1.0' };
+  if (command === '--version' || command === '-v') return { code: 0, value: 'trace 0.1.1' };
   if (command === 'init') return init(args);
   if (command === 'login') return { code: 0, value: await loginDashboard(args) };
   if (command === 'whoami') return { code: 0, value: await dashboardWhoami() };

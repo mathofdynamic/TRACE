@@ -5,7 +5,7 @@ source-free artifacts. Install Node.js 22.14+ and Git, then install the versione
 package from the official GitHub release (no monorepo build or pnpm required):
 
 ```text
-npm install --global https://github.com/mathofdynamic/TRACE/releases/download/cli-v0.1.0/mathofdynamic-trace-cli-0.1.0.tgz
+npm install --global https://github.com/mathofdynamic/TRACE/releases/download/cli-v0.1.1/mathofdynamic-trace-cli-0.1.1.tgz
 trace --version
 ```
 
