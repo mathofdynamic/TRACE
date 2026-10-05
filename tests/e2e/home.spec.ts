@@ -1,3 +1,8 @@
+import { execFileSync } from 'node:child_process';
+import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { parseArtifact } from '@trace/schema';
 import { expect, test } from '@playwright/test';
 import {
   createSessionCookie as createAuthSessionCookie,
@@ -582,8 +587,15 @@ test.describe('authenticated product journey', () => {
         dailyReport.getByRole('heading', { name: 'Daily project report' }).first(),
       ).toBeVisible();
       await expect(dailyReport.locator('pre.safe-markdown')).toBeHidden();
-      await dailyReport.getByText('View approved TRACE record').click();
-      await expect(dailyReport.locator('pre.safe-markdown')).toBeVisible();
+      await dailyReport.getByRole('link', { name: 'Read report →' }).click();
+      await expect(page.getByRole('tab', { name: 'Structured Document' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      await expect(page.locator('#panel-readable')).not.toContainText('schema_version');
+      await page.getByRole('tab', { name: 'Verification & Provenance' }).click();
+      await expect(page.getByText('Artifact Identifier')).toBeVisible();
+      await page.goto('/app/reports');
       const weeklyReport = page
         .locator('article.report-row')
         .filter({ hasText: 'Weekly project report' })
@@ -592,8 +604,14 @@ test.describe('authenticated product journey', () => {
         weeklyReport.getByRole('heading', { name: 'Weekly project report' }).first(),
       ).toBeVisible();
       await expect(weeklyReport.locator('pre.safe-markdown')).toBeHidden();
-      await weeklyReport.getByText('View approved TRACE record').click();
-      await expect(weeklyReport.locator('pre.safe-markdown')).toBeVisible();
+      await weeklyReport.getByRole('link', { name: 'Read report →' }).click();
+      await expect(page.getByRole('tab', { name: 'Structured Document' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      await expect(page.locator('#panel-readable')).not.toContainText('schema_version');
+      await page.getByRole('tab', { name: 'Verification & Provenance' }).click();
+      await expect(page.getByText('Artifact Identifier')).toBeVisible();
 
       await page.setViewportSize({ width: 390, height: 844 });
       await page.goto('/app/reports');
@@ -604,13 +622,19 @@ test.describe('authenticated product journey', () => {
       ).toBe(true);
       for (const reportTitle of ['Daily project report', 'Weekly project report']) {
         const report = page.locator('article.report-row').filter({ hasText: reportTitle }).first();
-        await report.getByText('View approved TRACE record').click();
-        await expect(report.locator('pre.safe-markdown')).toBeVisible();
+        await report.getByRole('link', { name: 'Read report →' }).click();
+        await expect(page.getByRole('tab', { name: 'Structured Document' })).toHaveAttribute(
+          'aria-selected',
+          'true',
+        );
+        await page.getByRole('tab', { name: 'Verification & Provenance' }).click();
+        await expect(page.getByText('Artifact Identifier')).toBeVisible();
         expect(
           await page.evaluate(
             () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
           ),
         ).toBe(true);
+        await page.goto('/app/reports');
       }
       await page.getByRole('button', { name: 'Open navigation' }).click();
       const navigation = page.getByRole('navigation', { name: 'Mobile application navigation' });
@@ -620,6 +644,112 @@ test.describe('authenticated product journey', () => {
       );
     } finally {
       await seeded.cleanup();
+    }
+  });
+
+  test('real CLI engineering report renders its period and evidence while keeping metadata in verification', async ({
+    page,
+  }) => {
+    const seeded = await seedWorkspace({
+      installation: true,
+      repositoryState: 'active',
+      localSync: true,
+    });
+    const root = await mkdtemp(join(tmpdir(), 'trace-report-browser-'));
+    const client = new Client({ connectionString: databaseUrl });
+    const command = (executable: string, args: string[]) =>
+      execFileSync(executable, args, {
+        cwd: root,
+        encoding: 'utf8',
+        env: { ...process.env, TRACE_CONFIG_HOME: join(root, '.trace-config-unused') },
+      }).trim();
+    try {
+      command('git', ['init', '-b', 'main']);
+      command('git', ['config', 'user.name', 'TRACE test fixture']);
+      command('git', ['config', 'user.email', 'fixture@example.test']);
+      command('git', [
+        'remote',
+        'add',
+        'origin',
+        `https://github.com/${seeded.user.githubLogin}/project.git`,
+      ]);
+      await writeFile(join(root, '.gitignore'), '.trace/\n');
+      await writeFile(join(root, 'README.md'), '# Explicit local browser-test fixture\n');
+      command('git', ['add', '.']);
+      command('git', ['commit', '-m', 'Verified engineering report browser fixture']);
+      const cli = resolve('packages/trace-cli/dist/cli.js');
+      command(process.execPath, [cli, 'init', '--yes', '--json']);
+      const result = JSON.parse(
+        command(process.execPath, [cli, 'report', 'weekly', '--yes', '--json']),
+      );
+      const content = await readFile(result.artifact.path, 'utf8');
+      const artifact = parseArtifact(content);
+      expect(result.authoritative).toBe(true);
+      expect(command('git', ['status', '--porcelain'])).toBe('');
+      await client.connect();
+      await client.query(
+        "UPDATE synced_artifacts SET content=$1, metadata=$2::jsonb, projection=$3::jsonb WHERE repository_id=$4 AND artifact_type='weekly_report'",
+        [
+          content,
+          JSON.stringify(artifact.metadata),
+          JSON.stringify(artifact.metadata.dashboard),
+          seeded.repositoryId,
+        ],
+      );
+      await client.query('UPDATE github_repositories SET remote_head_sha=$1 WHERE id=$2', [
+        artifact.metadata.dashboard!.head_commit,
+        seeded.repositoryId,
+      ]);
+      await page
+        .context()
+        .addCookies([{ name: 'trace_session', value: seeded.cookie, url: appBaseUrl }]);
+      await page.goto('/app/reports');
+      await page
+        .getByRole('searchbox', { name: 'Search reports library' })
+        .fill('Verified engineering report browser fixture');
+      await expect(
+        page.getByRole('link', { name: artifact.metadata.dashboard!.title, exact: true }),
+      ).toBeVisible();
+      await page
+        .getByRole('link', { name: artifact.metadata.dashboard!.title, exact: true })
+        .click();
+      const readable = page.locator('#panel-readable');
+      await expect(
+        readable.getByRole('heading', { name: 'Reporting period', exact: true }),
+      ).toBeVisible();
+      await expect(
+        readable.getByRole('heading', { name: 'Executive summary', exact: true }),
+      ).toBeVisible();
+      await expect(
+        readable.getByRole('link', { name: /Verified engineering report browser fixture/ }).first(),
+      ).toHaveAttribute('href', /github.com/);
+      await expect(readable).toContainText('Not available');
+      await expect(readable).not.toContainText('schema_version');
+      await expect(readable).not.toContainText(artifact.metadata.dashboard!.head_commit!);
+      await page.screenshot({
+        path: test.info().outputPath('engineering-report-desktop.png'),
+        fullPage: true,
+      });
+      await page.getByRole('tab', { name: 'Verification & Provenance' }).click();
+      await expect(page.locator('#panel-provenance')).toContainText('trace:engineering-report:v1');
+      await expect(page.locator('#panel-provenance')).toContainText(
+        artifact.metadata.dashboard!.head_commit!,
+      );
+      await page.getByRole('tab', { name: 'Structured Document' }).click();
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.screenshot({
+        path: test.info().outputPath('engineering-report-mobile.png'),
+        fullPage: true,
+      });
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+        ),
+      ).toBe(true);
+    } finally {
+      await client.end().catch(() => {});
+      await seeded.cleanup();
+      await rm(root, { recursive: true, force: true });
     }
   });
 

@@ -1,3 +1,5 @@
+import type { EngineeringReport } from '@trace/schema';
+import { readEngineeringReport } from './report-artifact';
 import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 import { isD1Database, schema } from '@trace/db';
 import type { TraceD1Database } from '@trace/db';
@@ -95,6 +97,7 @@ export type DashboardActivity = {
 };
 
 export type DashboardSyncedRecord = {
+  engineeringReport?: EngineeringReport;
   id: string;
   artifactId: string;
   artifactType: string;
@@ -550,6 +553,7 @@ async function getPostgresDashboardSummary(
       typeof value === 'string' && value.length ? value : null;
     const reportRemoteHead = stringValue(projectionRecord.remoteHeadCommit);
     const reportAnalyzedCommit =
+      stringValue(projectionRecord.head_commit) ??
       stringValue(projectionRecord.analyzedCommit) ??
       latestSyncByRepository.get(artifact.repositoryId)?.headCommit ??
       null;
@@ -574,6 +578,7 @@ async function getPostgresDashboardSummary(
       syncedAt: artifact.syncedAt.toISOString(),
       origin: 'local',
       content: artifact.content,
+      engineeringReport: readEngineeringReport(artifact.content),
       path: artifact.path,
       timeWindow: stringValue(projectionRecord.timeWindow),
       freshness,

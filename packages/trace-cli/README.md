@@ -50,3 +50,15 @@ For maintainers: `pnpm cli:pack` builds a standalone npm-compatible tarball and
 SHA256SUMS in ignored `dist/cli-release/`. Only tested exact-source artifacts should
 be released. Windows/Linux CI installs the package into a fresh prefix and uses a
 fresh TRACE checkout for acceptance, without production contact.
+
+## Period reports (unreleased workspace implementation)
+
+Published CLI 0.1.1 retains the legacy report behavior until the next release.
+
+Daily and weekly reports aggregate reachable committed history for one or seven
+calendar days ending on `--date` (default today), rather than working-tree edits.
+Use `--timezone <IANA zone>` and optional `--github` with an authenticated `gh`
+CLI for verified PR/release metadata. Missing data is labelled Not available.
+Preview without `--yes`; write or revise the canonical report with `--yes`.
+See [Engineering reports](../../DOC/engineering-reports.md) for data coverage,
+clean-input publication guards and the dashboard document/provenance contract.

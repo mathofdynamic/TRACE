@@ -1,3 +1,4 @@
+import { readEngineeringReport } from './report-artifact';
 import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 import { d1Schema, type TraceD1Database } from '@trace/db';
 import type {
@@ -384,6 +385,7 @@ export async function getD1DashboardSummary(
     const projection = artifact.projection as Record<string, unknown>;
     const items = Array.isArray(projection.items) ? projection.items : [];
     const reportAnalyzedCommit =
+      stringValue(projection.head_commit) ??
       stringValue(projection.analyzedCommit) ??
       latestSyncByRepository.get(artifact.repositoryId)?.headCommit ??
       null;
@@ -408,6 +410,7 @@ export async function getD1DashboardSummary(
       syncedAt: artifact.syncedAt.toISOString(),
       origin: 'local',
       content: artifact.content,
+      engineeringReport: readEngineeringReport(artifact.content),
       path: artifact.path,
       timeWindow: stringValue(projection.timeWindow),
       freshness,

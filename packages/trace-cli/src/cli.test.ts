@@ -94,11 +94,19 @@ describe('source-free sync collection', () => {
       generator: 'test',
       execution_origin: 'local' as const,
       source_refs: [],
-      evidence: [],
+      evidence: [
+        {
+          type: 'check' as const,
+          locator: 'trace:report-input:v1',
+          metadata: { head_commit: 'abcdef1', branch: 'main', working_tree: 'clean' },
+        },
+      ],
       review_status: 'draft' as const,
       sensitivity: 'internal' as const,
       dashboard: {
         title: 'Analysis',
+        branch: 'main',
+        head_commit: 'abcdef1',
         summary: 'Source-free summary.',
         status: 'completed',
         items: [],
@@ -135,11 +143,32 @@ describe('source-free sync collection', () => {
         '# Snippet\n\n```ts\nconst secret = 1;\n```\n',
       ),
     );
-    const result = await collectSyncArtifacts(root);
+    await writeFile(
+      join(traceRoot, 'unverified.md'),
+      serializeArtifact(
+        {
+          ...base,
+          id: 'report-unverified',
+          artifact_type: 'daily_report',
+          sync_policy: 'allowlisted',
+          evidence: [],
+        },
+        '# Legacy report',
+      ),
+    );
+    const result = await collectSyncArtifacts(root, {
+      branch: 'main',
+      headCommit: 'abcdef1',
+      workingTree: 'clean',
+    });
     expect(result.eligible.map((entry) => entry.manifest.id)).toEqual(['analysis-approved']);
     expect(result.excluded).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ path: 'analyses/local.md', reason: 'local-only policy' }),
+        expect.objectContaining({
+          path: 'analyses/unverified.md',
+          reason: 'report input provenance is unverified or dirty',
+        }),
         expect.objectContaining({
           path: 'analyses/snippet.md',
           reason: 'code snippets are disabled',

@@ -4,6 +4,9 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { parse, stringify } from 'yaml';
 import { z } from 'zod';
 
+import { engineeringReportSchema, reportEvidenceLocator } from './engineering-report.js';
+export * from './engineering-report.js';
+
 export const schemaVersion = '0.1';
 export const syncProtocolVersion = '0.1';
 
@@ -128,7 +131,25 @@ export const artifactMetadataSchema = z
       .optional(),
     dashboard: dashboardProjectionSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((metadata, ctx) => {
+    const reports = metadata.evidence.filter((entry) => entry.locator === reportEvidenceLocator);
+    if (reports.length > 1)
+      ctx.addIssue({ code: 'custom', message: 'Duplicate engineering report document' });
+    for (const entry of reports) {
+      const result = engineeringReportSchema.safeParse(entry.metadata?.document);
+      if (
+        !result.success ||
+        metadata.artifact_type !== `${result.success ? result.data.period.kind : ''}_report`
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Invalid engineering report contract',
+          path: ['evidence'],
+        });
+      }
+    }
+  });
 
 export type ArtifactMetadata = z.infer<typeof artifactMetadataSchema>;
 export type EvidenceReference = z.infer<typeof evidenceReferenceSchema>;

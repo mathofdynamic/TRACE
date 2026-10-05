@@ -20708,3 +20708,22 @@ html[data-trace-motion-ready='true']
     will-change: auto !important;
   }
 }
+
+.engineering-report-items {
+  margin: 1rem 0 0;
+  padding-left: 1.25rem;
+}
+.engineering-report-items li {
+  margin: 0.75rem 0;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.engineering-report-items a {
+  color: var(--trace-text);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+.engineering-report-items a:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
