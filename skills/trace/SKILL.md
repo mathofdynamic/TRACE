@@ -5,7 +5,7 @@ description: Operate a TRACE-enabled repository through the `trace` CLI - initia
 
 # Working with TRACE
 
-Written against: TRACE CLI `0.1.1`, artifact schema `0.1`, sync protocol `0.1`.
+Written against: TRACE CLI `0.2.0`, artifact schema `0.1`, sync protocol `0.1`.
 Check with `trace --version` and `.trace/schema-version`. If versions differ, review the installed CLI contract before applying these instructions; do not guess.
 
 ## Purpose
@@ -124,7 +124,7 @@ trace report daily  [--date YYYY-MM-DD] --yes --json     # without --yes it is a
 trace report weekly --yes --json
 ```
 
-The following period behavior is in the unreleased workspace implementation, not published CLI 0.1.1 (which retains legacy working-tree reports). Reports are deterministic engineering snapshots of committed period history. Daily covers one calendar day; weekly covers seven calendar days ending on `--date` (default today). Use `--timezone <IANA zone>` for boundaries and `--github` for optional verified metadata through an authenticated `gh` CLI. Missing sources are Not available; open PRs are labelled as a current snapshot. No semantic provider is used. Re-running with `--yes` revises the canonical report. Dirty generation is local-only; clean reports must match branch/HEAD before sync. Reports are syncable but sync still requires dry-run first. See DOC/engineering-reports.md in the repository.
+Available in CLI 0.2.0. Reports are deterministic engineering snapshots of committed period history. Daily covers one calendar day; weekly covers seven calendar days ending on `--date` (default today). Use `--timezone <IANA zone>` for boundaries and `--github` for optional verified metadata through an authenticated `gh` CLI. Missing sources are Not available; open PRs are labelled as a current snapshot. No semantic provider is used. Re-running with `--yes` revises the canonical report. Dirty generation is local-only; clean reports must match branch/HEAD before sync. Reports are syncable but sync still requires dry-run first. See DOC/engineering-reports.md in the repository.
 
 ## Dashboard / freshness interpretation
 

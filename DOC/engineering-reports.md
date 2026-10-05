@@ -1,8 +1,7 @@
 # Engineering reports
 
-This describes the unreleased workspace implementation. Published CLI 0.1.1
-still generates the legacy working-tree reports; these commands require the new
-workspace build until a subsequent CLI release is published.
+Available in TRACE CLI 0.2.0. Artifact schema and sync protocol remain 0.1.
+Install the versioned GitHub release using the CLI README instructions.
 
 Daily reports cover one calendar day. Weekly reports cover seven calendar days
 ending on the selected date: October 5 covers September 29 through October 5.

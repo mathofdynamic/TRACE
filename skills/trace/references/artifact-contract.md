@@ -34,7 +34,7 @@ No CLI command generates `decision`, `risk`, `debt`, `conflict`, `rule`, `index`
 
 - Never hand-edit CLI-generated artifacts to alter findings, classification, evidence, or projection.
 - Evidence locators (paths, commit SHAs) are allowed; code content is not.
-- Re-running `trace analyze` for the same HEAD overwrites the same file. The period-report implementation also revises the canonical selected-date report with explicit `--yes`; its creation timestamp is preserved. Published CLI 0.1.1 still uses the legacy report behavior until the next release.
+- Re-running `trace analyze` for the same HEAD overwrites the same file. The period-report implementation also revises the canonical selected-date report with explicit `--yes`; its creation timestamp is preserved. This period-report behavior is available in CLI 0.2.0.
 
 ## Commit attribution gate
 
