@@ -281,7 +281,7 @@ async function engineeringReport(args: string[], kind: 'daily' | 'weekly'): Prom
     repository: { provider: identity ? 'github' : 'git', owner: owner!, name: name! },
     created_at: previousCreatedAt,
     updated_at: now.toISOString(),
-    generator: 'trace-cli/0.1',
+    generator: 'trace-cli/0.2.0',
     execution_origin: 'local',
     source_refs: before.headCommit ? [{ type: 'commit', locator: before.headCommit }] : [],
     evidence,
@@ -385,7 +385,7 @@ async function analyzeCommand(args: string[]): Promise<CliResult> {
       },
       created_at: now,
       updated_at: now,
-      generator: 'trace-cli/0.1',
+      generator: 'trace-cli/0.2.0',
       execution_origin: 'local',
       source_refs: changeSet.evidence,
       evidence: [...changeSet.evidence, inputEvidence],
@@ -475,7 +475,7 @@ async function prCommand(args: string[]): Promise<CliResult> {
     repository: { provider: input.provider, owner: input.owner, name: input.repository },
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
-    generator: 'trace-cli/0.1',
+    generator: 'trace-cli/0.2.0',
     execution_origin: 'local' as const,
     source_refs: changeSet.evidence,
     evidence: changeSet.evidence,
@@ -516,7 +516,7 @@ async function rulesCommand(args: string[]): Promise<CliResult> {
 
 export async function main(args: string[]): Promise<CliResult> {
   const [command, subcommand] = args;
-  if (command === '--version' || command === '-v') return { code: 0, value: 'trace 0.1.1' };
+  if (command === '--version' || command === '-v') return { code: 0, value: 'trace 0.2.0' };
   if (command === 'init') return init(args);
   if (command === 'login') return { code: 0, value: await loginDashboard(args) };
   if (command === 'whoami') return { code: 0, value: await dashboardWhoami() };

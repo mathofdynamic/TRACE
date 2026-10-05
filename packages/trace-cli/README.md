@@ -5,7 +5,7 @@ source-free artifacts. Install Node.js 22.14+ and Git, then install the versione
 package from the official GitHub release (no monorepo build or pnpm required):
 
 ```text
-npm install --global https://github.com/mathofdynamic/TRACE/releases/download/cli-v0.1.1/mathofdynamic-trace-cli-0.1.1.tgz
+npm install --global https://github.com/mathofdynamic/TRACE/releases/download/cli-v0.2.0/mathofdynamic-trace-cli-0.2.0.tgz
 trace --version
 ```
 
@@ -51,9 +51,9 @@ SHA256SUMS in ignored `dist/cli-release/`. Only tested exact-source artifacts sh
 be released. Windows/Linux CI installs the package into a fresh prefix and uses a
 fresh TRACE checkout for acceptance, without production contact.
 
-## Period reports (unreleased workspace implementation)
+## Period reports (CLI 0.2.0)
 
-Published CLI 0.1.1 retains the legacy report behavior until the next release.
+CLI 0.2.0 adds verified period engineering reports.
 
 Daily and weekly reports aggregate reachable committed history for one or seven
 calendar days ending on `--date` (default today), rather than working-tree edits.
@@ -62,3 +62,22 @@ CLI for verified PR/release metadata. Missing data is labelled Not available.
 Preview without `--yes`; write or revise the canonical report with `--yes`.
 See [Engineering reports](../../DOC/engineering-reports.md) for data coverage,
 clean-input publication guards and the dashboard document/provenance contract.
+
+
+## Release notes — 0.2.0
+
+- Daily and trailing seven-day engineering reports aggregate committed period
+  history, changed areas and detectable package version transitions.
+- Optional `--github` adds verified PR/release metadata using a separately
+  authenticated `gh` CLI. Missing sources remain Not available; open PRs are a
+  current snapshot, not reconstructed historical state.
+- The dashboard reads one validated engineering document, links evidence and
+  separates readable sections from Verification & Provenance.
+- Dirty/unstable reports remain local-only. Sync excludes reports whose recorded
+  clean branch/HEAD differs from the current checkout. Regenerate legacy reports
+  before publication; historical artifacts need not be deleted.
+- Explicit `--yes` revises the canonical ending-date report while preserving its
+  creation time. Artifact schema and sync protocol remain 0.1; no migration is needed.
+- Both privacy flags remain false. Release publication requires the existing
+  checksum-verified fresh Windows/Linux installation acceptance, now including
+  real daily/weekly generation, validation and safe local sync planning.

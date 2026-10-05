@@ -80,6 +80,33 @@ assert(artifact.includes(run('git', ['rev-parse', 'HEAD'])));
 assert(artifact.includes('Working tree: **clean**'));
 assert(artifact.includes('Source code sent to a model: **no**'));
 assert.deepEqual(JSON.parse(run(executable, ['validate', '--json'])), []);
+const supportsPeriodReports =
+  Number(expectedVersion!.split('.')[0]) > 0 || Number(expectedVersion!.split('.')[1]) >= 2;
+if (supportsPeriodReports) {
+  for (const kind of ['daily', 'weekly'] as const) {
+    const report = JSON.parse(run(executable, ['report', kind, '--yes', '--json']));
+    assert.equal(report.authoritative, true);
+    assert.equal(report.document.period.kind, kind);
+    const duration =
+      Date.parse(report.document.period.end) - Date.parse(report.document.period.start);
+    assert.equal(duration, (kind === 'daily' ? 1 : 7) * 86_400_000);
+    assert.equal(report.document.period.timeZone, 'UTC');
+    assert.equal(report.document.sections.length, 11);
+    assert(
+      report.document.sources.some(
+        (source: { name: string; status: string }) =>
+          source.name === 'GitHub' && source.status === 'not_available',
+      ),
+    );
+    const reportContent = await readFile(report.artifact.path, 'utf8');
+    assert(reportContent.includes('trace:engineering-report:v1'));
+    assert(reportContent.includes('trace:report-input:v1'));
+    assert(reportContent.includes(`trace-cli/${expectedVersion}`));
+    assert(reportContent.includes(run('git', ['rev-parse', 'HEAD'])));
+    assert(reportContent.includes('## Executive summary'));
+  }
+  assert.deepEqual(JSON.parse(run(executable, ['validate', '--json'])), []);
+}
 const status = JSON.parse(run(executable, ['status', '--json']));
 assert.equal(status.trace.valid, true);
 assert.equal(status.dashboard.connected, false);
@@ -89,6 +116,10 @@ assert.equal(plan.connected, false);
 assert.equal(plan.sourceCodeIncluded, false);
 assert.equal(plan.codeSnippetsIncluded, false);
 assert(plan.eligible.length > 0, 'Fresh analysis must be eligible for source-free planning');
+if (supportsPeriodReports)
+  for (const kind of ['daily_report', 'weekly_report']) {
+    assert(plan.eligible.some((item: { type: string }) => item.type === kind));
+  }
 
 await assert.rejects(access(join(checkout, '.trace/state/dashboard.json')));
 assert.deepEqual(await readdir(config), [], 'Local acceptance must not create credentials');
@@ -103,6 +134,8 @@ console.log(
       checkout: run('git', ['rev-parse', 'HEAD']),
       initialized: true,
       analyzed: true,
+      dailyReport: supportsPeriodReports,
+      weeklyReport: supportsPeriodReports,
       schemaValid: true,
       rootTraceIgnored: true,
       credentialsCreated: false,
