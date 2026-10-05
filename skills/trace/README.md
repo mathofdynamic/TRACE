@@ -8,7 +8,7 @@ The Skill delegates execution to the CLI and does not provide a daemon or a sepa
 ## Current installation state
 
 Install the standalone CLI with the GitHub release instructions in
-[the CLI README](../../packages/trace-cli/README.md). Version 0.1.0 bundles its
+[the CLI README](../../packages/trace-cli/README.md). Version 0.1.1 bundles its
 runtime dependencies; no npm registry package name should be guessed.
 For source development, run `pnpm install --frozen-lockfile`, then
 `pnpm --filter @trace/cli... build` and `pnpm trace <command>`.

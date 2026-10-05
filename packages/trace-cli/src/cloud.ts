@@ -513,7 +513,7 @@ export async function buildManifest(
     repositoryId: binding.repositoryId,
     repository: binding.repository,
     executionOrigin: 'local',
-    traceVersion: '0.1.0',
+    traceVersion: '0.1.1',
     createdAt: new Date().toISOString(),
     baseOperationId,
     git: { branch, headCommit },

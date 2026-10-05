@@ -2052,3 +2052,9 @@
 - CI correction: preserve detached checkout local-only dry-run compatibility while explicitly refusing connected authoritative sync without a named branch. Windows Git-heavy CLI tests use a bounded 15-second timeout instead of 5 seconds; no assertions or checks skipped.
 - Review correction: explicitly include all untracked input and dirty submodules in Git status, rather than trusting user/repository status configuration. Add a regression for `status.showUntrackedFiles=no`.
 - Final focused validation: 40 tests PASS, including 14 attribution regressions; `pnpm check` PASS after the review and CI compatibility corrections.
+
+## CLI 0.1.1 release
+
+- Release the issue #69 analysis attribution fix as CLI 0.1.1. Update the package, executable version, sync manifest client version and current installation/Skill guidance together; artifact schema and sync protocol remain 0.1.
+- Use the existing checksummed distribution workflow and fresh Windows/Linux acceptance before publishing. No Worker, Pages, database, queue or credential configuration changes.
+- Local validation: 40 focused CLI/Skill tests PASS; `pnpm check` PASS; `pnpm cf:build` PASS (build only); `git diff --check` PASS. Release publication and fresh Windows/Linux acceptance are verified by the existing distribution workflow.

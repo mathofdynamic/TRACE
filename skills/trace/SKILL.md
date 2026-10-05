@@ -5,7 +5,7 @@ description: Operate a TRACE-enabled repository through the `trace` CLI - initia
 
 # Working with TRACE
 
-Written against: TRACE CLI `0.1.0`, artifact schema `0.1`, sync protocol `0.1`.
+Written against: TRACE CLI `0.1.1`, artifact schema `0.1`, sync protocol `0.1`.
 Check with `trace --version` and `.trace/schema-version`. If versions differ, review the installed CLI contract before applying these instructions; do not guess.
 
 ## Purpose
