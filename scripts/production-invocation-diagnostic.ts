@@ -1,4 +1,5 @@
 import { pathToFileURL } from 'node:url';
+import { encryptCatalogDiagnostic } from './verify-production-owner-state.js';
 
 type RecordValue = Record<string, unknown>;
 function record(value: unknown): RecordValue {
@@ -24,6 +25,17 @@ export function invocationQuery(rayId: string, timestamp: string, exact = true) 
   };
 }
 
+export function invocationPath(value: unknown) {
+  const event = record(value);
+  const workers = { ...record(record(event.source).$workers), ...record(event.$workers) };
+  try {
+    const url = record(record(workers.event).request).url ?? record(event.$metadata).url;
+    return new URL(String(url)).pathname;
+  } catch {
+    return null;
+  }
+}
+
 export function invocationSummary(value: unknown) {
   const event = record(value);
   const metadata = record(event.$metadata);
@@ -32,22 +44,18 @@ export function invocationSummary(value: unknown) {
   const sourceWorkers = record(source.$workers);
   const details = { ...sourceWorkers, ...workers };
   const outcome = details.outcome;
-  let requestPath: string | null = null;
-  try {
-    const url = metadata.url ?? record(record(details.event).request).url;
-    const pathname = new URL(String(url)).pathname;
-    requestPath = [
-      '/api/github/setup',
-      '/api/github/reconcile',
-      '/api/github/install',
-      '/api/github/repositories',
-      '/app/repositories',
-    ].includes(pathname)
-      ? pathname
+  const pathname = invocationPath(value);
+  const requestPath = [
+    '/api/github/setup',
+    '/api/github/reconcile',
+    '/api/github/install',
+    '/api/github/repositories',
+    '/app/repositories',
+  ].includes(pathname ?? '')
+    ? pathname
+    : pathname === null
+      ? null
       : 'OTHER_PATH';
-  } catch {
-    /* No valid request URL; omit it. */
-  }
   const error = String(metadata.error ?? source.error ?? '');
   const knownOutcome = typeof outcome === 'string' && /^[a-zA-Z_ -]{1,40}$/.test(outcome);
   const number = (key: string) =>
@@ -118,6 +126,19 @@ export async function diagnoseInvocation(
     console.log(
       JSON.stringify({
         scope: exact ? 'EXACT_RAY' : 'WORKER_TIME_WINDOW',
+        ...(environment.INVOCATION_DIAGNOSTIC_PUBLIC_KEY
+          ? {
+              encryptedPaths: encryptCatalogDiagnostic(
+                events.map((event) =>
+                  JSON.stringify({
+                    rayId: invocationSummary(event).rayId,
+                    pathname: invocationPath(event),
+                  }),
+                ),
+                environment.INVOCATION_DIAGNOSTIC_PUBLIC_KEY,
+              ),
+            }
+          : {}),
         events: events.map(invocationSummary),
       }),
     );
