@@ -2134,3 +2134,9 @@
 - Keep production limits, rollback/catalog guards and runtime untouched while obtaining evidence. Tests verify query bounds, redaction and explicit permission-denial reporting.
 - Validation: three focused diagnostic tests, web type checking, `pnpm check` and `git diff --check` PASS. Protected historical evidence remains pending workflow registration; no cause inferred from the generic 1102 page.
 - Review correction: classify recorded `exceededCpu`/`exceededMemory` directly even without optional error text; reserve subrequest classification for explicit subrequest errors. Six focused regressions pass. Continue to a bounded Worker-window query if exact-Ray logs lack CPU metrics.
+
+## Verified refresh CPU incident evidence and rollback identity
+
+- Protected retained-log query 37456678882 identified exact Ray `a46324dd8dcdb51e`, request ID `61ea581dd5bbea3c863d9a4c85de210f`, at 08:02:28.089 UTC: platform outcome `exceededCpu`, CPU 16 ms, wall time 21 ms, version `c13269d2-4850-47f8-9773-d36f68019c79`. Do not attribute the failure to reconciliation SQL without locating its exact route. Expand only fixed TRACE GitHub route names in sanitized diagnostics; query values remain omitted.
+- Protected independent post-incident inspection 37456065189 fully verified the current version/source `4cdd4161e17f1862594356b357e9319fb4847199`, 100% owner traffic, complete owner catalog, bindings, secret names and Queue0. Original guarded deployment 37431325494 and prior independent inspection 37432094907 passed. Pin this exact verified rollback target before an eventual reviewed runtime fix; unknown version/source/mode/resource guards remain intact.
+- Validation: 83 focused diagnostic/transition/owner/workflow tests, `pnpm check` and `git diff --check` PASS. No production deployment or limit change in this operational registration.

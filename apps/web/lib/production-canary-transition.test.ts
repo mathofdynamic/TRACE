@@ -478,6 +478,7 @@ describe('production fixture transition state gate', () => {
   it.each([
     ['a30ba0d6-c4e6-42a7-b9fd-cf6a8eb8d08e', '74450fd7684b6974e6deb8bb407f1fd670e5cecf'],
     ['b7c49d29-d0c7-49a6-9228-f5e7425e2873', '886fe6976cdbb67192f74a4f32aa621b08be4f65'],
+    ['c13269d2-4850-47f8-9773-d36f68019c79', '4cdd4161e17f1862594356b357e9319fb4847199'],
   ])(
     'accepts only independently verified owner rollback version %s and exact source',
     async (versionId, source) => {

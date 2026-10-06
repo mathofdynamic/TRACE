@@ -36,7 +36,13 @@ export function invocationSummary(value: unknown) {
   try {
     const url = metadata.url ?? record(record(details.event).request).url;
     const pathname = new URL(String(url)).pathname;
-    requestPath = ['/api/github/setup', '/app/repositories'].includes(pathname)
+    requestPath = [
+      '/api/github/setup',
+      '/api/github/reconcile',
+      '/api/github/install',
+      '/api/github/repositories',
+      '/app/repositories',
+    ].includes(pathname)
       ? pathname
       : 'OTHER_PATH';
   } catch {
