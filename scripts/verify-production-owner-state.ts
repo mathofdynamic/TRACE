@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { createProductionGitHubAppJwt } from './production-github-app-jwt.js';
 import { PRODUCTION_BACKEND_ORIGIN } from '../apps/web/lib/origins.js';
 import { fileURLToPath } from 'node:url';
@@ -17,6 +18,7 @@ type CatalogRow = {
   installation_state: string;
   suspended_at: unknown;
   disconnected?: number;
+  synchronized_at?: number | null;
 };
 export function assertDirectProductionWebhook(config: {
   url?: string;
@@ -46,7 +48,7 @@ export function assertOwnerLoginState(state: OwnerLoginState) {
   )
     throw new Error('Owner identity, onboarding or active sessions are invalid.');
 }
-export const ownerCatalogSql = `SELECT r.github_repository_id AS provider_id, r.full_name, r.state, ir.selected, (r.organization_id = gi.organization_id) AS tenant_matches, gi.github_installation_id AS installation_id, gi.account_login, gi.state AS installation_state, gi.suspended_at, (r.disconnected_at IS NOT NULL) AS disconnected FROM github_repositories r JOIN github_installations gi ON gi.id = r.installation_id LEFT JOIN github_installation_repositories ir ON ir.installation_id = gi.id AND ir.github_repository_id = r.github_repository_id ORDER BY r.github_repository_id`;
+export const ownerCatalogSql = `SELECT r.github_repository_id AS provider_id, r.full_name, r.state, ir.selected, (r.organization_id = gi.organization_id) AS tenant_matches, gi.github_installation_id AS installation_id, gi.account_login, gi.state AS installation_state, gi.suspended_at, (r.disconnected_at IS NOT NULL) AS disconnected, r.last_synchronized_at AS synchronized_at FROM github_repositories r JOIN github_installations gi ON gi.id = r.installation_id LEFT JOIN github_installation_repositories ir ON ir.installation_id = gi.id AND ir.github_repository_id = r.github_repository_id ORDER BY r.github_repository_id`;
 export const ownerIdentitySql = `SELECT (SELECT COUNT(*) FROM github_installations WHERE github_installation_id = '166179374' AND account_login = 'mathofdynamic' AND state = 'active' AND suspended_at IS NULL) AS installation_count, (SELECT COUNT(*) FROM memberships m JOIN accounts a ON a.user_id = m.user_id JOIN github_installations gi ON gi.organization_id = m.organization_id WHERE m.role = 'owner' AND a.provider_id = 'github' AND a.account_id = 'mathofdynamic' AND gi.github_installation_id = '166179374') AS owner_links, (SELECT COUNT(*) FROM github_webhook_deliveries d JOIN github_repositories r ON r.id = d.repository_id WHERE r.state <> 'active' AND r.github_repository_id <> '1378441300') AS inactive_deliveries`;
 export function assertOwnerCatalog(
   catalog: CatalogEntry[],
@@ -91,9 +93,20 @@ export function assertOwnerCatalog(
               ))),
       ).length,
     };
-    // Counts only: no credentials, repository names, identifiers or session data.
+    const missingFingerprints = [...trustedIds]
+      .filter((id) => !storedIds.has(id))
+      .map((id) => createHash('sha256').update(`TRACE repository diagnostic:${id}`).digest('hex'));
+    const synchronizedAt = rows
+      .map((row) => row.synchronized_at)
+      .filter((value): value is number => typeof value === 'number' && Number.isSafeInteger(value));
+    // Only fingerprints and timestamps: never expose names, raw IDs or session data.
+    const evidence = {
+      missingFingerprints,
+      oldestSynchronization: synchronizedAt.length ? Math.min(...synchronizedAt) : null,
+      newestSynchronization: synchronizedAt.length ? Math.max(...synchronizedAt) : null,
+    };
     throw new Error(
-      `Owner catalog count differs from trusted GitHub snapshot. Diagnostic=${JSON.stringify(diagnostic)}`,
+      `Owner catalog count differs from trusted GitHub snapshot. Diagnostic=${JSON.stringify(diagnostic)} Evidence=${JSON.stringify(evidence)}`,
     );
   }
   const trusted = new Map(catalog.map((r) => [String(r.id), r.fullName]));
