@@ -33,6 +33,16 @@ describe('protected invocation diagnostic', () => {
     });
     expect(JSON.stringify(result)).not.toMatch(/secret|private-repo|code=/);
   });
+  it('identifies the refresh entry route without disclosing query parameters', () => {
+    const summary = invocationSummary({
+      $metadata: {
+        url: 'https://trace-code.pages.dev/api/github/reconcile?next=private&code=secret',
+      },
+      $workers: { outcome: 'exceededCpu', cpuTimeMs: 16, wallTimeMs: 21 },
+    });
+    expect(summary.requestPath).toBe('/api/github/reconcile');
+    expect(JSON.stringify(summary)).not.toMatch(/private|secret|code=/);
+  });
   it.each([
     ['exceededCpu', 'CPU_LIMIT'],
     ['exceededMemory', 'MEMORY_LIMIT'],
