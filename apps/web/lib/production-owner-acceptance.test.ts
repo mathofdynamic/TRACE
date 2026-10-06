@@ -16,6 +16,47 @@ const rows = catalog.map((r) => ({
   suspended_at: null,
 }));
 describe('trusted production owner catalog acceptance', () => {
+  it('keeps count drift rejected while distinguishing retained inactive history without exposing names', () => {
+    const historical = {
+      ...rows[1]!,
+      provider_id: '11',
+      full_name: 'mathofdynamic/private-historical',
+      disconnected: 1,
+    };
+    expect(() => assertOwnerCatalog(catalog, [...rows, historical], false)).toThrow(
+      /"historical":1,"historicalInactive":1,"historicalDisconnected":1,"historicalIdentityInvalid":0/,
+    );
+    try {
+      assertOwnerCatalog(catalog, [...rows, historical], false);
+    } catch (error) {
+      expect(String(error)).not.toContain('private-historical');
+    }
+    expect(() =>
+      assertOwnerCatalog(
+        catalog,
+        [...rows, { ...historical, selected: 1, state: 'active', tenant_matches: 0 }],
+        false,
+      ),
+    ).toThrow(/"historicalInactive":0.*"historicalIdentityInvalid":1/);
+    expect(() => assertOwnerCatalog(catalog, [rows[0]!], false)).toThrow(/"missingCurrent":1/);
+  });
+  it('diagnoses a mismatched current name even within the expected owner', () => {
+    const historical = { ...rows[1]!, provider_id: '11', disconnected: 1 };
+    expect(() =>
+      assertOwnerCatalog(
+        catalog,
+        [{ ...rows[0]!, full_name: 'mathofdynamic/wrong-name' }, rows[1]!, historical],
+        false,
+      ),
+    ).toThrow(/"currentIdentityInvalid":1/);
+    expect(() =>
+      assertOwnerCatalog(
+        catalog,
+        [rows[0]!, { ...rows[1]!, selected: 1, state: 'active' }, historical],
+        false,
+      ),
+    ).toThrow(/"currentIdentityInvalid":1/);
+  });
   it('accepts an inactive trusted catalog and requires explicit active TRACE for final acceptance', () => {
     expect(assertOwnerCatalog(catalog, rows, false).available).toBe(2);
     expect(() => assertOwnerCatalog(catalog, rows, true)).toThrow(/not active/);

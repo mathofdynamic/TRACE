@@ -2084,3 +2084,11 @@
 - Regression coverage verifies exact candidate inspection, no registry promotion, read-only requests and rejection of wrong source/version/mode/traffic/resources. Local validation: 50 focused baseline/owner tests PASS; `pnpm check` PASS (54 CLI tests, 485 web tests with six existing skips); `pnpm cf:build` PASS; `git diff --check` PASS.
 
 - PR #77 review correction: require ASSETS, the complete required binding set, OpenNext minimal mode and all four disabled safety flags; allowed names alone do not establish a safe rollback contract. Add missing/enabled flag and missing assets regressions. Final local validation: 61 focused tests, `pnpm check` (496 web tests passed, six existing skips), `pnpm cf:build`, and `git diff --check` PASS.
+
+## Read-only owner catalog drift diagnostics
+
+- Protected baseline inspection failed again after owner access refresh (run 37418780998). Preserve the strict count/identity guard while adding counts-only diagnostics to distinguish missing current repositories from retained inactive/disconnected historical rows and unsafe identities. No names, credentials or session data are emitted.
+- Include the existing disconnected marker in the read-only SELECT; no schema or persistence changes. Add regressions proving count drift remains rejected and diagnostics do not expose repository names. No baseline is registered, no deploy/D1 write/Queue send is introduced.
+- Local validation: 62 focused production checks, `pnpm check`, and `git diff --check` PASS. Operational diagnostics only; the Worker application/bundle, strict guard predicates and runtime state are unchanged.
+- PR #78 review correction: current-identity diagnostics compare the exact trusted GitHub name and selection/state boundary, not just the owner prefix. Add same-owner name mismatch and unrelated-current activation regressions; strict rejection predicates remain unchanged.
+- Corrected validation: 63 focused tests, `pnpm check` (498 web tests passed; six existing skips), and `git diff --check` PASS.

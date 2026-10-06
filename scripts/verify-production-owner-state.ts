@@ -16,6 +16,7 @@ type CatalogRow = {
   account_login: string;
   installation_state: string;
   suspended_at: unknown;
+  disconnected?: number;
 };
 export function assertDirectProductionWebhook(config: {
   url?: string;
@@ -45,15 +46,56 @@ export function assertOwnerLoginState(state: OwnerLoginState) {
   )
     throw new Error('Owner identity, onboarding or active sessions are invalid.');
 }
-export const ownerCatalogSql = `SELECT r.github_repository_id AS provider_id, r.full_name, r.state, ir.selected, (r.organization_id = gi.organization_id) AS tenant_matches, gi.github_installation_id AS installation_id, gi.account_login, gi.state AS installation_state, gi.suspended_at FROM github_repositories r JOIN github_installations gi ON gi.id = r.installation_id LEFT JOIN github_installation_repositories ir ON ir.installation_id = gi.id AND ir.github_repository_id = r.github_repository_id ORDER BY r.github_repository_id`;
+export const ownerCatalogSql = `SELECT r.github_repository_id AS provider_id, r.full_name, r.state, ir.selected, (r.organization_id = gi.organization_id) AS tenant_matches, gi.github_installation_id AS installation_id, gi.account_login, gi.state AS installation_state, gi.suspended_at, (r.disconnected_at IS NOT NULL) AS disconnected FROM github_repositories r JOIN github_installations gi ON gi.id = r.installation_id LEFT JOIN github_installation_repositories ir ON ir.installation_id = gi.id AND ir.github_repository_id = r.github_repository_id ORDER BY r.github_repository_id`;
 export const ownerIdentitySql = `SELECT (SELECT COUNT(*) FROM github_installations WHERE github_installation_id = '166179374' AND account_login = 'mathofdynamic' AND state = 'active' AND suspended_at IS NULL) AS installation_count, (SELECT COUNT(*) FROM memberships m JOIN accounts a ON a.user_id = m.user_id JOIN github_installations gi ON gi.organization_id = m.organization_id WHERE m.role = 'owner' AND a.provider_id = 'github' AND a.account_id = 'mathofdynamic' AND gi.github_installation_id = '166179374') AS owner_links, (SELECT COUNT(*) FROM github_webhook_deliveries d JOIN github_repositories r ON r.id = d.repository_id WHERE r.state <> 'active' AND r.github_repository_id <> '1378441300') AS inactive_deliveries`;
 export function assertOwnerCatalog(
   catalog: CatalogEntry[],
   rows: CatalogRow[],
   requireActive: boolean,
 ) {
-  if (!catalog.length || rows.length !== catalog.length)
-    throw new Error('Owner catalog count differs from trusted GitHub snapshot.');
+  if (!catalog.length || rows.length !== catalog.length) {
+    const trustedNames = new Map(
+      catalog.map((repository) => [String(repository.id), repository.fullName]),
+    );
+    const trustedIds = new Set(trustedNames.keys());
+    const storedIds = new Set(rows.map((row) => row.provider_id));
+    const historical = rows.filter((row) => !trustedIds.has(row.provider_id));
+    const identityInvalid = (row: CatalogRow) =>
+      row.tenant_matches !== 1 ||
+      row.installation_id !== '166179374' ||
+      row.account_login !== 'mathofdynamic' ||
+      row.installation_state !== 'active' ||
+      row.suspended_at !== null ||
+      !row.full_name.startsWith('mathofdynamic/');
+    const diagnostic = {
+      github: catalog.length,
+      stored: rows.length,
+      missingCurrent: [...trustedIds].filter((id) => !storedIds.has(id)).length,
+      duplicateStored: rows.length - storedIds.size,
+      historical: historical.length,
+      historicalInactive: historical.filter(
+        (row) => row.selected === 0 && row.state === 'available',
+      ).length,
+      historicalDisconnected: historical.filter((row) => row.disconnected === 1).length,
+      historicalIdentityInvalid: historical.filter(identityInvalid).length,
+      currentIdentityInvalid: rows.filter(
+        (row) =>
+          trustedIds.has(row.provider_id) &&
+          (identityInvalid(row) ||
+            trustedNames.get(row.provider_id) !== row.full_name ||
+            ![0, 1].includes(row.selected) ||
+            (row.selected === 1 ? row.state !== 'active' : row.state !== 'available') ||
+            (row.selected === 1 &&
+              !['mathofdynamic/TRACE', 'mathofdynamic/trace-staging-fixture'].includes(
+                row.full_name,
+              ))),
+      ).length,
+    };
+    // Counts only: no credentials, repository names, identifiers or session data.
+    throw new Error(
+      `Owner catalog count differs from trusted GitHub snapshot. Diagnostic=${JSON.stringify(diagnostic)}`,
+    );
+  }
   const trusted = new Map(catalog.map((r) => [String(r.id), r.fullName]));
   const ids = new Set<string>();
   for (const row of rows) {
