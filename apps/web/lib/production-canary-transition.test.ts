@@ -475,43 +475,47 @@ describe('production fixture transition state gate', () => {
       }),
     ).rejects.toThrow(/source annotation/);
   });
-  it('accepts only the independently verified current owner rollback version and exact source', async () => {
-    const versionId = 'a30ba0d6-c4e6-42a7-b9fd-cf6a8eb8d08e';
-    const source = '74450fd7684b6974e6deb8bb407f1fd670e5cecf';
-    const environment = {
-      ...commonEnvironment,
-      TRACE_GITHUB_APP_CALLBACK_URL: 'https://trace-code.pages.dev/api/github/setup',
-    };
-    const input = { phase: 'before' as const, environment, consumerOutput: consumerList };
-    expect(
-      await verifyProductionFixtureTransitionState({
-        ...input,
-        fetchImplementation: fakeCloudflare('before', source, {
-          activeVersionId: versionId,
-          mode: 'owner',
-        }).fetchImplementation,
-      }),
-    ).toMatchObject({ versionId, sourceSha: source, canaryMode: 'owner' });
-    await expect(
-      verifyProductionFixtureTransitionState({
-        ...input,
-        fetchImplementation: fakeCloudflare('before', source, {
-          activeVersionId: versionId,
-          mode: 'owner',
-          deploymentMessage: 'TRACE production canary ' + 'f'.repeat(40),
-        }).fetchImplementation,
-      }),
-    ).rejects.toThrow(/source annotation/);
-    await expect(
-      verifyProductionFixtureTransitionState({
-        ...input,
-        fetchImplementation: fakeCloudflare('before', source, {
-          activeVersionId: 'de3d59c8-4230-4d14-abfb-0b6477fd7f0d',
-          mode: 'owner',
-        }).fetchImplementation,
-      }),
-    ).rejects.toThrow(/previously verified/);
-  });
+  it.each([
+    ['a30ba0d6-c4e6-42a7-b9fd-cf6a8eb8d08e', '74450fd7684b6974e6deb8bb407f1fd670e5cecf'],
+    ['b7c49d29-d0c7-49a6-9228-f5e7425e2873', '886fe6976cdbb67192f74a4f32aa621b08be4f65'],
+  ])(
+    'accepts only independently verified owner rollback version %s and exact source',
+    async (versionId, source) => {
+      const environment = {
+        ...commonEnvironment,
+        TRACE_GITHUB_APP_CALLBACK_URL: 'https://trace-code.pages.dev/api/github/setup',
+      };
+      const input = { phase: 'before' as const, environment, consumerOutput: consumerList };
+      expect(
+        await verifyProductionFixtureTransitionState({
+          ...input,
+          fetchImplementation: fakeCloudflare('before', source, {
+            activeVersionId: versionId,
+            mode: 'owner',
+          }).fetchImplementation,
+        }),
+      ).toMatchObject({ versionId, sourceSha: source, canaryMode: 'owner' });
+      await expect(
+        verifyProductionFixtureTransitionState({
+          ...input,
+          fetchImplementation: fakeCloudflare('before', source, {
+            activeVersionId: versionId,
+            mode: 'owner',
+            deploymentMessage: 'TRACE production canary ' + 'f'.repeat(40),
+          }).fetchImplementation,
+        }),
+      ).rejects.toThrow(/source annotation/);
+      await expect(
+        verifyProductionFixtureTransitionState({
+          ...input,
+          fetchImplementation: fakeCloudflare('before', source, {
+            activeVersionId: 'de3d59c8-4230-4d14-abfb-0b6477fd7f0d',
+            mode: 'owner',
+          }).fetchImplementation,
+        }),
+      ).rejects.toThrow(/previously verified/);
+    },
+  );
   it.each([
     ['wrong mode', bindings('fixture')],
     [

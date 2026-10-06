@@ -89,6 +89,9 @@ type KnownBaseline =
   | { versionId: string; mode: 'fixture' | 'owner'; sourceSha: string };
 
 function knownBaselineForVersion(versionId: string): KnownBaseline | undefined {
+  // Release PR #76/canary 37428305647; independent protected inspection 37429036662.
+  if (versionId === 'b7c49d29-d0c7-49a6-9228-f5e7425e2873')
+    return { versionId, mode: 'owner', sourceSha: '886fe6976cdbb67192f74a4f32aa621b08be4f65' };
   // PR #63/run 37126079125; independently verified by protected run 37426388514.
   if (versionId === 'a30ba0d6-c4e6-42a7-b9fd-cf6a8eb8d08e')
     return { versionId, mode: 'owner', sourceSha: '74450fd7684b6974e6deb8bb407f1fd670e5cecf' };
