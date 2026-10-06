@@ -38,11 +38,25 @@ const consumerList = [
   },
 ];
 
-function bindings(mode: 'closed' | 'fixture' | 'owner') {
+type TestBinding = {
+  type: string;
+  name: string;
+  text?: string;
+  database_id?: string;
+  queue_name?: string;
+};
+
+function bindings(mode: 'closed' | 'fixture' | 'owner'): TestBinding[] {
   return [
     { type: 'd1', name: 'DB', database_id: baseline.d1Id },
     { type: 'queue', name: 'TRACE_QUEUE', queue_name: baseline.queueName },
+    { type: 'assets', name: 'ASSETS' },
     ...Object.entries({
+      NEXT_PRIVATE_MINIMAL_MODE: '1',
+      TRACE_FEATURE_SEMANTIC_PR_FINDINGS: 'false',
+      TRACE_FEATURE_SEMANTIC_CONFLICTS: 'false',
+      TRACE_FEATURE_GITHUB_COMMENTS: 'false',
+      TRACE_FEATURE_HYBRID_SYNC: 'false',
       TRACE_DEPLOYMENT_ENV: 'production',
       TRACE_DATABASE_DRIVER: 'd1',
       TRACE_CANARY_MODE: mode,
@@ -320,6 +334,46 @@ describe('production fixture transition state gate', () => {
     ['wrong candidate version', { activeVersionId: 'a30ba0d6-c4e6-42a7-b9fd-cf6a8eb8d08f' }],
     ['wrong source', { deploymentMessage: 'TRACE production canary ' + 'f'.repeat(40) }],
     ['split traffic', { traffic: 50 }],
+    [
+      'missing assets',
+      { workerBindings: bindings('owner').filter((binding) => binding.name !== 'ASSETS') },
+    ],
+    [
+      'missing minimal mode',
+      {
+        workerBindings: bindings('owner').filter(
+          (binding) => binding.name !== 'NEXT_PRIVATE_MINIMAL_MODE',
+        ),
+      },
+    ],
+    [
+      'wrong minimal mode',
+      {
+        workerBindings: bindings('owner').map((binding) =>
+          binding.name === 'NEXT_PRIVATE_MINIMAL_MODE' ? { ...binding, text: '0' } : binding,
+        ),
+      },
+    ],
+    ...[
+      'TRACE_FEATURE_SEMANTIC_PR_FINDINGS',
+      'TRACE_FEATURE_SEMANTIC_CONFLICTS',
+      'TRACE_FEATURE_GITHUB_COMMENTS',
+      'TRACE_FEATURE_HYBRID_SYNC',
+    ].flatMap<[string, { workerBindings: TestBinding[] }]>((name) => [
+      [
+        'missing ' + name,
+        { workerBindings: bindings('owner').filter((binding) => binding.name !== name) },
+      ],
+      [
+        'enabled ' + name,
+        {
+          workerBindings: bindings('owner').map((binding) =>
+            binding.name === name ? { ...binding, text: 'true' } : binding,
+          ),
+        },
+      ],
+    ]),
+
     ['wrong mode', { mode: 'fixture' as const }],
     [
       'unexpected resource',

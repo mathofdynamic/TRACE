@@ -875,6 +875,39 @@ export function assertExpectedProductionResourceBindings(version: WorkerVersion)
                 : false;
     if (!allowed) fail('Unexpected production resource binding.');
   }
+  const requiredNames = [
+    'DB',
+    'TRACE_QUEUE',
+    'ASSETS',
+    'TRACE_DEPLOYMENT_ENV',
+    'TRACE_DATABASE_DRIVER',
+    'TRACE_CANARY_MODE',
+    'NEXT_PRIVATE_MINIMAL_MODE',
+    'TRACE_FEATURE_SEMANTIC_PR_FINDINGS',
+    'TRACE_FEATURE_SEMANTIC_CONFLICTS',
+    'TRACE_FEATURE_GITHUB_COMMENTS',
+    'TRACE_FEATURE_HYBRID_SYNC',
+    ...Object.keys(productionGitHubRuntimeVariableSources),
+    ...productionWorkerSecretNames,
+  ];
+  if (requiredNames.some((name) => !names.has(name)))
+    fail('Required production binding is missing.');
+  const variables = new Map(
+    bindings
+      .filter((binding) => binding.type === 'plain_text')
+      .map((binding) => [binding.name, binding.text]),
+  );
+  if (variables.get('NEXT_PRIVATE_MINIMAL_MODE') !== '1')
+    fail('OpenNext minimal mode must remain enabled.');
+  for (const name of [
+    'TRACE_FEATURE_SEMANTIC_PR_FINDINGS',
+    'TRACE_FEATURE_SEMANTIC_CONFLICTS',
+    'TRACE_FEATURE_GITHUB_COMMENTS',
+    'TRACE_FEATURE_HYBRID_SYNC',
+  ]) {
+    if (variables.get(name) !== 'false')
+      fail('Production safety feature flags must remain disabled.');
+  }
 }
 
 type TransitionCommand = TransitionPhase | 'rollback-if-needed';
