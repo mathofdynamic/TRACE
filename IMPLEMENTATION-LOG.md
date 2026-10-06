@@ -2097,3 +2097,9 @@
 
 - A successful GitHub reconciliation callback still leaves one current repository absent (trusted catalog 92, stored 91). Add read-only missing-ID fingerprints and synchronization timestamps so protected verification can identify the exact missing record internally without exposing private names or raw IDs.
 - Preserve strict count rejection and all rollback guards. No runtime persistence, deployment, credentials or production state changes. Add a 92-repository diagnostic regression. Local validation: 62 focused baseline/owner tests, `pnpm check`, and `git diff --check` PASS; application bundle unchanged.
+
+## Encrypted reconciliation diagnostic correction
+
+- PR #79 review correctly identified that public hashes of low-entropy numeric repository IDs can be guessed. No protected production run used those diagnostics. Replace them with hybrid RSA-OAEP-SHA256/AES-256-GCM encryption to an optional caller-owned public key; the private key remains outside Actions and TRACE. No IDs are emitted when no public key is supplied.
+- The existing protected read-only inspection accepts only a public encryption key as a dispatch input. Production credentials and runtime configuration remain unchanged. Regression coverage decrypts the synthetic missing ID internally while asserting logs omit names and raw IDs. Count and baseline guards remain strict.
+- Validation: `pnpm check` PASS; 66 focused production guard/workflow tests PASS; `git diff --check` PASS. No production diagnostic was executed before the encryption correction.

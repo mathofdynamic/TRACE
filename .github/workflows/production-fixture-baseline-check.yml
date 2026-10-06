@@ -20,6 +20,10 @@ on:
         description: Exact reviewed source annotation from successful canary evidence
         required: false
         type: string
+      diagnostic_public_key:
+        description: Optional RSA SPKI public key (base64 DER) to encrypt missing repository IDs
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -95,6 +99,7 @@ jobs:
             pnpm exec tsx scripts/verify-production-fixture-transition.ts before
           fi
         env:
+          OWNER_CATALOG_DIAGNOSTIC_PUBLIC_KEY: ${{ inputs.diagnostic_public_key }}
           INSPECTION: ${{ inputs.inspection }}
           REVIEWED_WORKER_VERSION_ID: ${{ inputs.worker_version_id }}
           REVIEWED_WORKER_SOURCE_SHA: ${{ inputs.source_sha }}

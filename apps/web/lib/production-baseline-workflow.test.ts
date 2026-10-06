@@ -22,5 +22,9 @@ describe('protected production baseline inspection workflow', () => {
     expect(workflow).toContain('verify-production-fixture-transition.ts before');
     expect(workflow).toContain('REVIEWED_WORKER_VERSION_ID: ${{ inputs.worker_version_id }}');
     expect(workflow).toContain('REVIEWED_WORKER_SOURCE_SHA: ${{ inputs.source_sha }}');
+    expect(workflow).toContain(
+      'OWNER_CATALOG_DIAGNOSTIC_PUBLIC_KEY: ${{ inputs.diagnostic_public_key }}',
+    );
+    expect(workflow).not.toContain('DIAGNOSTIC_PRIVATE_KEY');
   });
 });
