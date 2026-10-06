@@ -140,6 +140,27 @@ describe('GitHub App setup callback', () => {
     );
   });
 
+  it('does not declare reconciliation success when catalog completeness verification fails', async () => {
+    vi.mocked(persistGitHubInstallationSnapshot).mockRejectedValueOnce(
+      new Error('GitHub installation catalog persistence is incomplete.'),
+    );
+    const response = await GET(
+      new Request(
+        'https://trace-code.pages.dev/api/github/setup?state=reconcile-state&code=reauth-code',
+        {
+          headers: {
+            cookie:
+              'trace_github_reconcile_state=reconcile-state; trace_github_reconcile_next=%2Fapp%2Frepositories',
+          },
+        },
+      ),
+    );
+    expect(response.headers.get('location')).toBe(
+      'https://trace-code.pages.dev/app/repositories?setup=github-reconcile',
+    );
+    expect(response.headers.get('cache-control')).toBe('no-store');
+  });
+
   it('rejects an expired or mismatched reconciliation state before GitHub access', async () => {
     const response = await GET(
       new Request(

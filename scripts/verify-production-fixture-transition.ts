@@ -643,10 +643,11 @@ async function readApplicationCounts(
   const stage = environment.TRACE_FIXTURE_D1_BASELINE_STAGE ?? 'before-oauth';
   if (stage === 'owner') {
     const { verifyOwnerState } = await import('./verify-production-owner-state.js');
-    await verifyOwnerState(
+    const ownerVerification = await verifyOwnerState(
       { ...environment, OWNER_ACCEPTANCE_STAGE: 'active' },
       fetchImplementation,
     );
+    if (environment.OWNER_CATALOG_DIAGNOSTIC_PUBLIC_KEY) console.log(ownerVerification);
   } else if (stage === 'before-oauth') assertProductionApplicationCountsEmpty(counts);
   else if (stage === 'after-onboarding' || stage === 'after-live-issue') {
     assertExpectedProductionFixtureCounts(stage, counts);

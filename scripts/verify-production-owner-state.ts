@@ -19,6 +19,7 @@ type CatalogRow = {
   suspended_at: unknown;
   disconnected?: number;
   synchronized_at?: number | null;
+  created_at?: number;
 };
 export function assertDirectProductionWebhook(config: {
   url?: string;
@@ -48,7 +49,7 @@ export function assertOwnerLoginState(state: OwnerLoginState) {
   )
     throw new Error('Owner identity, onboarding or active sessions are invalid.');
 }
-export const ownerCatalogSql = `SELECT r.github_repository_id AS provider_id, r.full_name, r.state, ir.selected, (r.organization_id = gi.organization_id) AS tenant_matches, gi.github_installation_id AS installation_id, gi.account_login, gi.state AS installation_state, gi.suspended_at, (r.disconnected_at IS NOT NULL) AS disconnected, r.last_synchronized_at AS synchronized_at FROM github_repositories r JOIN github_installations gi ON gi.id = r.installation_id LEFT JOIN github_installation_repositories ir ON ir.installation_id = gi.id AND ir.github_repository_id = r.github_repository_id ORDER BY r.github_repository_id`;
+export const ownerCatalogSql = `SELECT r.github_repository_id AS provider_id, r.full_name, r.state, ir.selected, (r.organization_id = gi.organization_id) AS tenant_matches, gi.github_installation_id AS installation_id, gi.account_login, gi.state AS installation_state, gi.suspended_at, (r.disconnected_at IS NOT NULL) AS disconnected, r.last_synchronized_at AS synchronized_at, r.created_at FROM github_repositories r JOIN github_installations gi ON gi.id = r.installation_id LEFT JOIN github_installation_repositories ir ON ir.installation_id = gi.id AND ir.github_repository_id = r.github_repository_id ORDER BY r.github_repository_id`;
 export const ownerIdentitySql = `SELECT (SELECT COUNT(*) FROM github_installations WHERE github_installation_id = '166179374' AND account_login = 'mathofdynamic' AND state = 'active' AND suspended_at IS NULL) AS installation_count, (SELECT COUNT(*) FROM memberships m JOIN accounts a ON a.user_id = m.user_id JOIN github_installations gi ON gi.organization_id = m.organization_id WHERE m.role = 'owner' AND a.provider_id = 'github' AND a.account_id = 'mathofdynamic' AND gi.github_installation_id = '166179374') AS owner_links, (SELECT COUNT(*) FROM github_webhook_deliveries d JOIN github_repositories r ON r.id = d.repository_id WHERE r.state <> 'active' AND r.github_repository_id <> '1378441300') AS inactive_deliveries`;
 export function encryptCatalogDiagnostic(ids: string[], publicKeyDer: string) {
   if (!/^[A-Za-z0-9+/]+={0,2}$/.test(publicKeyDer) || publicKeyDer.length > 4096)
@@ -229,9 +230,10 @@ export async function verifyOwnerState(
       throw new Error('Owner query result is invalid.');
     return result[0].results;
   }
+  const persistedRows = (await query(ownerCatalogSql)) as CatalogRow[];
   const catalog = assertOwnerCatalog(
     installation.catalog!,
-    (await query(ownerCatalogSql)) as CatalogRow[],
+    persistedRows,
     environment.OWNER_ACCEPTANCE_STAGE === 'active',
     environment.OWNER_CATALOG_DIAGNOSTIC_PUBLIC_KEY,
   );
@@ -274,7 +276,19 @@ export async function verifyOwnerState(
     signal: AbortSignal.timeout(15000),
   });
   if (health.status !== 200) throw new Error('Production owner health failed.');
-  return `OWNER_INSTALLATION=166179374 VERIFIED\nEXTERNAL_REPOSITORIES=${installation.repositoryCount}\nAVAILABLE_REPOSITORIES=${catalog.available}\nACTIVE_REPOSITORIES=${catalog.active.join(',')}\nTRACE_REPOSITORY_ID=${catalog.traceId}\nTRACE_REPOSITORY=${environment.OWNER_ACCEPTANCE_STAGE === 'active' ? 'ACTIVE' : 'CATALOGUED'}\nOWNER_IDENTITY=VERIFIED\nACTIVE_OWNER_SESSIONS=${login.active_sessions}\nFRESH_OWNER_SESSIONS=${login.fresh_sessions}\nFIXTURE_PROOF=PRESERVED\nWEBHOOK=WORKER_DIRECT_VERIFIED\nUNSELECTED_DELIVERIES=0\nFOREIGN_KEY_VIOLATIONS=0\nQUEUE_BACKLOG=0\nHEALTH=200`;
+  const encryptedCatalog = environment.OWNER_CATALOG_DIAGNOSTIC_PUBLIC_KEY
+    ? encryptCatalogDiagnostic(
+        persistedRows.map((row) =>
+          JSON.stringify({
+            id: row.provider_id,
+            createdAt: row.created_at,
+            synchronizedAt: row.synchronized_at,
+          }),
+        ),
+        environment.OWNER_CATALOG_DIAGNOSTIC_PUBLIC_KEY,
+      )
+    : undefined;
+  return `OWNER_INSTALLATION=166179374 VERIFIED\nEXTERNAL_REPOSITORIES=${installation.repositoryCount}\nAVAILABLE_REPOSITORIES=${catalog.available}\nACTIVE_REPOSITORIES=${catalog.active.join(',')}\nTRACE_REPOSITORY_ID=${catalog.traceId}\nTRACE_REPOSITORY=${environment.OWNER_ACCEPTANCE_STAGE === 'active' ? 'ACTIVE' : 'CATALOGUED'}\nOWNER_IDENTITY=VERIFIED\nACTIVE_OWNER_SESSIONS=${login.active_sessions}\nFRESH_OWNER_SESSIONS=${login.fresh_sessions}\nFIXTURE_PROOF=PRESERVED\nWEBHOOK=WORKER_DIRECT_VERIFIED\nUNSELECTED_DELIVERIES=0\nFOREIGN_KEY_VIOLATIONS=0\nQUEUE_BACKLOG=0\nHEALTH=200${encryptedCatalog ? `\nOWNER_CATALOG_ENCRYPTED=${JSON.stringify(encryptedCatalog)}` : ''}`;
 }
 if (
   process.argv[1] &&

@@ -326,7 +326,13 @@ async function githubRequest<T>(url: string, init: GitHubRequestInit = {}, timeo
   if (init.token) headers.set('authorization', `Bearer ${init.token}`);
   const { token: _token, ...requestInit } = init;
   try {
-    const response = await fetch(url, { ...requestInit, headers, signal: controller.signal });
+    const freshRequest = {
+      ...requestInit,
+      cache: 'no-store' as const,
+      headers,
+      signal: controller.signal,
+    };
+    const response = await fetch(url, freshRequest);
     if (!response.ok) {
       const error = new Error(`GitHub API request failed with ${response.status}`) as Error & {
         status?: number;
@@ -520,16 +526,34 @@ export async function getGitHubInstallationSnapshot(
   const token = await createInstallationToken(config, installationId);
 
   const repositories: GitHubRepositorySnapshot[] = [];
+  const ids = new Set<number>();
+  let expectedCount: number | undefined;
   for (let page = 1; page <= 5; page += 1) {
-    const pageResponse = await githubRequest<{ repositories?: unknown[] }>(
+    const pageResponse = await githubRequest<{ total_count?: unknown; repositories?: unknown }>(
       `https://api.github.com/installation/repositories?per_page=100&page=${page}`,
       { token },
     );
-    const pageRepositories = (pageResponse.repositories ?? [])
-      .map(normalizeGitHubRepository)
-      .filter((repository): repository is GitHubRepositorySnapshot => repository !== null);
-    repositories.push(...pageRepositories);
-    if (pageRepositories.length < 100) break;
+    if (
+      typeof pageResponse.total_count !== 'number' ||
+      !Number.isSafeInteger(pageResponse.total_count) ||
+      pageResponse.total_count < 0 ||
+      pageResponse.total_count > 500 ||
+      !Array.isArray(pageResponse.repositories) ||
+      pageResponse.repositories.length > 100 ||
+      (expectedCount !== undefined && expectedCount !== pageResponse.total_count)
+    )
+      throw new Error('GitHub installation repository enumeration is incomplete or unstable.');
+    expectedCount = pageResponse.total_count;
+    for (const value of pageResponse.repositories) {
+      const repository = normalizeGitHubRepository(value);
+      if (!repository || ids.has(repository.id))
+        throw new Error('GitHub installation repository metadata is invalid or duplicated.');
+      ids.add(repository.id);
+      repositories.push(repository);
+    }
+    if (repositories.length === expectedCount) break;
+    if (repositories.length > expectedCount || pageResponse.repositories.length < 100 || page === 5)
+      throw new Error('GitHub installation repository enumeration is incomplete or unstable.');
   }
 
   return {

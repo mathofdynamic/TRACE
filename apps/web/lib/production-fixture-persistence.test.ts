@@ -26,7 +26,21 @@ function sqliteBinding(sqlite: DatabaseSync) {
       run: async () => ({ success: true, results: [], meta: statement.run(...params) }),
     };
   }
-  return { prepare } as Parameters<typeof createD1Database>[0];
+  return {
+    prepare,
+    batch: async (statements: ReturnType<typeof prepare>[]) => {
+      sqlite.exec('BEGIN');
+      try {
+        const results = [];
+        for (const statement of statements) results.push(await statement.all());
+        sqlite.exec('COMMIT');
+        return results;
+      } catch (error) {
+        sqlite.exec('ROLLBACK');
+        throw error;
+      }
+    },
+  } as Parameters<typeof createD1Database>[0];
 }
 
 const repo = {
