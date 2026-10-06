@@ -779,6 +779,137 @@ export async function verifyProductionFixtureTransitionState(options: {
   };
 }
 
+/** Read-only candidate verification. This never registers a rollback target. */
+export async function inspectReviewedOwnerDeployment(options: {
+  expectedVersionId: string;
+  expectedSourceSha: string;
+  environment: Record<string, string | undefined>;
+  fetchImplementation?: FetchImplementation;
+  consumerOutput?: unknown;
+}) {
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      options.expectedVersionId,
+    )
+  )
+    fail('Reviewed Worker version must be an exact UUID.');
+  const expectedSourceSha = normalizeReviewedSourceSha(
+    options.expectedSourceSha,
+    'Reviewed owner source',
+  );
+  const result = await verifyProductionFixtureTransitionState({
+    phase: 'after',
+    expectedSourceSha,
+    // Previously verified predecessor captured by the original owner deployment.
+    expectedBaselineVersionId: '550a5214-4e46-4023-a330-7d042be4ea7c',
+    expectedBaselineMode: 'owner',
+    environment: {
+      ...options.environment,
+      RUNTIME_MODE: 'owner',
+      TRACE_FIXTURE_D1_BASELINE_STAGE: 'owner',
+    },
+    fetchImplementation: options.fetchImplementation,
+    consumerOutput: options.consumerOutput,
+  });
+  if (result.versionId !== options.expectedVersionId)
+    fail('Active Worker version does not match the reviewed candidate.');
+  const version = await cloudflareRequest<WorkerVersion>(
+    `/accounts/${productionFixtureTransitionBaseline.accountId}/workers/scripts/${productionFixtureTransitionBaseline.workerName}/versions/${result.versionId}`,
+    assertIdentityEnvironment(options.environment),
+    options.fetchImplementation ?? fetch,
+  );
+  if (version.id !== result.versionId) fail('Inspected Worker version identity does not match.');
+  assertExpectedProductionResourceBindings(version);
+  const variables = new Map(
+    version
+      .resources!.bindings!.filter((binding) => binding.type === 'plain_text')
+      .map((binding) => [binding.name, binding.text]),
+  );
+  return {
+    ...result,
+    sourceAnnotation: `TRACE production canary ${result.sourceSha}`,
+    publicUrl: variables.get('TRACE_PUBLIC_URL'),
+    githubAppId: variables.get('GITHUB_APP_ID'),
+    githubAppSlug: variables.get('GITHUB_APP_SLUG'),
+    githubCallbackUrl: variables.get('GITHUB_APP_CALLBACK_URL'),
+    bindings: version.resources!.bindings!.map((binding) => ({
+      name: binding.name,
+      type: binding.type,
+    })),
+  };
+}
+
+export function assertExpectedProductionResourceBindings(version: WorkerVersion) {
+  const bindings = version.resources?.bindings;
+  if (!Array.isArray(bindings)) fail('Worker binding inventory is missing.');
+  const names = new Set<string>();
+  const allowedVariables = new Set([
+    'TRACE_DEPLOYMENT_ENV',
+    'TRACE_DATABASE_DRIVER',
+    'TRACE_CANARY_MODE',
+    'TRACE_PUBLIC_URL',
+    'TRACE_CANARY_GITHUB_OWNER',
+    'TRACE_CANARY_GITHUB_REPOSITORY',
+    'TRACE_CANARY_GITHUB_REPOSITORY_ID',
+    'NEXT_PRIVATE_MINIMAL_MODE',
+    'TRACE_FEATURE_SEMANTIC_PR_FINDINGS',
+    'TRACE_FEATURE_SEMANTIC_CONFLICTS',
+    'TRACE_FEATURE_GITHUB_COMMENTS',
+    'TRACE_FEATURE_HYBRID_SYNC',
+    ...Object.keys(productionGitHubRuntimeVariableSources),
+  ]);
+  for (const binding of bindings) {
+    if (!binding.name || names.has(binding.name)) fail('Production binding names must be unique.');
+    names.add(binding.name);
+    const allowed =
+      binding.type === 'd1'
+        ? binding.name === 'DB'
+        : binding.type === 'queue'
+          ? binding.name === 'TRACE_QUEUE'
+          : binding.type === 'assets'
+            ? binding.name === 'ASSETS'
+            : binding.type === 'plain_text'
+              ? allowedVariables.has(binding.name)
+              : binding.type === 'secret_text'
+                ? (productionWorkerSecretNames as readonly string[]).includes(binding.name)
+                : false;
+    if (!allowed) fail('Unexpected production resource binding.');
+  }
+  const requiredNames = [
+    'DB',
+    'TRACE_QUEUE',
+    'ASSETS',
+    'TRACE_DEPLOYMENT_ENV',
+    'TRACE_DATABASE_DRIVER',
+    'TRACE_CANARY_MODE',
+    'NEXT_PRIVATE_MINIMAL_MODE',
+    'TRACE_FEATURE_SEMANTIC_PR_FINDINGS',
+    'TRACE_FEATURE_SEMANTIC_CONFLICTS',
+    'TRACE_FEATURE_GITHUB_COMMENTS',
+    'TRACE_FEATURE_HYBRID_SYNC',
+    ...Object.keys(productionGitHubRuntimeVariableSources),
+    ...productionWorkerSecretNames,
+  ];
+  if (requiredNames.some((name) => !names.has(name)))
+    fail('Required production binding is missing.');
+  const variables = new Map(
+    bindings
+      .filter((binding) => binding.type === 'plain_text')
+      .map((binding) => [binding.name, binding.text]),
+  );
+  if (variables.get('NEXT_PRIVATE_MINIMAL_MODE') !== '1')
+    fail('OpenNext minimal mode must remain enabled.');
+  for (const name of [
+    'TRACE_FEATURE_SEMANTIC_PR_FINDINGS',
+    'TRACE_FEATURE_SEMANTIC_CONFLICTS',
+    'TRACE_FEATURE_GITHUB_COMMENTS',
+    'TRACE_FEATURE_HYBRID_SYNC',
+  ]) {
+    if (variables.get(name) !== 'false')
+      fail('Production safety feature flags must remain disabled.');
+  }
+}
+
 type TransitionCommand = TransitionPhase | 'rollback-if-needed';
 
 export function formatFixtureDeploymentOutputs(result: {
@@ -857,6 +988,15 @@ function parseArguments(arguments_: string[]): {
 
 async function main() {
   try {
+    if (process.argv.slice(2).join(' ') === 'inspect-reviewed-owner') {
+      const result = await inspectReviewedOwnerDeployment({
+        expectedVersionId: process.env.REVIEWED_WORKER_VERSION_ID ?? '',
+        expectedSourceSha: process.env.REVIEWED_WORKER_SOURCE_SHA ?? '',
+        environment: process.env,
+      });
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
     const {
       command: phase,
       captureDeploymentOutputs,

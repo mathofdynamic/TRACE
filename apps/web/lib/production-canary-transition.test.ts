@@ -1,8 +1,14 @@
 import { expectedProductionFixtureCounts } from '../../../scripts/production-fixture-d1-state.js';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// D1/catalog acceptance has its own suite; this suite exercises the Worker gate.
+vi.mock('../../../scripts/verify-production-owner-state.js', () => ({
+  verifyOwnerState: vi.fn(async () => 'OWNER_IDENTITY=VERIFIED'),
+}));
 import { productionApplicationTables } from '../../../scripts/production-canary-d1.js';
 import {
   assertWranglerProductionConsumer,
+  inspectReviewedOwnerDeployment,
   classifyFixtureDeploymentForRollback,
   formatFixtureBaselineOutputs,
   formatFixtureDeploymentOutputs,
@@ -32,11 +38,25 @@ const consumerList = [
   },
 ];
 
-function bindings(mode: 'closed' | 'fixture' | 'owner') {
+type TestBinding = {
+  type: string;
+  name: string;
+  text?: string;
+  database_id?: string;
+  queue_name?: string;
+};
+
+function bindings(mode: 'closed' | 'fixture' | 'owner'): TestBinding[] {
   return [
     { type: 'd1', name: 'DB', database_id: baseline.d1Id },
     { type: 'queue', name: 'TRACE_QUEUE', queue_name: baseline.queueName },
+    { type: 'assets', name: 'ASSETS' },
     ...Object.entries({
+      NEXT_PRIVATE_MINIMAL_MODE: '1',
+      TRACE_FEATURE_SEMANTIC_PR_FINDINGS: 'false',
+      TRACE_FEATURE_SEMANTIC_CONFLICTS: 'false',
+      TRACE_FEATURE_GITHUB_COMMENTS: 'false',
+      TRACE_FEATURE_HYBRID_SYNC: 'false',
       TRACE_DEPLOYMENT_ENV: 'production',
       TRACE_DATABASE_DRIVER: 'd1',
       TRACE_CANARY_MODE: mode,
@@ -270,6 +290,125 @@ const commonEnvironment = {
 };
 
 describe('production fixture transition state gate', () => {
+  it('inspects an exact reviewed owner deployment without registering it or mutating runtime state', async () => {
+    const versionId = 'a30ba0d6-c4e6-42a7-b9fd-cf6a8eb8d08e';
+    const sourceSha = '74450fd7684b6974e6deb8bb407f1fd670e5cecf';
+    const fake = fakeCloudflare('after', sourceSha, { activeVersionId: versionId, mode: 'owner' });
+    const result = await inspectReviewedOwnerDeployment({
+      expectedVersionId: versionId,
+      expectedSourceSha: sourceSha,
+      environment: {
+        ...commonEnvironment,
+        TRACE_GITHUB_APP_CALLBACK_URL: 'https://trace-code.pages.dev/api/github/setup',
+      },
+      fetchImplementation: fake.fetchImplementation,
+      consumerOutput: consumerList,
+    });
+    expect(result).toMatchObject({
+      versionId,
+      sourceSha,
+      trafficPercentage: 100,
+      canaryMode: 'owner',
+      publicUrl: 'https://trace-code.pages.dev',
+      githubAppId: '5082884',
+      githubAppSlug: 'trace-production-integration',
+    });
+    expect(
+      fake.requests.every(
+        (request) =>
+          request.method === 'GET' ||
+          (request.method === 'POST' && JSON.parse(request.body!).sql.startsWith('SELECT')),
+      ),
+    ).toBe(true);
+    // Inspection must not add a candidate to the trusted registry.
+    await expect(
+      verifyProductionFixtureTransitionState({
+        phase: 'before',
+        environment: commonEnvironment,
+        fetchImplementation: fake.fetchImplementation,
+        consumerOutput: consumerList,
+      }),
+    ).rejects.toThrow(/previously verified/);
+  });
+  it.each([
+    ['wrong candidate version', { activeVersionId: 'a30ba0d6-c4e6-42a7-b9fd-cf6a8eb8d08f' }],
+    ['wrong source', { deploymentMessage: 'TRACE production canary ' + 'f'.repeat(40) }],
+    ['split traffic', { traffic: 50 }],
+    [
+      'missing assets',
+      { workerBindings: bindings('owner').filter((binding) => binding.name !== 'ASSETS') },
+    ],
+    [
+      'missing minimal mode',
+      {
+        workerBindings: bindings('owner').filter(
+          (binding) => binding.name !== 'NEXT_PRIVATE_MINIMAL_MODE',
+        ),
+      },
+    ],
+    [
+      'wrong minimal mode',
+      {
+        workerBindings: bindings('owner').map((binding) =>
+          binding.name === 'NEXT_PRIVATE_MINIMAL_MODE' ? { ...binding, text: '0' } : binding,
+        ),
+      },
+    ],
+    ...[
+      'TRACE_FEATURE_SEMANTIC_PR_FINDINGS',
+      'TRACE_FEATURE_SEMANTIC_CONFLICTS',
+      'TRACE_FEATURE_GITHUB_COMMENTS',
+      'TRACE_FEATURE_HYBRID_SYNC',
+    ].flatMap<[string, { workerBindings: TestBinding[] }]>((name) => [
+      [
+        'missing ' + name,
+        { workerBindings: bindings('owner').filter((binding) => binding.name !== name) },
+      ],
+      [
+        'enabled ' + name,
+        {
+          workerBindings: bindings('owner').map((binding) =>
+            binding.name === name ? { ...binding, text: 'true' } : binding,
+          ),
+        },
+      ],
+    ]),
+
+    ['wrong mode', { mode: 'fixture' as const }],
+    [
+      'unexpected resource',
+      { workerBindings: [...bindings('owner'), { type: 'r2_bucket', name: 'UNEXPECTED' }] },
+    ],
+    [
+      'duplicate binding',
+      {
+        workerBindings: [
+          ...bindings('owner'),
+          { type: 'd1', name: 'DB', database_id: baseline.d1Id },
+        ],
+      },
+    ],
+  ])('rejects candidate inspection with %s', async (_label, overrides) => {
+    const versionId = 'a30ba0d6-c4e6-42a7-b9fd-cf6a8eb8d08e';
+    const sourceSha = '74450fd7684b6974e6deb8bb407f1fd670e5cecf';
+    await expect(
+      inspectReviewedOwnerDeployment({
+        expectedVersionId: versionId,
+        expectedSourceSha: sourceSha,
+        environment: {
+          ...commonEnvironment,
+          TRACE_GITHUB_APP_CALLBACK_URL: 'https://trace-code.pages.dev/api/github/setup',
+        },
+        fetchImplementation: fakeCloudflare('after', sourceSha, {
+          activeVersionId: versionId,
+          mode: 'owner',
+          ...overrides,
+        }).fetchImplementation,
+        consumerOutput: consumerList,
+      }),
+    ).rejects.toThrow();
+  });
+
   it('pins the accepted owner rollback version/source while preserving its legacy Worker callback', async () => {
     const ownerVersion = 'a118f111-0bcb-4662-b864-c8587ca29567';
     const source = '72f71ff4f597c0a18abaa2eaec837ff4892266d0';
