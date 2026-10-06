@@ -33,6 +33,20 @@ describe('protected invocation diagnostic', () => {
     });
     expect(JSON.stringify(result)).not.toMatch(/secret|private-repo|code=/);
   });
+  it.each([
+    ['exceededCpu', 'CPU_LIMIT'],
+    ['exceededMemory', 'MEMORY_LIMIT'],
+  ])('classifies recorded %s without optional error text', (outcome, errorClass) => {
+    expect(invocationSummary({ $workers: { outcome } })).toMatchObject({ outcome, errorClass });
+  });
+  it('does not mistake upstream rate limiting for Worker subrequest exhaustion', () => {
+    expect(invocationSummary({ $metadata: { error: 'Too many requests' } }).errorClass).toBe(
+      'OTHER_ERROR_REDACTED',
+    );
+    expect(invocationSummary({ $metadata: { error: 'Too many subrequests' } }).errorClass).toBe(
+      'SUBREQUEST_LIMIT',
+    );
+  });
   it('reports permission denial explicitly without printing credentials', async () => {
     await expect(
       diagnoseInvocation(

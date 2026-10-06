@@ -60,17 +60,18 @@ export function invocationSummary(value: unknown) {
     requestPath,
     cpuTimeMs: number('cpuTimeMs'),
     wallTimeMs: number('wallTimeMs'),
-    errorClass: /CPU|exceededCpu/i.test(error)
-      ? 'CPU_LIMIT'
-      : /memory|exceededMemory/i.test(error)
-        ? 'MEMORY_LIMIT'
-        : /subrequest|Too many requests/i.test(error)
-          ? 'SUBREQUEST_LIMIT'
-          : /D1/i.test(error)
-            ? 'D1_ERROR'
-            : error
-              ? 'OTHER_ERROR_REDACTED'
-              : null,
+    errorClass:
+      outcome === 'exceededCpu' || /CPU|exceededCpu/i.test(error)
+        ? 'CPU_LIMIT'
+        : outcome === 'exceededMemory' || /memory|exceededMemory/i.test(error)
+          ? 'MEMORY_LIMIT'
+          : /subrequest/i.test(error)
+            ? 'SUBREQUEST_LIMIT'
+            : /D1/i.test(error)
+              ? 'D1_ERROR'
+              : error
+                ? 'OTHER_ERROR_REDACTED'
+                : null,
     workerVersion:
       typeof record(details.scriptVersion).id === 'string' &&
       /^[a-f0-9-]{36}$/i.test(String(record(details.scriptVersion).id))
@@ -114,7 +115,7 @@ export async function diagnoseInvocation(
         events: events.map(invocationSummary),
       }),
     );
-    if (exact && events.length) return;
+    if (exact && events.some((event) => invocationSummary(event).cpuTimeMs !== null)) return;
   }
 }
 
