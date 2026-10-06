@@ -1,0 +1,38 @@
+name: TRACE protected production invocation diagnostic
+on:
+  workflow_dispatch:
+    inputs:
+      ray_id:
+        description: Exact incident Ray ID
+        required: true
+        type: string
+      timestamp:
+        description: Incident UTC timestamp in ISO format
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production-canary
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.16.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec vitest run --project @trace/web apps/web/lib/production-invocation-diagnostic.test.ts
+      - name: Read retained invocation evidence without runtime mutation
+        run: pnpm exec tsx scripts/production-invocation-diagnostic.ts
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          INVOCATION_RAY_ID: ${{ inputs.ray_id }}
+          INVOCATION_TIMESTAMP: ${{ inputs.timestamp }}
