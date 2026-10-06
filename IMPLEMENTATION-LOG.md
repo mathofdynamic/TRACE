@@ -2127,3 +2127,10 @@
 - Independently reverified that exact active immutable release version/source with protected inspection 37429036662 before registering it as rollback target for the reviewed reconciliation runtime fix (PR #81). Preserve all strict source/mode/resource/count guards; no deployment or runtime mutation in this registration.
 - Install the checksum-verified published CLI 0.2.0 package via npm into a workspace prefix and verify all installed package files against the release archive; retain existing owner CLI configuration. Fresh report generation/sync follows the final protected reconciliation deployment.
 - Regression validation: 75 focused production transition/workflow/owner tests, `pnpm check`, `pnpm cf:build`, and `git diff --check` PASS. Unknown versions and mismatched source annotations remain rejected.
+
+## Production refresh resource-limit incident diagnostics
+
+- Investigate Ray `a46324dd8dcdb51e` at 2026-10-06 08:02:28 UTC using retained Workers observability, not a new owner callback. Add a protected main-only read-only query bounded to the exact Worker and two-minute incident window. Emit only sanitized invocation outcome, CPU/wall time, Ray/request identity, immutable Worker version and classified resource errors; never emit callback parameters, headers, credentials or private repository names.
+- Keep production limits, rollback/catalog guards and runtime untouched while obtaining evidence. Tests verify query bounds, redaction and explicit permission-denial reporting.
+- Validation: three focused diagnostic tests, web type checking, `pnpm check` and `git diff --check` PASS. Protected historical evidence remains pending workflow registration; no cause inferred from the generic 1102 page.
+- Review correction: classify recorded `exceededCpu`/`exceededMemory` directly even without optional error text; reserve subrequest classification for explicit subrequest errors. Six focused regressions pass. Continue to a bounded Worker-window query if exact-Ray logs lack CPU metrics.
