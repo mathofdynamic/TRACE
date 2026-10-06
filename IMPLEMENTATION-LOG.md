@@ -2092,3 +2092,8 @@
 - Local validation: 62 focused production checks, `pnpm check`, and `git diff --check` PASS. Operational diagnostics only; the Worker application/bundle, strict guard predicates and runtime state are unchanged.
 - PR #78 review correction: current-identity diagnostics compare the exact trusted GitHub name and selection/state boundary, not just the owner prefix. Add same-owner name mismatch and unrelated-current activation regressions; strict rejection predicates remain unchanged.
 - Corrected validation: 63 focused tests, `pnpm check` (498 web tests passed; six existing skips), and `git diff --check` PASS.
+
+## Private reconciliation completeness diagnosis
+
+- A successful GitHub reconciliation callback still leaves one current repository absent (trusted catalog 92, stored 91). Add read-only missing-ID fingerprints and synchronization timestamps so protected verification can identify the exact missing record internally without exposing private names or raw IDs.
+- Preserve strict count rejection and all rollback guards. No runtime persistence, deployment, credentials or production state changes. Add a 92-repository diagnostic regression. Local validation: 62 focused baseline/owner tests, `pnpm check`, and `git diff --check` PASS; application bundle unchanged.

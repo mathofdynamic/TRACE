@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { assertOwnerCatalog } from '../../../scripts/verify-production-owner-state.js';
 const catalog = [
@@ -39,6 +40,31 @@ describe('trusted production owner catalog acceptance', () => {
       ),
     ).toThrow(/"historicalInactive":0.*"historicalIdentityInvalid":1/);
     expect(() => assertOwnerCatalog(catalog, [rows[0]!], false)).toThrow(/"missingCurrent":1/);
+  });
+  it('identifies a missing repository privately in a 92-repository catalog without relaxing rejection', () => {
+    const large = Array.from({ length: 92 }, (_, index) => ({
+      id: 100000 + index,
+      fullName: `mathofdynamic/synthetic-${index}`,
+    }));
+    const stored = large.slice(0, 91).map((repository) => ({
+      ...rows[0]!,
+      provider_id: String(repository.id),
+      full_name: repository.fullName,
+      synchronized_at: 1700000000,
+    }));
+    try {
+      assertOwnerCatalog(large, stored, false);
+      expect.fail('Catalog mismatch must remain rejected');
+    } catch (error) {
+      const diagnostic = String(error);
+      expect(diagnostic).toContain('"github":92,"stored":91,"missingCurrent":1');
+      expect(diagnostic).toContain(
+        createHash('sha256').update('TRACE repository diagnostic:100091').digest('hex'),
+      );
+      expect(diagnostic).toContain('"newestSynchronization":1700000000');
+      expect(diagnostic).not.toContain('100091');
+      expect(diagnostic).not.toContain('synthetic-');
+    }
   });
   it('diagnoses a mismatched current name even within the expected owner', () => {
     const historical = { ...rows[1]!, provider_id: '11', disconnected: 1 };
