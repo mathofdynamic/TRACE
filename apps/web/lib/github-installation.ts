@@ -140,9 +140,11 @@ export async function persistGitHubInstallationSnapshot(input: {
 
   if (isD1Database(input.db)) {
     const db = input.db;
-    const [installation] = await db
+    const installation = { id: existing?.id ?? crypto.randomUUID() };
+    const installationUpsert = db
       .insert(d1Schema.githubInstallations)
       .values({
+        id: installation.id,
         organizationId: workspace.id,
         githubInstallationId: providerId,
         accountLogin: installationSnapshot.accountLogin,
@@ -164,11 +166,9 @@ export async function persistGitHubInstallationSnapshot(input: {
             : null,
           updatedAt: now,
         },
-      })
-      .returning({ id: d1Schema.githubInstallations.id });
-    if (!installation) throw new Error('GitHub App installation could not be persisted.');
+      });
 
-    const queries: unknown[] = [];
+    const queries: unknown[] = [installationUpsert];
     for (const repository of input.snapshot.repositories) {
       queries.push(
         db
@@ -251,12 +251,19 @@ export async function persistGitHubInstallationSnapshot(input: {
         );
       }
     }
-    // One D1 batch is a transaction: a failed repository/access upsert rolls back the entire catalog.
+    // One D1 batch atomically commits installation state and the full repository/access catalog.
     if (queries.length) {
       const results = (await db.batch(queries as never)) as unknown as { success?: boolean }[];
       if (results.length !== queries.length || results.some((result) => result.success !== true))
         throw new Error('GitHub installation catalog persistence failed.');
     }
+    const [storedInstallation] = await db
+      .select({ id: d1Schema.githubInstallations.id })
+      .from(d1Schema.githubInstallations)
+      .where(eq(d1Schema.githubInstallations.githubInstallationId, providerId))
+      .limit(1);
+    if (storedInstallation?.id !== installation.id)
+      throw new Error('GitHub installation identity changed during reconciliation.');
     const persisted = await db
       .select({
         providerId: d1Schema.githubRepositories.githubRepositoryId,

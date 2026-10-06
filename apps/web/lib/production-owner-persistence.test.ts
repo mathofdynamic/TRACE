@@ -220,6 +220,9 @@ it.each([92, 102])(
         sqlite.prepare('SELECT COUNT(*) AS count FROM github_installation_repositories').get(),
       ).toEqual({ count: size });
       sqlite.exec(
+        "UPDATE github_installations SET state='suspended', suspended_at=1700000000000; UPDATE github_repositories SET state='active' WHERE github_repository_id='100000'; UPDATE github_installation_repositories SET selected=1 WHERE github_repository_id='100000'",
+      );
+      sqlite.exec(
         `CREATE TRIGGER fail_last BEFORE UPDATE ON github_repositories WHEN NEW.github_repository_id='${100000 + size - 1}' BEGIN SELECT RAISE(ABORT,'synthetic final upsert failure'); END`,
       );
       const changed = {
@@ -231,6 +234,21 @@ it.each([92, 102])(
       await expect(
         persistGitHubInstallationSnapshot({ ...input, snapshot: changed }),
       ).rejects.toThrow();
+      expect(sqlite.prepare('SELECT state, suspended_at FROM github_installations').get()).toEqual({
+        state: 'suspended',
+        suspended_at: 1700000000000,
+      });
+      expect(
+        await isD1SelectedOwnerWebhookEvent(input.db, {
+          type: 'IssueUpdated',
+          installationId: 166179374,
+          repositoryId: 100000,
+          issueId: 99,
+          number: 1,
+          action: 'opened',
+        }),
+      ).toBe(false);
+
       expect(
         sqlite
           .prepare("SELECT full_name FROM github_repositories WHERE github_repository_id='100000'")
