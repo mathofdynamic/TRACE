@@ -40,6 +40,23 @@ describe('trusted production owner catalog acceptance', () => {
     ).toThrow(/"historicalInactive":0.*"historicalIdentityInvalid":1/);
     expect(() => assertOwnerCatalog(catalog, [rows[0]!], false)).toThrow(/"missingCurrent":1/);
   });
+  it('diagnoses a mismatched current name even within the expected owner', () => {
+    const historical = { ...rows[1]!, provider_id: '11', disconnected: 1 };
+    expect(() =>
+      assertOwnerCatalog(
+        catalog,
+        [{ ...rows[0]!, full_name: 'mathofdynamic/wrong-name' }, rows[1]!, historical],
+        false,
+      ),
+    ).toThrow(/"currentIdentityInvalid":1/);
+    expect(() =>
+      assertOwnerCatalog(
+        catalog,
+        [rows[0]!, { ...rows[1]!, selected: 1, state: 'active' }, historical],
+        false,
+      ),
+    ).toThrow(/"currentIdentityInvalid":1/);
+  });
   it('accepts an inactive trusted catalog and requires explicit active TRACE for final acceptance', () => {
     expect(assertOwnerCatalog(catalog, rows, false).available).toBe(2);
     expect(() => assertOwnerCatalog(catalog, rows, true)).toThrow(/not active/);

@@ -54,7 +54,10 @@ export function assertOwnerCatalog(
   requireActive: boolean,
 ) {
   if (!catalog.length || rows.length !== catalog.length) {
-    const trustedIds = new Set(catalog.map((repository) => String(repository.id)));
+    const trustedNames = new Map(
+      catalog.map((repository) => [String(repository.id), repository.fullName]),
+    );
+    const trustedIds = new Set(trustedNames.keys());
     const storedIds = new Set(rows.map((row) => row.provider_id));
     const historical = rows.filter((row) => !trustedIds.has(row.provider_id));
     const identityInvalid = (row: CatalogRow) =>
@@ -76,7 +79,16 @@ export function assertOwnerCatalog(
       historicalDisconnected: historical.filter((row) => row.disconnected === 1).length,
       historicalIdentityInvalid: historical.filter(identityInvalid).length,
       currentIdentityInvalid: rows.filter(
-        (row) => trustedIds.has(row.provider_id) && identityInvalid(row),
+        (row) =>
+          trustedIds.has(row.provider_id) &&
+          (identityInvalid(row) ||
+            trustedNames.get(row.provider_id) !== row.full_name ||
+            ![0, 1].includes(row.selected) ||
+            (row.selected === 1 ? row.state !== 'active' : row.state !== 'available') ||
+            (row.selected === 1 &&
+              !['mathofdynamic/TRACE', 'mathofdynamic/trace-staging-fixture'].includes(
+                row.full_name,
+              ))),
       ).length,
     };
     // Counts only: no credentials, repository names, identifiers or session data.
