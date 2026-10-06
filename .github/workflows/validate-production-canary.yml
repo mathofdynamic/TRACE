@@ -239,11 +239,35 @@ jobs:
           TRACE_GITHUB_APP_CLIENT_ID: ${{ vars.TRACE_GITHUB_APP_CLIENT_ID }}
           TRACE_GITHUB_APP_PRIVATE_KEY: ${{ secrets.TRACE_GITHUB_APP_PRIVATE_KEY }}
 
+      # The application remains the exact inputs.sha build. Operational guards must
+      # come from the reviewed workflow ref, whose registry can include newer baselines.
+      - name: Check out reviewed production verification tooling
+        if: ${{ inputs.mode == 'deploy' && (inputs.runtime_mode == 'fixture' || inputs.runtime_mode == 'owner') }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: .trace-cache/production-verifier
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify operational source identity and application ancestry
+        if: ${{ inputs.mode == 'deploy' && (inputs.runtime_mode == 'fixture' || inputs.runtime_mode == 'owner') }}
+        shell: bash
+        env:
+          VERIFIER_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          actual_verifier_sha="$(git -C .trace-cache/production-verifier rev-parse HEAD)"
+          [[ "$actual_verifier_sha" == "$VERIFIER_SHA" ]]
+          git merge-base --is-ancestor "$EXPECTED_SHA" "$VERIFIER_SHA"
+          echo "PRODUCTION_VERIFIER_SOURCE_SHA=$actual_verifier_sha"
+          [[ "$(git rev-parse HEAD)" == "${EXPECTED_SHA,,}" ]]
+
       - name: Capture verified production baseline before fixture deployment
         if: ${{ inputs.mode == 'deploy' && (inputs.runtime_mode == 'fixture' || inputs.runtime_mode == 'owner') }}
         id: capture_transition_baseline
         shell: bash
-        run: pnpm exec tsx scripts/verify-production-fixture-transition.ts before --capture-baseline-outputs
+        run: pnpm exec tsx .trace-cache/production-verifier/scripts/verify-production-fixture-transition.ts before --capture-baseline-outputs
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           TRACE_GITHUB_APP_ID: ${{ vars.TRACE_GITHUB_APP_ID }}
@@ -351,7 +375,7 @@ jobs:
         if: ${{ inputs.mode == 'deploy' && (inputs.runtime_mode == 'fixture' || inputs.runtime_mode == 'owner') }}
         id: capture_fixture_identity
         shell: bash
-        run: pnpm exec tsx scripts/verify-production-fixture-transition.ts after --capture-deployment-outputs
+        run: pnpm exec tsx .trace-cache/production-verifier/scripts/verify-production-fixture-transition.ts after --capture-deployment-outputs
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           DEPLOY_SHA: ${{ inputs.sha }}
@@ -408,7 +432,7 @@ jobs:
       - name: Verify fixture transition side effects after acceptance probes
         if: ${{ inputs.mode == 'deploy' && (inputs.runtime_mode == 'fixture' || inputs.runtime_mode == 'owner') }}
         shell: bash
-        run: pnpm exec tsx scripts/verify-production-fixture-transition.ts after
+        run: pnpm exec tsx .trace-cache/production-verifier/scripts/verify-production-fixture-transition.ts after
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           DEPLOY_SHA: ${{ inputs.sha }}
@@ -425,7 +449,7 @@ jobs:
       - name: Inspect and safely roll back a failed fixture transition
         if: ${{ failure() && inputs.mode == 'deploy' && (inputs.runtime_mode == 'fixture' || inputs.runtime_mode == 'owner') && steps.capture_transition_baseline.outcome == 'success' }}
         shell: bash
-        run: pnpm exec tsx scripts/verify-production-fixture-transition.ts rollback-if-needed
+        run: pnpm exec tsx .trace-cache/production-verifier/scripts/verify-production-fixture-transition.ts rollback-if-needed
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           DEPLOY_SHA: ${{ inputs.sha }}

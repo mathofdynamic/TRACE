@@ -89,6 +89,9 @@ type KnownBaseline =
   | { versionId: string; mode: 'fixture' | 'owner'; sourceSha: string };
 
 function knownBaselineForVersion(versionId: string): KnownBaseline | undefined {
+  // PR #63/run 37126079125; independently verified by protected run 37426388514.
+  if (versionId === 'a30ba0d6-c4e6-42a7-b9fd-cf6a8eb8d08e')
+    return { versionId, mode: 'owner', sourceSha: '74450fd7684b6974e6deb8bb407f1fd670e5cecf' };
   if (versionId === '550a5214-4e46-4023-a330-7d042be4ea7c')
     return { versionId, mode: 'owner', sourceSha: '22b98cf2224a31403c9ea403e34137562f7076d8' };
   if (versionId === 'a118f111-0bcb-4662-b864-c8587ca29567')
@@ -390,6 +393,8 @@ function assertWorkerBindings(
   if (secretNames.has('CLOUDFLARE_API_TOKEN')) {
     fail('CLOUDFLARE_API_TOKEN must not be a Worker runtime secret.');
   }
+
+  assertExpectedProductionResourceBindings(version);
 
   return {
     canaryMode: variables.get('TRACE_CANARY_MODE')!,
