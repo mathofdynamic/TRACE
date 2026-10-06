@@ -142,6 +142,47 @@ async function main() {
       .where(eq(d1Schema.githubInstallations.githubInstallationId, '7002'));
     assert(suspended?.state === 'suspended', 'Suspended installation was not fail-closed');
 
+    const batchSizes: number[] = [];
+    const measuredDb = createD1Database({
+      prepare: binding.prepare.bind(binding),
+      batch: async (statements: Parameters<typeof binding.batch>[0]) => {
+        batchSizes.push(statements.length);
+        return binding.batch(statements);
+      },
+    } as Parameters<typeof createD1Database>[0]);
+    for (const size of [92, 102, 500]) {
+      const accountLogin = `synthetic-load-${size}`;
+      const catalog = snapshot({ id: 9000 + size, accountLogin });
+      catalog.repositories = Array.from({ length: size }, (_, index) => ({
+        ...catalog.repositories[0]!,
+        id: 1000000 + size * 1000 + index,
+        owner: accountLogin,
+        name: `synthetic-${index}`,
+        fullName: `${accountLogin}/synthetic-${index}`,
+      }));
+      await persistGitHubInstallationSnapshot({
+        db: requestDatabase(measuredDb),
+        user,
+        snapshot: catalog,
+        action: 'github.reconciled',
+        ownerMode: true,
+      });
+      const [stored] = await measuredDb
+        .select()
+        .from(d1Schema.githubInstallations)
+        .where(
+          eq(d1Schema.githubInstallations.githubInstallationId, String(catalog.installation.id)),
+        );
+      assert(stored, 'Synthetic load installation is missing');
+      const rows = await measuredDb
+        .select()
+        .from(d1Schema.githubRepositories)
+        .where(eq(d1Schema.githubRepositories.installationId, stored.id));
+      assert(rows.length === size, 'Synthetic load catalog is incomplete');
+      assert(batchSizes.at(-1) === 5, 'Reconciliation batch grows with catalog size');
+    }
+    console.log('Real D1 catalog load: 92/102/500 repositories; five atomic statements each.');
+
     console.log('D1 GitHub reconciliation checks passed.');
   } finally {
     await miniflare.dispose();

@@ -10,6 +10,7 @@ import {
 import type { GitHubInstallationSnapshot, GitHubRepositorySnapshot } from '@trace/github';
 import type { AnyRequestDatabase } from './request-database';
 import { ensureGitHubWorkspace, findGitHubWorkspace } from './workspace';
+import { d1CatalogStatements } from './d1-github-catalog';
 
 type InstallationPersistenceAction = 'github.connected' | 'github.reconciled';
 
@@ -141,122 +142,45 @@ export async function persistGitHubInstallationSnapshot(input: {
   if (isD1Database(input.db)) {
     const db = input.db;
     const installation = { id: existing?.id ?? crypto.randomUUID() };
-    const installationUpsert = db
-      .insert(d1Schema.githubInstallations)
-      .values({
-        id: installation.id,
-        organizationId: workspace.id,
-        githubInstallationId: providerId,
-        accountLogin: installationSnapshot.accountLogin,
-        accountType: installationSnapshot.accountType,
-        state,
-        suspendedAt: installationSnapshot.suspendedAt
-          ? new Date(installationSnapshot.suspendedAt)
-          : null,
-      })
-      .onConflictDoUpdate({
-        target: d1Schema.githubInstallations.githubInstallationId,
-        set: {
-          organizationId: workspace.id,
-          accountLogin: installationSnapshot.accountLogin,
-          accountType: installationSnapshot.accountType,
+    const timestamp = now.getTime();
+    const queries = [
+      db.$client
+        .prepare(
+          `INSERT INTO github_installations
+        (id, organization_id, github_installation_id, account_login, account_type, state, suspended_at, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(github_installation_id) DO UPDATE SET
+          organization_id=excluded.organization_id, account_login=excluded.account_login,
+          account_type=excluded.account_type, state=excluded.state,
+          suspended_at=excluded.suspended_at, updated_at=excluded.updated_at`,
+        )
+        .bind(
+          installation.id,
+          workspace.id,
+          providerId,
+          installationSnapshot.accountLogin,
+          installationSnapshot.accountType,
           state,
-          suspendedAt: installationSnapshot.suspendedAt
-            ? new Date(installationSnapshot.suspendedAt)
+          installationSnapshot.suspendedAt
+            ? new Date(installationSnapshot.suspendedAt).getTime()
             : null,
-          updatedAt: now,
-        },
-      });
-
-    const queries: unknown[] = [installationUpsert];
-    for (const repository of input.snapshot.repositories) {
-      queries.push(
-        db
-          .insert(d1Schema.githubRepositories)
-          .values({
-            organizationId: workspace.id,
-            installationId: installation.id,
-            githubRepositoryId: String(repository.id),
-            owner: repository.owner,
-            name: repository.name,
-            fullName: repository.fullName,
-            defaultBranch: repository.defaultBranch,
-            visibility: repository.visibility,
-            state: 'available',
-            lastSynchronizedAt: now,
-          })
-          .onConflictDoUpdate({
-            target: d1Schema.githubRepositories.githubRepositoryId,
-            set: {
-              organizationId: workspace.id,
-              installationId: installation.id,
-              owner: repository.owner,
-              name: repository.name,
-              fullName: repository.fullName,
-              defaultBranch: repository.defaultBranch,
-              visibility: repository.visibility,
-              lastSynchronizedAt: now,
-              disconnectedAt: null,
-              updatedAt: now,
-            },
-          }),
-      );
-      queries.push(
-        db
-          .insert(d1Schema.githubInstallationRepositories)
-          .values({
-            installationId: installation.id,
-            githubRepositoryId: String(repository.id),
-            permissions: repository.permissions,
-          })
-          .onConflictDoUpdate({
-            target: [
-              d1Schema.githubInstallationRepositories.installationId,
-              d1Schema.githubInstallationRepositories.githubRepositoryId,
-            ],
-            set: { permissions: repository.permissions, updatedAt: now },
-          }),
-      );
-    }
-    if (input.ownerMode) {
-      const expected = new Set(ids.map(String));
-      const previous = await db
-        .select({ providerId: d1Schema.githubRepositories.githubRepositoryId })
-        .from(d1Schema.githubRepositories)
-        .where(eq(d1Schema.githubRepositories.installationId, installation.id));
-      const removed = previous.map((row) => row.providerId).filter((id) => !expected.has(id));
-      for (let offset = 0; offset < removed.length; offset += 50) {
-        const chunk = removed.slice(offset, offset + 50);
-        queries.push(
-          db
-            .update(d1Schema.githubInstallationRepositories)
-            .set({ selected: false, updatedAt: now })
-            .where(
-              and(
-                eq(d1Schema.githubInstallationRepositories.installationId, installation.id),
-                inArray(d1Schema.githubInstallationRepositories.githubRepositoryId, chunk),
-              ),
-            ),
-        );
-        queries.push(
-          db
-            .update(d1Schema.githubRepositories)
-            .set({ state: 'available', disconnectedAt: now, updatedAt: now })
-            .where(
-              and(
-                eq(d1Schema.githubRepositories.installationId, installation.id),
-                inArray(d1Schema.githubRepositories.githubRepositoryId, chunk),
-              ),
-            ),
-        );
-      }
-    }
-    // One D1 batch atomically commits installation state and the full repository/access catalog.
-    if (queries.length) {
-      const results = (await db.batch(queries as never)) as unknown as { success?: boolean }[];
-      if (results.length !== queries.length || results.some((result) => result.success !== true))
-        throw new Error('GitHub installation catalog persistence failed.');
-    }
+          timestamp,
+          timestamp,
+        ),
+      ...d1CatalogStatements(
+        db,
+        input.snapshot.repositories,
+        workspace.id,
+        installation.id,
+        now,
+        Boolean(input.ownerMode),
+      ),
+    ];
+    // One native batch atomically commits installation and complete catalog with
+    // three statements (five with removal reconciliation), independent of size.
+    const results = (await db.$client.batch(queries)) as { success?: boolean }[];
+    if (results.length !== queries.length || results.some((result) => result.success !== true))
+      throw new Error('GitHub installation catalog persistence failed.');
     const [storedInstallation] = await db
       .select({ id: d1Schema.githubInstallations.id })
       .from(d1Schema.githubInstallations)
