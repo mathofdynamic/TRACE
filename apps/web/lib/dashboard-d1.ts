@@ -1,4 +1,4 @@
-import { readEngineeringReport } from './report-artifact';
+import { readEngineeringReportMetadata } from './report-artifact';
 import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 import { d1Schema, type TraceD1Database } from '@trace/db';
 import type {
@@ -410,7 +410,7 @@ export async function getD1DashboardSummary(
       syncedAt: artifact.syncedAt.toISOString(),
       origin: 'local',
       content: artifact.content,
-      engineeringReport: readEngineeringReport(artifact.content),
+      engineeringReport: readEngineeringReportMetadata(artifact.metadata),
       path: artifact.path,
       timeWindow: stringValue(projection.timeWindow),
       freshness,

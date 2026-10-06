@@ -7,7 +7,7 @@ import {
   reportSectionIds,
   type EngineeringReport,
 } from '@trace/schema';
-import { readEngineeringReport } from './report-artifact';
+import { readEngineeringReport, readEngineeringReportMetadata } from './report-artifact';
 import { ReportDetailView } from '../app/(app)/app/_components/report-detail-view';
 import type { DashboardSyncedRecord } from './dashboard';
 
@@ -83,6 +83,79 @@ describe('engineering report artifact and reader', () => {
         markdown: 'duplicate',
       }),
     ).toThrow();
+  });
+  it('reads the identical report from persisted metadata without YAML content', () => {
+    expect(readEngineeringReportMetadata(metadata)).toEqual(document);
+  });
+  it('keeps metadata-only reads fail-closed for duplicate, mismatched or unsafe documents', () => {
+    expect(
+      readEngineeringReportMetadata({
+        ...metadata,
+        evidence: [...metadata.evidence, ...metadata.evidence],
+      }),
+    ).toBeUndefined();
+    expect(
+      readEngineeringReportMetadata({ ...metadata, artifact_type: 'daily_report' }),
+    ).toBeUndefined();
+    expect(
+      readEngineeringReportMetadata({
+        ...metadata,
+        evidence: [
+          {
+            ...metadata.evidence[0],
+            metadata: { document: { ...document, debug: 'private source' } },
+          },
+        ],
+      }),
+    ).toBeUndefined();
+    expect(
+      readEngineeringReportMetadata({
+        ...metadata,
+        evidence: [
+          {
+            ...metadata.evidence[0],
+            metadata: {
+              document: {
+                ...document,
+                sections: document.sections.map((section) => ({
+                  ...section,
+                  items: [
+                    {
+                      title: 'Unsafe link',
+                      evidence: ['synthetic'],
+                      url: 'https://private.example/source',
+                    },
+                  ],
+                })),
+              },
+            },
+          },
+        ],
+      }),
+    ).toBeUndefined();
+    expect(readEngineeringReportMetadata(null)).toBeUndefined();
+  });
+  it('handles period reports with 100 evidence items using the persisted JSON contract', () => {
+    const large = {
+      ...document,
+      sections: document.sections.map((section) =>
+        section.id === 'commits'
+          ? {
+              ...section,
+              items: Array.from({ length: 100 }, (_, index) => ({
+                title: `Verified synthetic commit ${index}`,
+                evidence: [`commit:synthetic-${index}`],
+                url: `https://github.com/a/b/commit/${index.toString(16).padStart(40, '0')}`,
+              })),
+            }
+          : section,
+      ),
+    };
+    const persisted = {
+      ...metadata,
+      evidence: [{ ...metadata.evidence[0], metadata: { document: large } }],
+    };
+    expect(readEngineeringReportMetadata(persisted)).toEqual(large);
   });
   it('rejects unknown fields, invalid boundaries and unsafe evidence links', () => {
     expect(engineeringReportSchema.safeParse({ ...document, debug: 'source' }).success).toBe(false);

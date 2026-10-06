@@ -14,11 +14,18 @@ import {
 import { scopeCanaryInstallationSnapshot } from './production-canary';
 import { processGitHubWebhookEvent } from '@trace/core';
 import { enqueueD1Webhook } from './d1-webhook-queue';
-function sqliteBinding(sqlite: DatabaseSync) {
+function sqliteBinding(
+  sqlite: DatabaseSync,
+  metrics?: { batchSizes: number[]; preparedCount: number; maxBindCount: number },
+) {
   function prepare(sql: string, params: SQLInputValue[] = []) {
+    if (metrics && params.length === 0) metrics.preparedCount++;
     const statement = sqlite.prepare(sql);
     return {
-      bind: (...values: SQLInputValue[]) => prepare(sql, values),
+      bind: (...values: SQLInputValue[]) => {
+        if (metrics) metrics.maxBindCount = Math.max(metrics.maxBindCount, values.length);
+        return prepare(sql, values);
+      },
       raw: async () => {
         return statement.all(...params).map((row) => Object.values(row));
       },
@@ -29,6 +36,7 @@ function sqliteBinding(sqlite: DatabaseSync) {
   return {
     prepare,
     batch: async (statements: ReturnType<typeof prepare>[]) => {
+      metrics?.batchSizes.push(statements.length);
       sqlite.exec('BEGIN');
       try {
         const results = [];
@@ -169,7 +177,7 @@ it('owner catalog remains inactive until explicit selection; inactive intake has
   }
 });
 
-it.each([92, 102])(
+it.each([92, 102, 500])(
   'persists the complete %i-repository catalog atomically and detects a failed final upsert',
   async (size) => {
     const sqlite = new DatabaseSync(':memory:');
@@ -199,8 +207,9 @@ it.each([92, 102])(
         },
         repositories,
       };
+      const metrics = { batchSizes: [], preparedCount: 0, maxBindCount: 0 };
       const input = {
-        db: createD1Database(sqliteBinding(sqlite)),
+        db: createD1Database(sqliteBinding(sqlite, metrics)),
         user: {
           id: 'u',
           name: 'Owner',
@@ -213,6 +222,10 @@ it.each([92, 102])(
         ownerMode: true,
       };
       await persistGitHubInstallationSnapshot(input);
+      // The Worker prepares a constant-size transaction, not 2*N query builders.
+      expect(metrics.batchSizes).toEqual([5]);
+      expect(metrics.preparedCount).toBeLessThanOrEqual(20);
+      expect(metrics.maxBindCount).toBeLessThanOrEqual(10);
       expect(sqlite.prepare('SELECT COUNT(*) AS count FROM github_repositories').get()).toEqual({
         count: size,
       });
@@ -274,6 +287,43 @@ it.each([92, 102])(
           'workspace',
         ),
       ).toThrow(/incomplete/);
+      sqlite.exec('DROP TRIGGER fail_last');
+      const removedId = 100000 + size - 1;
+      sqlite.exec(
+        `UPDATE github_repositories SET state='active' WHERE github_repository_id='${removedId}'; UPDATE github_installation_repositories SET selected=1 WHERE github_repository_id='${removedId}'`,
+      );
+      await persistGitHubInstallationSnapshot({
+        ...input,
+        snapshot: { ...snapshot, repositories: repositories.slice(0, -1) },
+      });
+      expect(
+        sqlite
+          .prepare(
+            `SELECT state, (disconnected_at IS NOT NULL) AS disconnected FROM github_repositories WHERE github_repository_id='${removedId}'`,
+          )
+          .get(),
+      ).toEqual({ state: 'available', disconnected: 1 });
+      expect(
+        sqlite
+          .prepare(
+            `SELECT selected FROM github_installation_repositories WHERE github_repository_id='${removedId}'`,
+          )
+          .get(),
+      ).toEqual({ selected: 0 });
+      expect(
+        sqlite
+          .prepare("SELECT state FROM github_repositories WHERE github_repository_id='100000'")
+          .get(),
+      ).toEqual({ state: 'active' });
+      expect(
+        sqlite
+          .prepare(
+            "SELECT selected FROM github_installation_repositories WHERE github_repository_id='100000'",
+          )
+          .get(),
+      ).toEqual({ selected: 1 });
+      expect(metrics.batchSizes).toEqual([5, 5, 5]);
+      expect(sqlite.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
     } finally {
       sqlite.close();
     }
