@@ -1,4 +1,4 @@
-import { and, eq, notInArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { TraceUser } from '@trace/auth';
 import {
   d1Schema,
@@ -70,6 +70,39 @@ async function getExistingPostgresInstallation(db: TracePostgresDatabase, provid
   return installation;
 }
 
+type PersistedRepository = {
+  providerId: string | number;
+  fullName: string;
+  organizationId: string;
+  installationId: string | null;
+  accessInstallationId: string | null;
+};
+
+export function assertPersistedInstallationCatalog(
+  snapshot: InstallationSnapshotResult,
+  rows: PersistedRepository[],
+  installationId: string,
+  workspaceId: string,
+) {
+  const expected = new Map(
+    snapshot.repositories.map((repository) => [String(repository.id), repository]),
+  );
+  const current = rows.filter((row) => expected.has(String(row.providerId)));
+  if (
+    expected.size !== snapshot.repositories.length ||
+    current.length !== expected.size ||
+    new Set(current.map((row) => String(row.providerId))).size !== expected.size ||
+    current.some(
+      (row) =>
+        row.fullName !== expected.get(String(row.providerId))?.fullName ||
+        row.organizationId !== workspaceId ||
+        row.installationId !== installationId ||
+        row.accessInstallationId !== installationId,
+    )
+  )
+    throw new Error('GitHub installation catalog persistence is incomplete.');
+}
+
 export async function persistGitHubInstallationSnapshot(input: {
   db: AnyRequestDatabase;
   user: TraceUser;
@@ -77,6 +110,13 @@ export async function persistGitHubInstallationSnapshot(input: {
   action: InstallationPersistenceAction;
   ownerMode?: boolean;
 }) {
+  const ids = input.snapshot.repositories.map((repository) => repository.id);
+  if (
+    ids.length > 500 ||
+    new Set(ids).size !== ids.length ||
+    ids.some((id) => !Number.isSafeInteger(id) || id <= 0)
+  )
+    throw new Error('GitHub installation repository identities are invalid or duplicated.');
   const installationSnapshot = input.snapshot.installation;
   const providerId = String(installationSnapshot.id);
   const existing = isD1Database(input.db)
@@ -100,9 +140,11 @@ export async function persistGitHubInstallationSnapshot(input: {
 
   if (isD1Database(input.db)) {
     const db = input.db;
-    const [installation] = await db
+    const installation = { id: existing?.id ?? crypto.randomUUID() };
+    const installationUpsert = db
       .insert(d1Schema.githubInstallations)
       .values({
+        id: installation.id,
         organizationId: workspace.id,
         githubInstallationId: providerId,
         accountLogin: installationSnapshot.accountLogin,
@@ -124,17 +166,176 @@ export async function persistGitHubInstallationSnapshot(input: {
             : null,
           updatedAt: now,
         },
+      });
+
+    const queries: unknown[] = [installationUpsert];
+    for (const repository of input.snapshot.repositories) {
+      queries.push(
+        db
+          .insert(d1Schema.githubRepositories)
+          .values({
+            organizationId: workspace.id,
+            installationId: installation.id,
+            githubRepositoryId: String(repository.id),
+            owner: repository.owner,
+            name: repository.name,
+            fullName: repository.fullName,
+            defaultBranch: repository.defaultBranch,
+            visibility: repository.visibility,
+            state: 'available',
+            lastSynchronizedAt: now,
+          })
+          .onConflictDoUpdate({
+            target: d1Schema.githubRepositories.githubRepositoryId,
+            set: {
+              organizationId: workspace.id,
+              installationId: installation.id,
+              owner: repository.owner,
+              name: repository.name,
+              fullName: repository.fullName,
+              defaultBranch: repository.defaultBranch,
+              visibility: repository.visibility,
+              lastSynchronizedAt: now,
+              disconnectedAt: null,
+              updatedAt: now,
+            },
+          }),
+      );
+      queries.push(
+        db
+          .insert(d1Schema.githubInstallationRepositories)
+          .values({
+            installationId: installation.id,
+            githubRepositoryId: String(repository.id),
+            permissions: repository.permissions,
+          })
+          .onConflictDoUpdate({
+            target: [
+              d1Schema.githubInstallationRepositories.installationId,
+              d1Schema.githubInstallationRepositories.githubRepositoryId,
+            ],
+            set: { permissions: repository.permissions, updatedAt: now },
+          }),
+      );
+    }
+    if (input.ownerMode) {
+      const expected = new Set(ids.map(String));
+      const previous = await db
+        .select({ providerId: d1Schema.githubRepositories.githubRepositoryId })
+        .from(d1Schema.githubRepositories)
+        .where(eq(d1Schema.githubRepositories.installationId, installation.id));
+      const removed = previous.map((row) => row.providerId).filter((id) => !expected.has(id));
+      for (let offset = 0; offset < removed.length; offset += 50) {
+        const chunk = removed.slice(offset, offset + 50);
+        queries.push(
+          db
+            .update(d1Schema.githubInstallationRepositories)
+            .set({ selected: false, updatedAt: now })
+            .where(
+              and(
+                eq(d1Schema.githubInstallationRepositories.installationId, installation.id),
+                inArray(d1Schema.githubInstallationRepositories.githubRepositoryId, chunk),
+              ),
+            ),
+        );
+        queries.push(
+          db
+            .update(d1Schema.githubRepositories)
+            .set({ state: 'available', disconnectedAt: now, updatedAt: now })
+            .where(
+              and(
+                eq(d1Schema.githubRepositories.installationId, installation.id),
+                inArray(d1Schema.githubRepositories.githubRepositoryId, chunk),
+              ),
+            ),
+        );
+      }
+    }
+    // One D1 batch atomically commits installation state and the full repository/access catalog.
+    if (queries.length) {
+      const results = (await db.batch(queries as never)) as unknown as { success?: boolean }[];
+      if (results.length !== queries.length || results.some((result) => result.success !== true))
+        throw new Error('GitHub installation catalog persistence failed.');
+    }
+    const [storedInstallation] = await db
+      .select({ id: d1Schema.githubInstallations.id })
+      .from(d1Schema.githubInstallations)
+      .where(eq(d1Schema.githubInstallations.githubInstallationId, providerId))
+      .limit(1);
+    if (storedInstallation?.id !== installation.id)
+      throw new Error('GitHub installation identity changed during reconciliation.');
+    const persisted = await db
+      .select({
+        providerId: d1Schema.githubRepositories.githubRepositoryId,
+        fullName: d1Schema.githubRepositories.fullName,
+        organizationId: d1Schema.githubRepositories.organizationId,
+        installationId: d1Schema.githubRepositories.installationId,
+        accessInstallationId: sql<
+          string | null
+        >`${d1Schema.githubInstallationRepositories.installationId}`.as('access_installation_id'),
       })
-      .returning({ id: d1Schema.githubInstallations.id });
+      .from(d1Schema.githubRepositories)
+      .leftJoin(
+        d1Schema.githubInstallationRepositories,
+        and(
+          eq(
+            d1Schema.githubInstallationRepositories.githubRepositoryId,
+            d1Schema.githubRepositories.githubRepositoryId,
+          ),
+          eq(
+            d1Schema.githubInstallationRepositories.installationId,
+            d1Schema.githubRepositories.installationId,
+          ),
+        ),
+      )
+      .where(eq(d1Schema.githubRepositories.installationId, installation.id));
+    assertPersistedInstallationCatalog(input.snapshot, persisted, installation.id, workspace.id);
+    await db.insert(d1Schema.auditEvents).values({
+      organizationId: workspace.id,
+      actorUserId: input.user.id,
+      action: input.action,
+      subjectType: 'github_installation',
+      subjectId: installation.id,
+    });
+    return { installationId: installation.id, workspaceId: workspace.id };
+  }
+
+  return input.db.transaction(async (db) => {
+    const [installation] = await db
+      .insert(schema.githubInstallations)
+      .values({
+        organizationId: workspace.id,
+        githubInstallationId: installationSnapshot.id,
+        accountLogin: installationSnapshot.accountLogin,
+        accountType: installationSnapshot.accountType,
+        state,
+        suspendedAt: installationSnapshot.suspendedAt
+          ? new Date(installationSnapshot.suspendedAt)
+          : null,
+      })
+      .onConflictDoUpdate({
+        target: schema.githubInstallations.githubInstallationId,
+        set: {
+          organizationId: workspace.id,
+          accountLogin: installationSnapshot.accountLogin,
+          accountType: installationSnapshot.accountType,
+          state,
+          suspendedAt: installationSnapshot.suspendedAt
+            ? new Date(installationSnapshot.suspendedAt)
+            : null,
+          updatedAt: now,
+        },
+      })
+      .returning({ id: schema.githubInstallations.id });
     if (!installation) throw new Error('GitHub App installation could not be persisted.');
 
     for (const repository of input.snapshot.repositories) {
       await db
-        .insert(d1Schema.githubRepositories)
+        .insert(schema.githubRepositories)
         .values({
           organizationId: workspace.id,
           installationId: installation.id,
-          githubRepositoryId: String(repository.id),
+          githubRepositoryId: repository.id,
           owner: repository.owner,
           name: repository.name,
           fullName: repository.fullName,
@@ -144,7 +345,7 @@ export async function persistGitHubInstallationSnapshot(input: {
           lastSynchronizedAt: now,
         })
         .onConflictDoUpdate({
-          target: d1Schema.githubRepositories.githubRepositoryId,
+          target: schema.githubRepositories.githubRepositoryId,
           set: {
             organizationId: workspace.id,
             installationId: installation.id,
@@ -158,42 +359,45 @@ export async function persistGitHubInstallationSnapshot(input: {
           },
         });
       await db
-        .insert(d1Schema.githubInstallationRepositories)
+        .insert(schema.githubInstallationRepositories)
         .values({
           installationId: installation.id,
-          githubRepositoryId: String(repository.id),
+          githubRepositoryId: repository.id,
           permissions: repository.permissions,
         })
         .onConflictDoUpdate({
           target: [
-            d1Schema.githubInstallationRepositories.installationId,
-            d1Schema.githubInstallationRepositories.githubRepositoryId,
+            schema.githubInstallationRepositories.installationId,
+            schema.githubInstallationRepositories.githubRepositoryId,
           ],
           set: { permissions: repository.permissions, updatedAt: now },
         });
     }
-    if (input.ownerMode) {
-      const ids = input.snapshot.repositories.map((repository) => String(repository.id));
-      await db
-        .update(d1Schema.githubInstallationRepositories)
-        .set({ selected: false, updatedAt: now })
-        .where(
-          and(
-            eq(d1Schema.githubInstallationRepositories.installationId, installation.id),
-            notInArray(d1Schema.githubInstallationRepositories.githubRepositoryId, ids),
+    const persisted = await db
+      .select({
+        providerId: schema.githubRepositories.githubRepositoryId,
+        fullName: schema.githubRepositories.fullName,
+        organizationId: schema.githubRepositories.organizationId,
+        installationId: schema.githubRepositories.installationId,
+        accessInstallationId: schema.githubInstallationRepositories.installationId,
+      })
+      .from(schema.githubRepositories)
+      .leftJoin(
+        schema.githubInstallationRepositories,
+        and(
+          eq(
+            schema.githubInstallationRepositories.githubRepositoryId,
+            schema.githubRepositories.githubRepositoryId,
           ),
-        );
-      await db
-        .update(d1Schema.githubRepositories)
-        .set({ state: 'available', disconnectedAt: now, updatedAt: now })
-        .where(
-          and(
-            eq(d1Schema.githubRepositories.installationId, installation.id),
-            notInArray(d1Schema.githubRepositories.githubRepositoryId, ids),
+          eq(
+            schema.githubInstallationRepositories.installationId,
+            schema.githubRepositories.installationId,
           ),
-        );
-    }
-    await db.insert(d1Schema.auditEvents).values({
+        ),
+      )
+      .where(eq(schema.githubRepositories.installationId, installation.id));
+    assertPersistedInstallationCatalog(input.snapshot, persisted, installation.id, workspace.id);
+    await db.insert(schema.auditEvents).values({
       organizationId: workspace.id,
       actorUserId: input.user.id,
       action: input.action,
@@ -201,88 +405,7 @@ export async function persistGitHubInstallationSnapshot(input: {
       subjectId: installation.id,
     });
     return { installationId: installation.id, workspaceId: workspace.id };
-  }
-
-  const [installation] = await input.db
-    .insert(schema.githubInstallations)
-    .values({
-      organizationId: workspace.id,
-      githubInstallationId: installationSnapshot.id,
-      accountLogin: installationSnapshot.accountLogin,
-      accountType: installationSnapshot.accountType,
-      state,
-      suspendedAt: installationSnapshot.suspendedAt
-        ? new Date(installationSnapshot.suspendedAt)
-        : null,
-    })
-    .onConflictDoUpdate({
-      target: schema.githubInstallations.githubInstallationId,
-      set: {
-        organizationId: workspace.id,
-        accountLogin: installationSnapshot.accountLogin,
-        accountType: installationSnapshot.accountType,
-        state,
-        suspendedAt: installationSnapshot.suspendedAt
-          ? new Date(installationSnapshot.suspendedAt)
-          : null,
-        updatedAt: now,
-      },
-    })
-    .returning({ id: schema.githubInstallations.id });
-  if (!installation) throw new Error('GitHub App installation could not be persisted.');
-
-  for (const repository of input.snapshot.repositories) {
-    await input.db
-      .insert(schema.githubRepositories)
-      .values({
-        organizationId: workspace.id,
-        installationId: installation.id,
-        githubRepositoryId: repository.id,
-        owner: repository.owner,
-        name: repository.name,
-        fullName: repository.fullName,
-        defaultBranch: repository.defaultBranch,
-        visibility: repository.visibility,
-        state: 'available',
-        lastSynchronizedAt: now,
-      })
-      .onConflictDoUpdate({
-        target: schema.githubRepositories.githubRepositoryId,
-        set: {
-          organizationId: workspace.id,
-          installationId: installation.id,
-          owner: repository.owner,
-          name: repository.name,
-          fullName: repository.fullName,
-          defaultBranch: repository.defaultBranch,
-          visibility: repository.visibility,
-          lastSynchronizedAt: now,
-          updatedAt: now,
-        },
-      });
-    await input.db
-      .insert(schema.githubInstallationRepositories)
-      .values({
-        installationId: installation.id,
-        githubRepositoryId: repository.id,
-        permissions: repository.permissions,
-      })
-      .onConflictDoUpdate({
-        target: [
-          schema.githubInstallationRepositories.installationId,
-          schema.githubInstallationRepositories.githubRepositoryId,
-        ],
-        set: { permissions: repository.permissions, updatedAt: now },
-      });
-  }
-  await input.db.insert(schema.auditEvents).values({
-    organizationId: workspace.id,
-    actorUserId: input.user.id,
-    action: input.action,
-    subjectType: 'github_installation',
-    subjectId: installation.id,
   });
-  return { installationId: installation.id, workspaceId: workspace.id };
 }
 
 export type GitHubInstallationCandidate = {

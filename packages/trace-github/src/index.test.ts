@@ -1,8 +1,9 @@
-import { createHmac } from 'node:crypto';
+import { createHmac, generateKeyPairSync } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   exchangeGitHubAppCode,
   getGitHubAuthenticatedUser,
+  getGitHubInstallationSnapshot,
   listGitHubUserInstallations,
   normalizeGitHubEvent,
   normalizeGitHubRepositoryHead,
@@ -246,4 +247,73 @@ describe('GitHub webhook security and normalization', () => {
       login: 'trace-owner',
     });
   });
+});
+
+describe('complete installation repository snapshots', () => {
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const config = {
+    appId: '123',
+    clientId: 'synthetic',
+    clientSecret: 'synthetic',
+    privateKey: privateKey.export({ format: 'pem', type: 'pkcs8' }).toString(),
+  };
+  const repositories = Array.from({ length: 102 }, (_, index) => ({
+    id: 100000 + index,
+    owner: { login: 'synthetic' },
+    name: `repo-${index}`,
+    full_name: `synthetic/repo-${index}`,
+    private: true,
+    archived: index === 90,
+    fork: index === 91,
+  }));
+  function mockPages(pages: { total_count: number; repositories: unknown[] }[]) {
+    const fetcher = vi.fn(async (input: string, init?: RequestInit) => {
+      const url = new URL(input);
+      expect(init).toMatchObject({ cache: 'no-store' });
+      if (url.pathname.endsWith('/access_tokens'))
+        return Response.json({ token: 'synthetic-token' });
+      if (url.pathname === '/app/installations/7001')
+        return Response.json({
+          id: 7001,
+          account: { login: 'synthetic', type: 'User' },
+          suspended_at: null,
+          repository_selection: 'all',
+        });
+      expect(url.pathname).toBe('/installation/repositories');
+      expect(url.searchParams.get('per_page')).toBe('100');
+      return Response.json(pages[Number(url.searchParams.get('page')) - 1]);
+    });
+    vi.stubGlobal('fetch', fetcher);
+    return fetcher;
+  }
+  it('retains all 92 private, archived and fork repositories', async () => {
+    mockPages([{ total_count: 92, repositories: repositories.slice(0, 92) }]);
+    expect(
+      (await getGitHubInstallationSnapshot(config, 7001)).repositories.map((repo) => repo.id),
+    ).toEqual(repositories.slice(0, 92).map((repo) => repo.id));
+  });
+  it('enumerates a catalog larger than a full page without off-by-one loss', async () => {
+    const fetcher = mockPages([
+      { total_count: 102, repositories: repositories.slice(0, 100) },
+      { total_count: 102, repositories: repositories.slice(100) },
+    ]);
+    expect((await getGitHubInstallationSnapshot(config, 7001)).repositories).toHaveLength(102);
+    expect(fetcher).toHaveBeenCalledTimes(4);
+  });
+  it.each([
+    [{ total_count: 92, repositories: repositories.slice(0, 91) }],
+    [{ total_count: 92, repositories: [...repositories.slice(0, 91), { id: 100091 }] }],
+    [{ total_count: 92, repositories: [...repositories.slice(0, 91), repositories[0]] }],
+    [
+      { total_count: 102, repositories: repositories.slice(0, 100) },
+      { total_count: 101, repositories: repositories.slice(100) },
+    ],
+    [{ total_count: 501, repositories: repositories.slice(0, 100) }],
+  ])(
+    'rejects incomplete, invalid, duplicated, unstable or oversized catalogs before persistence (%#)',
+    async (...pages) => {
+      mockPages(pages);
+      await expect(getGitHubInstallationSnapshot(config, 7001)).rejects.toThrow(/repository/);
+    },
+  );
 });

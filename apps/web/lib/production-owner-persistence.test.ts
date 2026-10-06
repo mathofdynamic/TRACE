@@ -7,7 +7,10 @@ import {
   applyD1OwnerInstallationBoundary,
 } from '@trace/db';
 import { describe, expect, it, vi } from 'vitest';
-import { persistGitHubInstallationSnapshot } from './github-installation';
+import {
+  persistGitHubInstallationSnapshot,
+  assertPersistedInstallationCatalog,
+} from './github-installation';
 import { scopeCanaryInstallationSnapshot } from './production-canary';
 import { processGitHubWebhookEvent } from '@trace/core';
 import { enqueueD1Webhook } from './d1-webhook-queue';
@@ -23,7 +26,21 @@ function sqliteBinding(sqlite: DatabaseSync) {
       run: async () => ({ success: true, results: [], meta: statement.run(...params) }),
     };
   }
-  return { prepare } as Parameters<typeof createD1Database>[0];
+  return {
+    prepare,
+    batch: async (statements: ReturnType<typeof prepare>[]) => {
+      sqlite.exec('BEGIN');
+      try {
+        const results = [];
+        for (const statement of statements) results.push(await statement.all());
+        sqlite.exec('COMMIT');
+        return results;
+      } catch (error) {
+        sqlite.exec('ROLLBACK');
+        throw error;
+      }
+    },
+  } as Parameters<typeof createD1Database>[0];
 }
 
 it('owner catalog remains inactive until explicit selection; inactive intake has zero delivery/Queue/projection side effects', async () => {
@@ -151,3 +168,114 @@ it('owner catalog remains inactive until explicit selection; inactive intake has
     sqlite.close();
   }
 });
+
+it.each([92, 102])(
+  'persists the complete %i-repository catalog atomically and detects a failed final upsert',
+  async (size) => {
+    const sqlite = new DatabaseSync(':memory:');
+    try {
+      const migrations = new URL('../../../packages/db/drizzle-d1/', import.meta.url);
+      for (const file of readdirSync(migrations)
+        .filter((file) => file.endsWith('.sql'))
+        .sort())
+        sqlite.exec(readFileSync(new URL(file, migrations), 'utf8'));
+      sqlite.exec("INSERT INTO users (id,email) VALUES ('u','synthetic@example.invalid')");
+      const repositories = Array.from({ length: size }, (_, index) => ({
+        id: 100000 + index,
+        owner: 'mathofdynamic',
+        name: `synthetic-${index}`,
+        fullName: `mathofdynamic/synthetic-${index}`,
+        defaultBranch: 'main',
+        visibility: 'private',
+        permissions: { metadata: 'read' },
+      }));
+      const snapshot = {
+        installation: {
+          id: 166179374,
+          accountLogin: 'mathofdynamic',
+          accountType: 'User',
+          suspendedAt: null,
+          permissions: {},
+        },
+        repositories,
+      };
+      const input = {
+        db: createD1Database(sqliteBinding(sqlite)),
+        user: {
+          id: 'u',
+          name: 'Owner',
+          email: 'synthetic@example.invalid',
+          image: null,
+          githubLogin: 'mathofdynamic',
+        },
+        snapshot,
+        action: 'github.reconciled' as const,
+        ownerMode: true,
+      };
+      await persistGitHubInstallationSnapshot(input);
+      expect(sqlite.prepare('SELECT COUNT(*) AS count FROM github_repositories').get()).toEqual({
+        count: size,
+      });
+      expect(
+        sqlite.prepare('SELECT COUNT(*) AS count FROM github_installation_repositories').get(),
+      ).toEqual({ count: size });
+      sqlite.exec(
+        "UPDATE github_installations SET state='suspended', suspended_at=1700000000000; UPDATE github_repositories SET state='active' WHERE github_repository_id='100000'; UPDATE github_installation_repositories SET selected=1 WHERE github_repository_id='100000'",
+      );
+      sqlite.exec(
+        `CREATE TRIGGER fail_last BEFORE UPDATE ON github_repositories WHEN NEW.github_repository_id='${100000 + size - 1}' BEGIN SELECT RAISE(ABORT,'synthetic final upsert failure'); END`,
+      );
+      const changed = {
+        ...snapshot,
+        repositories: repositories.map((repo, index) =>
+          index === 0 ? { ...repo, name: 'renamed', fullName: 'mathofdynamic/renamed' } : repo,
+        ),
+      };
+      await expect(
+        persistGitHubInstallationSnapshot({ ...input, snapshot: changed }),
+      ).rejects.toThrow();
+      expect(sqlite.prepare('SELECT state, suspended_at FROM github_installations').get()).toEqual({
+        state: 'suspended',
+        suspended_at: 1700000000000,
+      });
+      expect(
+        await isD1SelectedOwnerWebhookEvent(input.db, {
+          type: 'IssueUpdated',
+          installationId: 166179374,
+          repositoryId: 100000,
+          issueId: 99,
+          number: 1,
+          action: 'opened',
+        }),
+      ).toBe(false);
+
+      expect(
+        sqlite
+          .prepare("SELECT full_name FROM github_repositories WHERE github_repository_id='100000'")
+          .get(),
+      ).toEqual({ full_name: 'mathofdynamic/synthetic-0' });
+      expect(
+        sqlite
+          .prepare("SELECT COUNT(*) AS count FROM audit_events WHERE action='github.reconciled'")
+          .get(),
+      ).toEqual({ count: 1 });
+      expect(sqlite.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+      expect(() =>
+        assertPersistedInstallationCatalog(
+          snapshot,
+          repositories.slice(0, size - 1).map((repo) => ({
+            providerId: String(repo.id),
+            fullName: repo.fullName,
+            organizationId: 'workspace',
+            installationId: 'installation',
+            accessInstallationId: 'installation',
+          })),
+          'installation',
+          'workspace',
+        ),
+      ).toThrow(/incomplete/);
+    } finally {
+      sqlite.close();
+    }
+  },
+);
