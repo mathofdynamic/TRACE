@@ -28,3 +28,40 @@ describe('protected production baseline inspection workflow', () => {
     expect(workflow).not.toContain('DIAGNOSTIC_PRIVATE_KEY');
   });
 });
+
+const canaryWorkflow = readFileSync(
+  new URL('../../../.github/workflows/validate-production-canary.yml', import.meta.url),
+  'utf8',
+);
+describe('exact application release with reviewed rollback verification', () => {
+  it('keeps the exact application SHA while pinning guard source to the protected workflow commit', () => {
+    expect(canaryWorkflow).toContain('ref: ${{ inputs.sha }}');
+    expect(canaryWorkflow).toContain('ref: ${{ github.sha }}');
+    expect(canaryWorkflow).toContain('path: .trace-cache/production-verifier');
+    expect(canaryWorkflow).toContain('persist-credentials: false');
+    expect(canaryWorkflow).toContain('[[ "$actual_verifier_sha" == "$VERIFIER_SHA" ]]');
+    expect(canaryWorkflow).toContain(
+      'git merge-base --is-ancestor "$EXPECTED_SHA" "$VERIFIER_SHA"',
+    );
+    expect(canaryWorkflow).toContain('[[ "$(git rev-parse HEAD)" == "${EXPECTED_SHA,,}" ]]');
+  });
+  it('uses the same reviewed guard for capture, acceptance, side effects and rollback', () => {
+    const guardedCommand =
+      'pnpm exec tsx .trace-cache/production-verifier/scripts/verify-production-fixture-transition.ts';
+    expect(canaryWorkflow.split(guardedCommand)).toHaveLength(5);
+    expect(canaryWorkflow).not.toContain(
+      'pnpm exec tsx scripts/verify-production-fixture-transition.ts',
+    );
+    const build = canaryWorkflow.indexOf('Build the Cloudflare bundle');
+    const checkout = canaryWorkflow.indexOf('Check out reviewed production verification tooling');
+    const capture = canaryWorkflow.indexOf(
+      'Capture verified production baseline before fixture deployment',
+    );
+    const deploy = canaryWorkflow.indexOf('      - name: Deploy production canary');
+    expect(build).toBeLessThan(checkout);
+    expect(checkout).toBeLessThan(capture);
+    expect(capture).toBeLessThan(deploy);
+    expect(canaryWorkflow).toContain("steps.capture_transition_baseline.outcome == 'success'");
+    expect(canaryWorkflow).toContain('--message "TRACE production canary $DEPLOY_SHA"');
+  });
+});
