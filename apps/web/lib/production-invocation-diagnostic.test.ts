@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   diagnoseInvocation,
   invocationQuery,
+  invocationPath,
   invocationSummary,
 } from '../../../scripts/production-invocation-diagnostic';
 
@@ -32,6 +33,28 @@ describe('protected invocation diagnostic', () => {
       errorClass: 'CPU_LIMIT',
     });
     expect(JSON.stringify(result)).not.toMatch(/secret|private-repo|code=/);
+  });
+  it('uses the actual Worker request path before derived telemetry metadata', () => {
+    expect(
+      invocationPath({
+        $metadata: { url: 'https://worker.example/' },
+        $workers: {
+          event: { request: { url: 'https://worker.example/api/github/setup?code=secret' } },
+        },
+      }),
+    ).toBe('/api/github/setup');
+  });
+  it('extracts unknown route paths for encrypted diagnosis without query or fragment content', () => {
+    expect(
+      invocationPath({
+        $metadata: { url: 'https://worker.example/app/private-repository?code=secret#token' },
+      }),
+    ).toBe('/app/private-repository');
+    expect(
+      invocationSummary({
+        $metadata: { url: 'https://worker.example/app/private-repository?code=secret' },
+      }).requestPath,
+    ).toBe('OTHER_PATH');
   });
   it('identifies the refresh entry route without disclosing query parameters', () => {
     const summary = invocationSummary({

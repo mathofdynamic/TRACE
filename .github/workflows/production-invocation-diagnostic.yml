@@ -10,6 +10,10 @@ on:
         description: Incident UTC timestamp in ISO format
         required: true
         type: string
+      diagnostic_public_key:
+        description: Optional RSA SPKI public key (base64 DER) for encrypted pathname evidence
+        required: false
+        type: string
 permissions:
   contents: read
 jobs:
@@ -36,3 +40,4 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           INVOCATION_RAY_ID: ${{ inputs.ray_id }}
           INVOCATION_TIMESTAMP: ${{ inputs.timestamp }}
+          INVOCATION_DIAGNOSTIC_PUBLIC_KEY: ${{ inputs.diagnostic_public_key }}
