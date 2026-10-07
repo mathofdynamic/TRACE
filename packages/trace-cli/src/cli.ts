@@ -2,7 +2,7 @@
 import { collectEngineeringReport, reportPeriod } from './engineering-report.js';
 import { analysisInputCheck, gitSnapshot, sameSnapshot } from './analysis-attribution.js';
 import { execFile } from 'node:child_process';
-import { access, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
+import { access, lstat, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
@@ -52,6 +52,24 @@ async function repoRoot(cwd = process.cwd()) {
     return await git(['rev-parse', '--show-toplevel'], cwd);
   } catch {
     return resolve(cwd);
+  }
+}
+
+async function initializationIssue(root: string): Promise<CliResult | undefined> {
+  try {
+    if (!(await lstat(join(root, '.trace'))).isDirectory())
+      throw new Error('TRACE root must be a real directory.');
+    for (const name of ['config.yml', 'schema-version']) {
+      if (!(await lstat(join(root, '.trace', name))).isFile())
+        throw new Error('Initialization markers must be regular files.');
+    }
+  } catch {
+    return {
+      code: 2,
+      value: {
+        error: 'TRACE is not initialized in this repository. Run `trace init --yes` first.',
+      },
+    };
   }
 }
 
@@ -195,17 +213,8 @@ async function changes(args: string[]): Promise<NormalizedChangeSet> {
 
 async function engineeringReport(args: string[], kind: 'daily' | 'weekly'): Promise<CliResult> {
   const root = await repoRoot();
-  if (
-    !(await access(join(root, '.trace', 'config.yml'))
-      .then(() => true)
-      .catch(() => false))
-  )
-    return {
-      code: 2,
-      value: {
-        error: 'TRACE is not initialized in this repository. Run `trace init --yes` first.',
-      },
-    };
+  const initialization = await initializationIssue(root);
+  if (initialization) return initialization;
   const before = await gitSnapshot(root).catch(() => ({
     branch: '',
     headCommit: '',
@@ -312,6 +321,7 @@ async function engineeringReport(args: string[], kind: 'daily' | 'weekly'): Prom
     markdown = renderMarkdown();
   }
   const artifact = await writeArtifact({
+    repositoryRoot: root,
     traceRoot: join(root, '.trace'),
     relativePath,
     overwrite: true,
@@ -338,6 +348,8 @@ async function analyzeCommand(args: string[]): Promise<CliResult> {
   if (args[1] && args[1] !== 'changes' && !args[1].startsWith('--'))
     return { code: 2, value: { error: 'Use: trace analyze [changes] [--with-ai]' } };
   const root = await repoRoot();
+  const initialization = await initializationIssue(root);
+  if (initialization) return initialization;
   const before = await gitSnapshot(root).catch(() => null);
   const changeSet = await changes(args);
   const result = await analyzeChanges({
@@ -370,6 +382,7 @@ async function analyzeCommand(args: string[]): Promise<CliResult> {
     `${changeSet.repository.provider}:${changeSet.repository.owner ?? 'local'}:${changeSet.repository.name}:${headCommit ?? changeSet.headRef ?? result.analysisId}`,
   );
   const artifact = await writeArtifact({
+    repositoryRoot: root,
     traceRoot: join(root, '.trace'),
     relativePath: `analyses/${artifactId}.md`,
     overwrite: true,
@@ -433,6 +446,10 @@ async function analyzeCommand(args: string[]): Promise<CliResult> {
 
 async function prCommand(args: string[]): Promise<CliResult> {
   const root = await repoRoot();
+  if (args.includes('--write')) {
+    const initialization = await initializationIssue(root);
+    if (initialization) return initialization;
+  }
   const changeSet = await changes(args);
   const numberArg = args.find((arg) => /^\d+$/.test(arg));
   const input: PullRequestInput = {
@@ -484,6 +501,7 @@ async function prCommand(args: string[]): Promise<CliResult> {
     sync_policy: 'repository_authoritative' as const,
   };
   const artifact = await writeArtifact({
+    repositoryRoot: root,
     traceRoot: join(root, '.trace'),
     relativePath: `pull-requests/${input.provider}-${input.number || 'local'}.md`,
     metadata,

@@ -284,10 +284,12 @@ function checkedPath(root: string, candidate: string) {
   return target;
 }
 
-async function assertNoSymlinkEscape(root: string, target: string) {
-  const rootPath = await realpath(root);
-  let current = rootPath;
-  const parts = relative(rootPath, target).split(sep).filter(Boolean);
+async function assertNoSymlinkEscape(repositoryRoot: string, target: string) {
+  // The caller supplies the existing trusted repository boundary. Canonicalize
+  // platform/workspace aliases above it, but reject links inside it.
+  const canonicalRepository = await realpath(repositoryRoot);
+  let current = canonicalRepository;
+  const parts = relative(repositoryRoot, target).split(sep).filter(Boolean);
   for (const part of parts) {
     current = join(current, part);
     try {
@@ -298,9 +300,12 @@ async function assertNoSymlinkEscape(root: string, target: string) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
   }
+  return current;
 }
 
 export async function writeArtifact(options: {
+  // Existing trusted repository; filesystem aliases above it are permitted.
+  repositoryRoot: string;
   traceRoot: string;
   relativePath: string;
   metadata: ArtifactMetadata;
@@ -308,10 +313,10 @@ export async function writeArtifact(options: {
   overwrite?: boolean;
   dryRun?: boolean;
 }) {
-  const root = resolve(options.traceRoot);
-  await mkdir(root, { recursive: true });
-  const target = checkedPath(root, options.relativePath);
-  await assertNoSymlinkEscape(root, target);
+  const repository = resolve(options.repositoryRoot);
+  const root = checkedPath(repository, relative(repository, resolve(options.traceRoot)));
+  const checkedTarget = checkedPath(root, options.relativePath);
+  const target = await assertNoSymlinkEscape(repository, checkedTarget);
   const content = serializeArtifact(options.metadata, options.markdown);
   if (options.dryRun) return { path: target, content, checksum: checksum(content), dryRun: true };
   try {

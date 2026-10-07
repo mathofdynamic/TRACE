@@ -1,6 +1,6 @@
 # `.trace/` directory
 
-Canonical initialization is `trace init --yes`. Other write commands can currently create a partial directory; that does not constitute initialization. Verified from `packages/trace-cli/src/cli.ts`.
+Canonical initialization is `trace init --yes`. Analysis, reports and explicit PR artifact writes require `config.yml` and `schema-version`; they reject missing initialization without creating `.trace/`. Verified from `packages/trace-cli/src/cli.ts`.
 
 ```text
 .trace/
@@ -17,7 +17,7 @@ Canonical initialization is `trace init --yes`. Other write commands can current
     sync.json        last acknowledged sync operation (written by `trace sync`, `sync status --accept-dashboard-base`)
 ```
 
-Do not claim any directory beyond `README.md`, `schema-version`, `config.yml` is mandatory. `trace analyze` will create `.trace/analyses/` even if `.trace` was never initialized, producing a partial tree; avoid that by checking for `config.yml` and `schema-version` first.
+Do not claim any directory beyond `README.md`, `schema-version`, `config.yml` is mandatory. `trace analyze` creates `.trace/analyses/` only when writing in an initialized repository. Preview paths do not create directories; check for `config.yml` and `schema-version` first.
 
 ## Roles
 
@@ -46,10 +46,10 @@ TRACE's own repository ignores `.trace/` (runtime output) and its docs say `.tra
 
 Synced (only via `trace sync`, after the gates in `safety.md`): allowlisted Markdown artifacts with a dashboard projection. Always local: `config.yml`, `state/*`, `README.md`, `schema-version`, any excluded artifact, and all source code.
 
-## Initialization product gap
+## Initialization and previews
 
-The shared artifact writer creates its root before the dry-run return. Therefore
-`trace analyze --dry-run` can create an empty `.trace/`, and normal `trace analyze`
-can create a partial tree without config/schema-version. Neither is initialization.
-Always check the two scaffold files and use real init before analysis. This is a
-product limitation to address separately, not a reason to hand-build the scaffold.
+Use real `trace init --yes` before analysis, reports or explicit PR artifact writes.
+Missing scaffold files cause an actionable initialization error before persistence.
+Artifact previews validate their paths and content without creating files or
+folders. Invalid artifact writes likewise do not create an empty artifact root.
+Read-only validation and sync previews never initialize the repository.

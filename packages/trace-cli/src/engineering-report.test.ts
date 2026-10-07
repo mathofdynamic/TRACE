@@ -197,6 +197,7 @@ describe('period engineering reports', () => {
     }
     for (const name of [basename(root), 'foreign-project']) {
       await writeArtifact({
+        repositoryRoot: root,
         traceRoot: join(root, '.trace'),
         relativePath: `risks/${name}.md`,
         metadata: {
@@ -244,6 +245,7 @@ describe('period engineering reports', () => {
       ['risk-code', 'internal', 'allowlisted', 'example', '```source code```'],
     ] as const) {
       await writeArtifact({
+        repositoryRoot: root,
         traceRoot: join(root, '.trace'),
         relativePath: `risks/${id}.md`,
         metadata: {
@@ -284,6 +286,7 @@ describe('period engineering reports', () => {
       await main(['init', '--yes']);
       for (let index = 0; index < 100; index++)
         await writeArtifact({
+          repositoryRoot: root,
           traceRoot: join(root, '.trace'),
           relativePath: `risks/risk-size-${index}.md`,
           metadata: {
