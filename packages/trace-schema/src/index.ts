@@ -156,6 +156,7 @@ export const artifactMetadataSchema = z
         d.branch !== pr?.input.branch ||
         d.head_commit !== pr?.input.head_commit ||
         !safePrBriefValue(metadata) ||
+        !/^trace-cli\/\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/.test(metadata.generator) ||
         d.title !== (pr && prBriefTitle(pr)) ||
         d.summary !== (pr && prBriefSummary(pr)) ||
         d.status !== 'draft' ||
@@ -168,9 +169,11 @@ export const artifactMetadataSchema = z
         !pr ||
         Object.keys(metadata.evidence[0]?.metadata ?? {}).length !== Object.keys(pr.input).length ||
         Object.entries(pr.input).some(([k, v]) => metadata.evidence[0]?.metadata?.[k] !== v) ||
+        metadata.source_refs.length !== (pr?.input.head_commit ? 1 : 0) ||
         metadata.source_refs.some(
           (r) =>
             r.type !== 'commit' ||
+            r.locator !== pr?.input.head_commit ||
             !/^[a-f0-9]{40,64}$/i.test(r.locator) ||
             r.metadata ||
             r.label ||

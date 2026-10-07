@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import * as analysisModule from '@trace/analysis';
@@ -140,6 +140,10 @@ it('keeps unstable input local-only', async () => {
 it('rejects unsafe/malformed projections and noncanonical bodies', async () => {
   const { artifact } = await generate();
   const d = artifact.metadata.dashboard!;
+  expect(
+    artifactMetadataSchema.safeParse({ ...artifact.metadata, generator: 'int main(){return 42;}' })
+      .success,
+  ).toBe(false);
   for (const field of [
     { title: 'const secret = 42' },
     { summary: '/tmp/private-file' },
@@ -200,20 +204,6 @@ it('real sync uploads only the validated brief and preserves privacy flags', asy
       connectionId: 'fixture',
       savedAt: new Date().toISOString(),
     });
-    const plan = await buildManifest(root, binding, target.branch, target.headCommit);
-    expect(plan.manifest).toMatchObject({ sourceCodeIncluded: false, codeSnippetsIncluded: false });
-    const mismatchedBinding = await buildManifest(
-      root,
-      { ...binding, repository: 'example/wrong' },
-      target.branch,
-      target.headCommit,
-    );
-    expect(mismatchedBinding.manifest.artifacts.some((entry) => entry.type === 'pr_brief')).toBe(
-      false,
-    );
-    expect(
-      mismatchedBinding.excluded.some((entry) => entry.reason.includes('repository identity')),
-    ).toBe(true);
     await sync(root, target.branch, target.headCommit, false);
     expect(calls.find((c) => c.path.endsWith('/artifact'))?.body.content).toBe(content);
     expect(JSON.stringify(calls)).not.toContain('PRIVATE_SOURCE_SENTINEL');
@@ -314,3 +304,80 @@ it('rejects invalid Git refs rather than allowing unsafe attribution strings', a
     );
   }
 });
+
+it('uses only a positional PR number and never interprets numeric Git options as the identifier', async () => {
+  await main(['init', '--yes']);
+  for (const option of ['--base', '--base-sha']) {
+    const invalid = await main(['pr', option, '123', '--write', '--yes']);
+    expect(invalid.code).toBe(2);
+    expect((await collectSyncArtifacts(root)).eligible).toHaveLength(0);
+  }
+  const valid = await main(['pr', '--base', '123', '--base-sha', '456', '7', '--write', '--yes']);
+  expect(valid.code).toBe(0);
+  const parsed = parseArtifact(
+    await readFile((valid.value as { artifact: { path: string } }).artifact.path, 'utf8'),
+  );
+  expect(parsed.metadata.dashboard?.pull_request?.number).toBe(7);
+});
+it('rejects missing or contradictory commit provenance even with a current projection', async () => {
+  const { artifact } = await generate();
+  for (const source_refs of [
+    [],
+    [{ type: 'commit', locator: 'a'.repeat(40) }],
+    [
+      { type: 'commit', locator: artifact.metadata.dashboard!.head_commit },
+      { type: 'commit', locator: 'a'.repeat(40) },
+    ],
+  ]) {
+    expect(artifactMetadataSchema.safeParse({ ...artifact.metadata, source_refs }).success).toBe(
+      false,
+    );
+  }
+});
+
+it('excludes a current brief when the saved dashboard binding names another repository', async () => {
+  await git('remote', 'add', 'origin', 'https://github.com/example/project.git');
+  await generate();
+  const headCommit = await git('rev-parse', 'HEAD');
+  const plan = await buildManifest(
+    root,
+    {
+      server: 'https://trace.example.test',
+      repositoryId: '11111111-1111-4111-8111-111111111111',
+      repository: 'example/wrong',
+      workspaceId: 'fixture',
+      workspaceName: 'Fixture',
+      connectedAt: new Date().toISOString(),
+    },
+    'main',
+    headCommit,
+  );
+  expect(plan.manifest.artifacts.some((entry) => entry.type === 'pr_brief')).toBe(false);
+  expect(plan.excluded.some((entry) => entry.reason.includes('repository identity'))).toBe(true);
+  expect(plan.manifest).toMatchObject({ sourceCodeIncluded: false, codeSnippetsIncluded: false });
+});
+
+it.each(['my project', 'project+demo', 'پروژه', 'project (demo)', 'my [project]'])(
+  'supports safe local checkout name %s without a GitHub remote',
+  async (name) => {
+    const relocated = join(dirname(root), `${name}-${basename(root)}`);
+    process.chdir(previous);
+    await rename(root, relocated);
+    root = relocated;
+    process.chdir(root);
+    const { artifact } = await generate();
+    expect(artifact.metadata.repository.provider).toBe('git');
+    expect(artifact.metadata.repository.name).toBe(basename(root));
+    expect(
+      prBriefProjectionSchema.safeParse({
+        ...artifact.metadata.dashboard!.pull_request,
+        provider: 'github',
+      }).success,
+    ).toBe(false);
+    expect(
+      (await collectSyncArtifacts(root)).eligible.some(
+        (entry) => entry.manifest.type === 'pr_brief',
+      ),
+    ).toBe(true);
+  },
+);

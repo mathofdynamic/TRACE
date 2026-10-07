@@ -26,7 +26,7 @@ const metadata = {
   updated_at: '2026-10-07T00:00:00Z',
   generator: 'trace-cli/0.2.0',
   execution_origin: 'local',
-  source_refs: [],
+  source_refs: [{ type: 'commit', locator: pr.input.head_commit }],
   evidence: [{ type: 'check', locator: 'trace:pr-brief-input:v1', metadata: pr.input }],
   review_status: 'draft',
   sensitivity: 'internal',

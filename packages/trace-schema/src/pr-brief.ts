@@ -42,7 +42,7 @@ export const prBriefProjectionSchema = z
     number: z.number().int().positive().max(2147483647),
     provider: z.enum(['github', 'git']),
     owner: identity,
-    repository: identity,
+    repository: z.string().min(1).max(255),
     change_scope: z.literal('working_tree'),
     changed_files: z.number().int().nonnegative(),
     findings: z.number().int().nonnegative(),
@@ -58,7 +58,13 @@ export const prBriefProjectionSchema = z
   })
   .strict()
   .superRefine((p, ctx) => {
-    if (p.material_findings > p.findings || !safePrBriefValue(p))
+    const safeRepositoryName =
+      p.provider === 'github'
+        ? /^[A-Za-z0-9_.-]{1,100}$/.test(p.repository)
+        : p.repository.trim().length > 0 &&
+          !/[\\/]/.test(p.repository) &&
+          ![...p.repository].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127);
+    if (!safeRepositoryName || p.material_findings > p.findings || !safePrBriefValue(p))
       ctx.addIssue({ code: 'custom', message: 'Unsafe or inconsistent PR brief projection' });
   });
 export type PrBriefProjection = z.infer<typeof prBriefProjectionSchema>;
@@ -93,12 +99,17 @@ export function prBriefAttributionIssue(
 }
 
 export function prBriefSummary(p: PrBriefProjection) {
-  return `${p.changed_files} working-tree changes observed; ${p.findings} deterministic findings (${p.material_findings} material). GitHub PR change totals, title, state and decisions: Not available.`;
+  return `${p.changed_files} working-tree changes observed; ${p.findings} findings observed (${p.material_findings} material). GitHub PR change totals, title, state and decisions: Not available.`;
 }
 export function prBriefTitle(p: PrBriefProjection) {
   return `PR #${p.number} — Local review brief`;
 }
 export function renderPrBriefDocument(p: PrBriefProjection) {
   const clean = p.input.working_tree === 'clean' && p.input.stable;
-  return `# ${prBriefTitle(p)}\n\n## Summary\n\n${prBriefSummary(p)}\n\n## Attribution\n\nLocally generated review brief for ${p.owner}/${p.repository}#${p.number}. PR number supplied by the caller; GitHub metadata was not fetched. Input: ${clean ? 'clean committed checkout' : 'dirty or unstable; local-only'}. Source code and snippets are excluded.\n`;
+  // Identity is structured data, never caller-supplied Markdown or a link.
+  const repositoryDisplay = `${p.owner}/${p.repository}`.replace(
+    /[\\`*_{}[\]()#+\-.!|>~]/g,
+    '\\$&',
+  );
+  return `# ${prBriefTitle(p)}\n\n## Summary\n\n${prBriefSummary(p)}\n\n## Attribution\n\nLocally generated review brief for ${repositoryDisplay}#${p.number}. PR number supplied by the caller; GitHub metadata was not fetched. Input: ${clean ? 'clean committed checkout' : 'dirty or unstable; local-only'}. Source code and snippets are excluded.\n`;
 }

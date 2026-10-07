@@ -39,7 +39,7 @@ Modified local repo: dirty tree -> local exploratory `trace analyze` only -> DO 
 
 Needs refresh: ask/confirm whether the local checkout should first be updated to the remote state (never pull/reset unprompted) -> `trace analyze` -> `trace validate` -> dry-run -> sync.
 
-New PR: `trace pr --base <ref> --base-sha <sha> <n>` preview -> `--write --yes` -> `trace analyze` if checkout changed -> dry-run; note the PR brief is excluded from sync today.
+New PR: `trace pr --base <ref> --base-sha <sha> <n>` preview -> `--write --yes` -> `trace analyze` if checkout changed -> validate -> privacy dry-run -> authorized sync. The generated source-free PR brief is eligible only for clean, stable current HEAD/branch and matching repository identity; dirty/unstable and legacy projection-free briefs must be regenerated from clean input. GitHub title/state/PR-wide totals remain unavailable.
 
 Unsafe sync: dry-run shows a source/snippet flag true, an unexpected `eligible` entry, or surprising content -> STOP, do not run `trace sync`, report which artifact and why.
 

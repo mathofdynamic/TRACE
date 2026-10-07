@@ -344,6 +344,9 @@ describe('TRACE Skill drift checks', () => {
   });
 
   it('documents every dashboard projection field and stays strict', async () => {
+    const lifecycle = await read('references/lifecycle.md');
+    expect(lifecycle).not.toContain('excluded from sync today');
+    expect(lifecycle).toContain('source-free PR brief is eligible');
     const doc = await read('references/dashboard-contract.md');
     for (const key of Object.keys(dashboardProjectionSchema.shape))
       expect(doc, `projection field ${key}`).toContain(key);

@@ -457,7 +457,19 @@ async function prCommand(args: string[]): Promise<CliResult> {
   }
   const before = await gitSnapshot(root).catch(() => null);
   const changeSet = await changes(args);
-  const numberArg = args.find((arg) => /^\d+$/.test(arg));
+  // Only a positional identifier is a PR number; numeric option values are Git context.
+  let positional: string | undefined;
+  for (let i = 1; i < args.length; i++) {
+    const arg = args[i]!;
+    if (['--base', '--base-sha'].includes(arg)) {
+      i++;
+      continue;
+    }
+    if (arg.startsWith('--')) continue;
+    positional = arg;
+    break;
+  }
+  const numberArg = positional && /^\d+$/.test(positional) ? positional : undefined;
   const input: PullRequestInput = {
     provider: changeSet.repository.provider,
     owner: changeSet.repository.owner ?? 'local',
