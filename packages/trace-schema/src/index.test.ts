@@ -137,6 +137,27 @@ describe('safe trace artifacts', () => {
     expect(await readdir(outside)).toEqual([]);
   });
 
+  it.each([true, false])(
+    'rejects symlinked ancestors of a missing root (dryRun=%s)',
+    async (dryRun) => {
+      root = await mkdtemp(join(tmpdir(), 'trace-schema-'));
+      const outside = join(root, 'outside');
+      await mkdir(outside);
+      const link = join(root, 'link');
+      await symlink(outside, link, 'junction');
+      await expect(
+        writeArtifact({
+          traceRoot: join(link, '.trace'),
+          relativePath: 'decisions/test.md',
+          metadata,
+          markdown: '# Test',
+          dryRun,
+        }),
+      ).rejects.toThrow(/Symlink/);
+      expect(await readdir(outside)).toEqual([]);
+    },
+  );
+
   it('accepts only bounded source-free sync manifests and safe .trace paths', () => {
     const artifact = {
       id: 'decision-test-001',

@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { lstat, mkdir, readFile, realpath, rename, writeFile } from 'node:fs/promises';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { dirname, isAbsolute, join, parse as parsePath, relative, resolve, sep } from 'node:path';
 import { parse, stringify } from 'yaml';
 import { z } from 'zod';
 
@@ -284,11 +284,12 @@ function checkedPath(root: string, candidate: string) {
   return target;
 }
 
-async function assertNoSymlinkEscape(root: string, target: string) {
-  const rootPath = resolve(root);
-  let current = rootPath;
-  const parts = relative(rootPath, target).split(sep).filter(Boolean);
-  // Include the root itself; missing paths are valid for a read-only preview.
+async function assertNoSymlinkEscape(target: string) {
+  // Walk from the filesystem root so an existing symlink above a missing
+  // artifact root cannot redirect mkdir/write outside the checked path.
+  let current = parsePath(target).root;
+  const parts = relative(current, target).split(sep).filter(Boolean);
+  // Missing components are valid during read-only previews.
   for (const part of ['', ...parts]) {
     current = join(current, part);
     try {
@@ -311,7 +312,7 @@ export async function writeArtifact(options: {
 }) {
   const root = resolve(options.traceRoot);
   const target = checkedPath(root, options.relativePath);
-  await assertNoSymlinkEscape(root, target);
+  await assertNoSymlinkEscape(target);
   const content = serializeArtifact(options.metadata, options.markdown);
   if (options.dryRun) return { path: target, content, checksum: checksum(content), dryRun: true };
   try {
