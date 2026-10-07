@@ -35,6 +35,9 @@ const run = (command: string, args: string[], cwd = checkout) =>
 assert.equal(run('git', ['status', '--porcelain']), '', 'Acceptance needs a clean checkout');
 await assert.rejects(access(join(checkout, '.trace')));
 await assert.rejects(access(join(checkout, 'node_modules')));
+// Actions checks out a detached PR merge commit. Give this disposable checkout a named branch
+// without changing its source commit; authoritative artifact sync requires branch attribution.
+if (!run('git', ['branch', '--show-current'])) run('git', ['switch', '-c', 'trace-cli-acceptance']);
 assert.equal(
   createHash('sha256')
     .update(await readFile(archive))

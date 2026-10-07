@@ -241,3 +241,12 @@ it('keeps existing analysis/report sync eligible in a mixed batch and rejects ch
   expect(changed.eligible.some((entry) => entry.manifest.type === 'pr_brief')).toBe(false);
   expect(changed.excluded.some((entry) => entry.reason.includes('repository'))).toBe(true);
 });
+
+it('keeps a detached-HEAD PR brief local-only instead of inventing branch attribution', async () => {
+  await git('checkout', '--detach');
+  const { artifact } = await generate();
+  expect(artifact.metadata.sync_policy).toBe('local_only');
+  expect(
+    (await collectSyncArtifacts(root)).eligible.some((entry) => entry.manifest.type === 'pr_brief'),
+  ).toBe(false);
+});
