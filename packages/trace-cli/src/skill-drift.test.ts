@@ -252,17 +252,25 @@ describe('TRACE Skill drift checks', () => {
       await writeFile(join(root, '.git', 'info', 'exclude'), '.trace/\n');
       process.chdir(root);
       const value = async (args: string[]) => (await main(args)).value as Record<string, unknown>;
-      expect((await value(['analyze', '--dry-run'])).artifact).toMatchObject({ dryRun: true });
-      expect(await readdir(join(root, '.trace'))).toEqual([]);
-      await expect(access(join(root, '.trace', 'config.yml'))).rejects.toThrow();
-      expect((await value(['analyze'])).artifact).toMatchObject({ dryRun: false });
-      await expect(access(join(root, '.trace', 'analyses'))).resolves.toBeUndefined();
-      await expect(access(join(root, '.trace', 'config.yml'))).rejects.toThrow();
+      for (const args of [['analyze', '--dry-run'], ['analyze']]) {
+        expect(await main(args)).toMatchObject({
+          code: 2,
+          value: {
+            error: 'TRACE is not initialized in this repository. Run `trace init --yes` first.',
+          },
+        });
+        await expect(access(join(root, '.trace'))).rejects.toThrow();
+      }
       await expect(connect(root, 'https://github.com/example/project.git')).rejects.toThrow(
         'TRACE is not initialized in this repository.',
       );
       expect(await value(['init'])).toHaveProperty('dryRun', true);
+      await expect(access(join(root, '.trace'))).rejects.toThrow();
       expect(await value(['init', '--yes'])).toHaveProperty('initialized', true);
+      expect((await value(['analyze', '--dry-run'])).artifact).toMatchObject({ dryRun: true });
+      await expect(access(join(root, '.trace', 'analyses'))).rejects.toThrow();
+      expect((await value(['analyze'])).artifact).toMatchObject({ dryRun: false });
+      await expect(access(join(root, '.trace', 'analyses'))).resolves.toBeUndefined();
       expect((await main(['validate'])).value).toEqual([]);
       await expect(connect(root, 'invalid')).rejects.toThrow(
         'remote.origin.url is not an unambiguous GitHub repository URL.',

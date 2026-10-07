@@ -22,8 +22,8 @@ login. Cloud sync requires the normal user-approved device flow and selected rep
 Source remains authoritative. CLI drift tests protect documented command/subcommand
 behavior, schema/protocol/types/projections, sync privacy/limits, and stable errors.
 Update this package when changing those contracts; never compensate for product gaps
-inside the Skill. The current analyze-before-init partial-directory behavior and
-PR-brief missing-projection gap are documented in references and exercised locally.
+inside the Skill. Initialization guards and side-effect-free previews are documented and tested.
+The PR-brief missing-projection gap remains documented; it is separate product work.
 
 Dirty analyses remain local exploratory work; synchronization requires a clean
 committed checkout and freshly regenerated clean analysis. The current CLI

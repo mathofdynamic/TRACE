@@ -34,8 +34,9 @@ Messages below are from CLI/server source. Where no stable message exists, the s
 | "Computer revoked"                                                                  | Device revoked in dashboard                                                                                                            | `trace login` (human).                                                                                                                                                 |
 | `trace doctor` exit 1                                                               | git missing or `.trace` invalid                                                                                                        | Fix per output.                                                                                                                                                        |
 
-An empty or partial `.trace` after analysis (including an empty root after dry-run)
-is not initialized state. Use `trace init --yes` to adopt missing scaffold files;
+An empty or partial `.trace` left by older CLI versions is not initialized state.
+Current analysis/report/PR write commands reject missing scaffold files before
+persistence, and dry-run paths do not create directories. Use `trace init --yes` to adopt missing scaffold files;
 do not assume directory existence or a successful `trace validate` proves config
 and schema-version exist.
 

@@ -55,6 +55,21 @@ async function repoRoot(cwd = process.cwd()) {
   }
 }
 
+async function initializationIssue(root: string): Promise<CliResult | undefined> {
+  for (const name of ['config.yml', 'schema-version']) {
+    try {
+      await access(join(root, '.trace', name));
+    } catch {
+      return {
+        code: 2,
+        value: {
+          error: 'TRACE is not initialized in this repository. Run `trace init --yes` first.',
+        },
+      };
+    }
+  }
+}
+
 function jsonFlag(args: string[]) {
   return args.includes('--json');
 }
@@ -195,17 +210,8 @@ async function changes(args: string[]): Promise<NormalizedChangeSet> {
 
 async function engineeringReport(args: string[], kind: 'daily' | 'weekly'): Promise<CliResult> {
   const root = await repoRoot();
-  if (
-    !(await access(join(root, '.trace', 'config.yml'))
-      .then(() => true)
-      .catch(() => false))
-  )
-    return {
-      code: 2,
-      value: {
-        error: 'TRACE is not initialized in this repository. Run `trace init --yes` first.',
-      },
-    };
+  const initialization = await initializationIssue(root);
+  if (initialization) return initialization;
   const before = await gitSnapshot(root).catch(() => ({
     branch: '',
     headCommit: '',
@@ -338,6 +344,8 @@ async function analyzeCommand(args: string[]): Promise<CliResult> {
   if (args[1] && args[1] !== 'changes' && !args[1].startsWith('--'))
     return { code: 2, value: { error: 'Use: trace analyze [changes] [--with-ai]' } };
   const root = await repoRoot();
+  const initialization = await initializationIssue(root);
+  if (initialization) return initialization;
   const before = await gitSnapshot(root).catch(() => null);
   const changeSet = await changes(args);
   const result = await analyzeChanges({
@@ -433,6 +441,10 @@ async function analyzeCommand(args: string[]): Promise<CliResult> {
 
 async function prCommand(args: string[]): Promise<CliResult> {
   const root = await repoRoot();
+  if (args.includes('--write')) {
+    const initialization = await initializationIssue(root);
+    if (initialization) return initialization;
+  }
   const changeSet = await changes(args);
   const numberArg = args.find((arg) => /^\d+$/.test(arg));
   const input: PullRequestInput = {

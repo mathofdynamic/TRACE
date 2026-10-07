@@ -43,7 +43,7 @@ Then pick a branch:
 | Observation                                                   | Action                                                                                                                                            |
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `trace` not found                                             | Use the GitHub release installer in packages/trace-cli/README.md, or the workspace build in README.md. Do not install a guessed registry package. |
-| `.trace/config.yml` or `schema-version` missing               | Initialize. Do NOT run `trace analyze` first (it would create a partial `.trace/`).                                                               |
+| `.trace/config.yml` or `schema-version` missing               | Initialize. `trace analyze` rejects missing initialization without creating `.trace/`.                                                            |
 | `trace validate` reports issues                               | Stop; read `references/troubleshooting.md`; repair or ask.                                                                                        |
 | `dashboard.connected: false`                                  | Authenticate/connect if the user wants dashboard sync; otherwise local-only is valid.                                                             |
 | Connected, no analysis file                                   | Analyze.                                                                                                                                          |
@@ -78,7 +78,7 @@ trace connect --json
 
 ```bash
 trace analyze --json              # writes .trace/analyses/analysis-<id>.md (local, no network)
-trace analyze --dry-run --json    # preview, no artifact write (can create an empty .trace directory)
+trace analyze --dry-run --json    # preview only; no files or directories created
 trace validate --json
 ```
 

@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -73,6 +73,68 @@ describe('safe trace artifacts', () => {
         markdown: '# Changed',
       }),
     ).rejects.toThrow(/already exists/);
+  });
+
+  it('previews repeatedly without creating a missing artifact root', async () => {
+    root = await mkdtemp(join(tmpdir(), 'trace-schema-'));
+    const traceRoot = join(root, '.trace');
+    const options = {
+      traceRoot,
+      relativePath: 'decisions/test.md',
+      metadata,
+      markdown: '# Test',
+      dryRun: true,
+    };
+    const first = await writeArtifact(options);
+    expect(await writeArtifact(options)).toEqual(first);
+    await expect(access(traceRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('rejects invalid writes before creating a missing artifact root', async () => {
+    root = await mkdtemp(join(tmpdir(), 'trace-schema-'));
+    const traceRoot = join(root, '.trace');
+    for (const dryRun of [true, false]) {
+      await expect(
+        writeArtifact({
+          traceRoot,
+          relativePath: 'decisions/test.md',
+          metadata,
+          markdown: '<script>unsafe</script>',
+          dryRun,
+        }),
+      ).rejects.toThrow(/Unsafe Markdown/);
+      await expect(access(traceRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+    }
+  });
+
+  it('rejects symlink roots and children during previews without writing to their targets', async () => {
+    root = await mkdtemp(join(tmpdir(), 'trace-schema-'));
+    const outside = join(root, 'outside');
+    await mkdir(outside);
+    const linkedRoot = join(root, '.trace');
+    await symlink(outside, linkedRoot, 'junction');
+    await expect(
+      writeArtifact({
+        traceRoot: linkedRoot,
+        relativePath: 'test.md',
+        metadata,
+        markdown: '# Test',
+        dryRun: true,
+      }),
+    ).rejects.toThrow(/Symlink/);
+    await rm(linkedRoot);
+    await mkdir(linkedRoot);
+    await symlink(outside, join(linkedRoot, 'decisions'), 'junction');
+    await expect(
+      writeArtifact({
+        traceRoot: linkedRoot,
+        relativePath: 'decisions/test.md',
+        metadata,
+        markdown: '# Test',
+        dryRun: true,
+      }),
+    ).rejects.toThrow(/Symlink/);
+    expect(await readdir(outside)).toEqual([]);
   });
 
   it('accepts only bounded source-free sync manifests and safe .trace paths', () => {

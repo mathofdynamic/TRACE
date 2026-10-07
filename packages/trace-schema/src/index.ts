@@ -285,10 +285,11 @@ function checkedPath(root: string, candidate: string) {
 }
 
 async function assertNoSymlinkEscape(root: string, target: string) {
-  const rootPath = await realpath(root);
+  const rootPath = resolve(root);
   let current = rootPath;
   const parts = relative(rootPath, target).split(sep).filter(Boolean);
-  for (const part of parts) {
+  // Include the root itself; missing paths are valid for a read-only preview.
+  for (const part of ['', ...parts]) {
     current = join(current, part);
     try {
       const stats = await lstat(current);
@@ -309,7 +310,6 @@ export async function writeArtifact(options: {
   dryRun?: boolean;
 }) {
   const root = resolve(options.traceRoot);
-  await mkdir(root, { recursive: true });
   const target = checkedPath(root, options.relativePath);
   await assertNoSymlinkEscape(root, target);
   const content = serializeArtifact(options.metadata, options.markdown);
