@@ -11,8 +11,21 @@ const ref = z
   .string()
   .min(1)
   .max(255)
-  .regex(/^[A-Za-z0-9_][A-Za-z0-9_./-]*$/)
-  .refine((s) => !s.includes('..'));
+  .refine((s) => {
+    // Git's check-ref-format constraints, plus --branch's leading-dash rule.
+    // Keep punctuation and Unicode accepted by Git; privacy validation runs separately.
+    const parts = s.split('/');
+    return (
+      s !== '@' &&
+      !s.startsWith('-') &&
+      !s.endsWith('.') &&
+      !s.includes('..') &&
+      !s.includes('@{') &&
+      !/[~^:?*[\]\\]/.test(s) &&
+      ![...s].some((c) => c.charCodeAt(0) <= 32 || c.charCodeAt(0) === 127) &&
+      parts.every((part) => part.length > 0 && !part.startsWith('.') && !part.endsWith('.lock'))
+    );
+  }, 'Invalid Git branch name');
 const forbidden =
   /```|[<>\r\n]|\b(?:gh[opsu]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16})\b|(?:^|\s)(?:\/[A-Za-z]|[A-Za-z]:\\)|\b(?:const|let|var|function|class|import|export)\s|(?:=>|\bdiff --git\b)/i;
 export function safePrBriefText(value: string) {

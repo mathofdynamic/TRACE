@@ -12,6 +12,7 @@ import {
   serializeArtifact,
   artifactMetadataSchema,
   prBriefAttributionIssue,
+  prBriefProjectionSchema,
 } from '@trace/schema';
 
 const run = promisify(execFile);
@@ -249,4 +250,67 @@ it('keeps a detached-HEAD PR brief local-only instead of inventing branch attrib
   expect(
     (await collectSyncArtifacts(root)).eligible.some((entry) => entry.manifest.type === 'pr_brief'),
   ).toBe(false);
+});
+
+it('regenerates legacy and dirty briefs safely while repeated dry-runs preserve bytes', async () => {
+  const generated = await generate();
+  await writeFile(
+    generated.path,
+    serializeArtifact(
+      { ...generated.artifact.metadata, dashboard: undefined, evidence: [] },
+      '# Legacy brief',
+    ),
+  );
+  expect((await main(['pr', '7', '--write', '--yes'])).code).toBe(0);
+  expect(
+    (await collectSyncArtifacts(root)).eligible.some((entry) => entry.manifest.type === 'pr_brief'),
+  ).toBe(true);
+  await writeFile(join(root, 'dirty.txt'), 'local-only input');
+  await main(['pr', '7', '--write', '--yes']);
+  expect(parseArtifact(await readFile(generated.path, 'utf8')).metadata.sync_policy).toBe(
+    'local_only',
+  );
+  await rm(join(root, 'dirty.txt'));
+  const dirtyContent = await readFile(generated.path, 'utf8');
+  for (let i = 0; i < 2; i++) await main(['pr', '7', '--write', '--yes', '--dry-run']);
+  expect(await readFile(generated.path, 'utf8')).toBe(dirtyContent);
+  expect((await collectSyncArtifacts(root)).eligible).toHaveLength(0);
+  await main(['pr', '7', '--write', '--yes']);
+  expect(
+    (await collectSyncArtifacts(root)).eligible.some((entry) => entry.manifest.type === 'pr_brief'),
+  ).toBe(true);
+});
+it.each(['feature/foo@bar', 'release/1.0+build', 'topic=one', 'feature,csv', 'feature/تست'])(
+  'generates and syncs a brief on valid Git branch %s',
+  async (branch) => {
+    await git('check-ref-format', '--branch', branch);
+    await git('checkout', '-b', branch);
+    const { artifact } = await generate();
+    expect(artifact.metadata.dashboard?.branch).toBe(branch);
+    expect(
+      (await collectSyncArtifacts(root)).eligible.some(
+        (entry) => entry.manifest.type === 'pr_brief',
+      ),
+    ).toBe(true);
+  },
+);
+
+it('rejects invalid Git refs rather than allowing unsafe attribution strings', async () => {
+  const { artifact } = await generate();
+  const p = artifact.metadata.dashboard!.pull_request!;
+  for (const branch of [
+    './topic',
+    'topic..one',
+    'topic@{one',
+    'topic.lock',
+    'topic/',
+    'topic~one',
+    'topic one',
+    'topic\\one',
+    'topic[one',
+  ]) {
+    expect(prBriefProjectionSchema.safeParse({ ...p, input: { ...p.input, branch } }).success).toBe(
+      false,
+    );
+  }
 });

@@ -552,6 +552,8 @@ async function prCommand(args: string[]): Promise<CliResult> {
     repositoryRoot: root,
     traceRoot: join(root, '.trace'),
     relativePath: `pull-requests/${input.provider}-${input.number || 'local'}.md`,
+    // Explicit --write --yes regenerates this generated per-PR snapshot, like analysis/report writes.
+    overwrite: true,
     metadata,
     markdown: safeMarkdown,
     dryRun: args.includes('--dry-run'),

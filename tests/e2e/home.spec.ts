@@ -723,6 +723,15 @@ test.describe('authenticated product journey', () => {
       await page.goto('/app/changes');
       await expect(page.getByText('PR #7 — Local review brief', { exact: true })).toBeVisible();
       await expect(page.getByText('LOCAL DRAFT', { exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'PR #7 — Local review brief', exact: true }).click();
+      await expect(page.getByRole('dialog')).toContainText('Local review summary');
+      await expect(
+        page
+          .getByRole('dialog')
+          .locator('.change-drawer__grid > div')
+          .filter({ hasText: 'Base branch' }),
+      ).toContainText('Not available');
+      await page.getByRole('button', { name: 'Close change details' }).click();
       await expect(page.locator('#changes-dashboard-page')).toContainText(
         'working-tree changes observed',
       );
