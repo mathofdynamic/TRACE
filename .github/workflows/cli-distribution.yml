@@ -81,6 +81,8 @@ jobs:
       - run: pnpm --filter @trace/cli test:unit
         working-directory: tooling
       - name: Install release and analyze fresh TRACE checkout
+        env:
+          TRACE_ACCEPTANCE_PUBLISHED_RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag != '' }}
         working-directory: tooling
         run: pnpm exec tsx scripts/test-cli-install.mts ../release ../fresh-trace
   publish:

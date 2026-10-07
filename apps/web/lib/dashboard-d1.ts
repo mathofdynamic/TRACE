@@ -1,3 +1,4 @@
+import { prBriefChange } from './pr-brief-change';
 import { readEngineeringReportMetadata } from './report-artifact';
 import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 import { d1Schema, type TraceD1Database } from '@trace/db';
@@ -421,6 +422,14 @@ export async function getD1DashboardSummary(
       relatedFindingIds: stringArray(projection.relatedFindingIds),
     };
   });
+  for (const artifact of syncedRows) {
+    if (artifact.artifactType !== 'pr_brief') continue;
+    const brief = prBriefChange(
+      artifact,
+      repositoryById.get(artifact.repositoryId)?.fullName ?? 'Repository',
+    );
+    if (brief) latestChanges.push(brief);
+  }
   const latestReports = syncedRecords.filter((record) =>
     ['daily_report', 'weekly_report'].includes(record.artifactType),
   );

@@ -23,7 +23,7 @@ Source remains authoritative. CLI drift tests protect documented command/subcomm
 behavior, schema/protocol/types/projections, sync privacy/limits, and stable errors.
 Update this package when changing those contracts; never compensate for product gaps
 inside the Skill. Initialization guards and side-effect-free previews are documented and tested.
-The PR-brief missing-projection gap remains documented; it is separate product work.
+PR brief projections and clean-input attribution are documented and tested; GitHub PR state remains unavailable in the local brief.
 
 Dirty analyses remain local exploratory work; synchronization requires a clean
 committed checkout and freshly regenerated clean analysis. The current CLI

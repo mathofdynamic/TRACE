@@ -229,7 +229,7 @@ describe('TRACE Skill drift checks', () => {
     expect(await read('SKILL.md')).not.toContain('enables optional semantic analysis');
   });
 
-  it('exercises CLI lifecycle, initialization gap, PR exclusion and privacy entirely offline', async () => {
+  it('exercises CLI lifecycle, initialization guards, PR projection and privacy entirely offline', async () => {
     const root = await mkdtemp(join(tmpdir(), 'trace-skill-contract-'));
     const previous = process.cwd();
     try {
@@ -285,10 +285,9 @@ describe('TRACE Skill drift checks', () => {
       ).toBe(true);
       expect((await main(['pr', '7', '--write'])).code).toBe(2);
       expect((await main(['pr', '7', '--write', '--yes'])).code).toBe(0);
-      expect((await collectSyncArtifacts(root)).excluded).toContainEqual({
-        path: 'pull-requests/git-7.md',
-        reason: 'no dashboard projection',
-      });
+      expect((await collectSyncArtifacts(root)).eligible).toContainEqual(
+        expect.objectContaining({ manifest: expect.objectContaining({ type: 'pr_brief' }) }),
+      );
       expect(await value(['sync', '--dry-run'])).toMatchObject({
         connected: false,
         sourceCodeIncluded: false,
@@ -345,6 +344,9 @@ describe('TRACE Skill drift checks', () => {
   });
 
   it('documents every dashboard projection field and stays strict', async () => {
+    const lifecycle = await read('references/lifecycle.md');
+    expect(lifecycle).not.toContain('excluded from sync today');
+    expect(lifecycle).toContain('source-free PR brief is eligible');
     const doc = await read('references/dashboard-contract.md');
     for (const key of Object.keys(dashboardProjectionSchema.shape))
       expect(doc, `projection field ${key}`).toContain(key);

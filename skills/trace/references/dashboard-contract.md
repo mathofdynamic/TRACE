@@ -8,6 +8,8 @@ Sources: `packages/trace-schema/src/index.ts`, `packages/trace-cli/src/cloud.ts`
 
 Item (strict): `id` (1-100), `title` (1-240), `detail` (<=2000), `severity?` (`info|low|medium|high`), `classification?` (`deterministic|correlated|semantic|uncertain`), `evidence[]` (<=20 strings, each <=300), `status?` (<=80).
 
+PR briefs add a strict `pull_request` block: caller-supplied number, provider/repository identity, `change_scope: working_tree`, verified change/finding counts, and clean-input branch/HEAD/stability proof. Their canonical source-free summary never claims fetched GitHub title/state or PR change totals.
+
 Projections are produced by the CLI from real findings. Never populate or edit them from guesses or from dashboard screenshots.
 
 ## Sync manifest (protocol 0.1)
@@ -22,7 +24,7 @@ A. GitHub / TRACE Cloud: repository identity and selection, installation, catalo
 
 B. Synced local `.trace` artifacts: analysis, findings, reports, PR briefs, decisions, risks, conflicts, rules, provenance, analyzed commit.
 
-The backend joins A and B. Never copy dashboard screenshots or inferred A-plane facts into `.trace`. Period reports may include verified GitHub metadata collected by the CLI with explicit `--github`; it remains attributed evidence, not dashboard authority. CLI commands expose repository selection, local binding and sync operation information; they do not expose all GitHub metadata or dashboard state. Use a trusted authorized provider/dashboard source or the user for facts the CLI does not return. PR briefs currently lack a projection and stay local.
+The backend joins A and B. Never copy dashboard screenshots or inferred A-plane facts into `.trace`. Period reports may include verified GitHub metadata collected by the CLI with explicit `--github`; it remains attributed evidence, not dashboard authority. CLI commands expose repository selection, local binding and sync operation information; they do not expose all GitHub metadata or dashboard state. Use a trusted authorized provider/dashboard source or the user for facts the CLI does not return. New PR briefs include validated projections; older projection-free briefs stay local until regenerated.
 
 ## Commit attribution gate
 
@@ -30,4 +32,4 @@ Every path to synchronization requires empty `git status --porcelain`, fresh
 analysis of that clean committed checkout, validation and the privacy dry-run.
 Recheck cleanliness and matching HEAD immediately before sync. Dirty analysis
 is local exploratory work only and MUST NOT sync. Reverting edits is insufficient:
-regenerate the clean analysis even when HEAD has not changed. Runtime enforces clean-input branch/HEAD attribution for analyses. The period-report implementation adds the same gate for daily/weekly reports; legacy/unverified reports require regeneration. See safety.md for the publication policy.
+regenerate the clean analysis even when HEAD has not changed. Runtime enforces clean-input branch/HEAD attribution for analyses. The period-report implementation adds the same gate for daily/weekly reports and projected PR briefs; legacy/unverified artifacts require regeneration. See safety.md for the publication policy.

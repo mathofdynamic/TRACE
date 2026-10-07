@@ -3,7 +3,14 @@ import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { createD1Database, d1Schema, type TraceD1Database } from '@trace/db';
-import { checksum, serializeArtifact } from '@trace/schema';
+import {
+  checksum,
+  serializeArtifact,
+  prBriefTitle,
+  prBriefSummary,
+  renderPrBriefDocument,
+  prBriefInputCheck,
+} from '@trace/schema';
 import { createSessionCookie } from '@trace/auth';
 import {
   approveDeviceAuthorization,
@@ -378,6 +385,95 @@ async function main() {
       .onConflictDoNothing({ target: d1Schema.githubWebhookDeliveries.deliveryId })
       .returning({ id: d1Schema.githubWebhookDeliveries.id });
     assert(firstDelivery && !secondDelivery, 'D1 webhook deduplication did not hold');
+
+    // Exercise the production D1 upload policy, not just CLI filtering.
+    const prHead = 'a'.repeat(40);
+    for (const branch of ['historical', 'main']) {
+      const pr = {
+        number: 7,
+        provider: 'github' as const,
+        owner: 'd1-a',
+        repository: 'trace-a',
+        change_scope: 'working_tree' as const,
+        changed_files: 0,
+        findings: 0,
+        material_findings: 0,
+        input: { branch, head_commit: prHead, working_tree: 'clean' as const, stable: true },
+      };
+      const prTime = new Date(Date.now() + 2000).toISOString();
+      const prContent = serializeArtifact(
+        {
+          schema_version: '0.1',
+          id: 'pr-github-7',
+          artifact_type: 'pr_brief',
+          repository: { provider: 'github', owner: pr.owner, name: pr.repository },
+          created_at: prTime,
+          updated_at: prTime,
+          generator: 'trace-cli/0.2.0',
+          execution_origin: 'local',
+          source_refs: [{ type: 'commit', locator: prHead }],
+          evidence: [{ type: 'check', locator: prBriefInputCheck, metadata: pr.input }],
+          review_status: 'draft',
+          sensitivity: 'internal',
+          sync_policy: 'repository_authoritative',
+          dashboard: {
+            title: prBriefTitle(pr),
+            summary: prBriefSummary(pr),
+            branch,
+            head_commit: prHead,
+            status: 'draft',
+            items: [],
+            pull_request: pr,
+          },
+        },
+        renderPrBriefDocument(pr),
+      );
+      const prArtifact = {
+        id: 'pr-github-7',
+        type: 'pr_brief' as const,
+        path: 'pull-requests/github-7.md',
+        sha256: checksum(prContent),
+        size: Buffer.byteLength(prContent),
+        schemaVersion: '0.1' as const,
+        sensitivity: 'internal' as const,
+        revision: prTime,
+      };
+      const prNegotiated = await negotiateSync(requestDb, connection, {
+        ...manifest,
+        syncId: randomUUID(),
+        baseOperationId: operationId,
+        createdAt: prTime,
+        git: { branch: 'main', headCommit: prHead },
+        artifacts: [prArtifact],
+      });
+      assert(prNegotiated.status === 200, 'D1 PR negotiation failed');
+      const prOperationId = (prNegotiated.body as { operationId: string }).operationId;
+      const prStaged = await stageSyncArtifact(requestDb, connection, {
+        operationId: prOperationId,
+        artifact: prArtifact,
+        content: prContent,
+      });
+      if (branch === 'historical') {
+        assert(prStaged.status === 422, 'D1 accepted stale branch PR brief');
+        const uploads = await db
+          .select()
+          .from(d1Schema.syncUploads)
+          .where(eq(d1Schema.syncUploads.operationId, prOperationId));
+        assert(uploads.length === 0, 'D1 persisted a rejected PR brief');
+      } else {
+        assert(prStaged.status === 200, 'D1 rejected current clean PR brief');
+        const prComplete = await completeSync(requestDb, connection, prOperationId);
+        assert(prComplete.status === 200, 'D1 PR completion failed');
+        const prSummary = await getDashboardSummary(requestDb, userA);
+        assert(
+          prSummary.latestChanges.some(
+            (item) =>
+              item.source === 'local-brief' && item.number === 7 && item.state === 'local draft',
+          ),
+          'D1 dashboard did not render synced PR brief',
+        );
+      }
+    }
 
     const indexes = await binding
       .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name NOT LIKE 'sqlite_%'")

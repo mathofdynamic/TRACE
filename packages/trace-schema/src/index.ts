@@ -3,6 +3,15 @@ import { lstat, mkdir, readFile, realpath, rename, writeFile } from 'node:fs/pro
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { parse, stringify } from 'yaml';
 import { z } from 'zod';
+import {
+  prBriefProjectionSchema,
+  safePrBriefValue,
+  prBriefInputCheck,
+  prBriefTitle,
+  prBriefSummary,
+  renderPrBriefDocument,
+} from './pr-brief.js';
+export * from './pr-brief.js';
 
 import { engineeringReportSchema, reportEvidenceLocator } from './engineering-report.js';
 export * from './engineering-report.js';
@@ -78,6 +87,7 @@ export const dashboardProjectionSchema = z
       .optional(),
     status: z.string().max(80).optional(),
     items: z.array(dashboardItemSchema).max(100).default([]),
+    pull_request: prBriefProjectionSchema.optional(),
   })
   .strict();
 
@@ -133,6 +143,50 @@ export const artifactMetadataSchema = z
   })
   .strict()
   .superRefine((metadata, ctx) => {
+    const pr = metadata.dashboard?.pull_request;
+    if (pr && metadata.artifact_type !== 'pr_brief')
+      ctx.addIssue({ code: 'custom', message: 'PR projection requires a PR brief artifact' });
+    if (metadata.artifact_type === 'pr_brief' && metadata.dashboard) {
+      const d = metadata.dashboard;
+      if (
+        !pr ||
+        pr.provider !== metadata.repository.provider ||
+        pr.owner !== metadata.repository.owner ||
+        pr.repository !== metadata.repository.name ||
+        d.branch !== pr?.input.branch ||
+        d.head_commit !== pr?.input.head_commit ||
+        !safePrBriefValue(metadata) ||
+        !/^trace-cli\/\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/.test(metadata.generator) ||
+        d.title !== (pr && prBriefTitle(pr)) ||
+        d.summary !== (pr && prBriefSummary(pr)) ||
+        d.status !== 'draft' ||
+        d.items.length !== 0 ||
+        metadata.evidence.length !== 1 ||
+        metadata.evidence[0]?.type !== 'check' ||
+        metadata.evidence[0]?.locator !== prBriefInputCheck ||
+        metadata.evidence[0]?.label ||
+        metadata.evidence[0]?.provider ||
+        !pr ||
+        Object.keys(metadata.evidence[0]?.metadata ?? {}).length !== Object.keys(pr.input).length ||
+        Object.entries(pr.input).some(([k, v]) => metadata.evidence[0]?.metadata?.[k] !== v) ||
+        metadata.source_refs.length !== (pr?.input.head_commit ? 1 : 0) ||
+        metadata.source_refs.some(
+          (r) =>
+            r.type !== 'commit' ||
+            r.locator !== pr?.input.head_commit ||
+            !/^[a-f0-9]{40,64}$/i.test(r.locator) ||
+            r.metadata ||
+            r.label ||
+            r.provider,
+        ) ||
+        (metadata.sync_policy !== 'local_only' &&
+          (pr?.input.working_tree !== 'clean' ||
+            !pr.input.stable ||
+            !pr.input.branch ||
+            !pr.input.head_commit))
+      )
+        ctx.addIssue({ code: 'custom', message: 'Invalid or unsafe PR brief contract' });
+    }
     const reports = metadata.evidence.filter((entry) => entry.locator === reportEvidenceLocator);
     if (reports.length > 1)
       ctx.addIssue({ code: 'custom', message: 'Duplicate engineering report document' });
@@ -262,6 +316,12 @@ export function serializeArtifact(metadata: ArtifactMetadata, markdown: string) 
     throw new Error('Unsafe Markdown content is not allowed.');
   const parsed = artifactMetadataSchema.parse(metadata);
   const normalizedBody = markdown.replace(/\r\n/g, '\n').trimEnd() + '\n';
+  if (
+    parsed.artifact_type === 'pr_brief' &&
+    parsed.dashboard?.pull_request &&
+    normalizedBody !== renderPrBriefDocument(parsed.dashboard.pull_request)
+  )
+    throw new Error('Unsafe or noncanonical PR brief body.');
   return `---\n${stringify(parsed, { sortMapEntries: true })}---\n\n${normalizedBody}`;
 }
 
@@ -272,7 +332,14 @@ export function parseArtifact(source: string): TraceArtifact {
   const end = normalized.indexOf('\n---\n', 4);
   if (end < 0) throw new Error('Artifact front matter is not closed.');
   const metadata = artifactMetadataSchema.parse(parse(normalized.slice(4, end)));
-  return { metadata, markdown: normalized.slice(end + 5).replace(/^\n/, '') };
+  const markdown = normalized.slice(end + 5).replace(/^\n/, '');
+  if (
+    metadata.artifact_type === 'pr_brief' &&
+    metadata.dashboard?.pull_request &&
+    markdown.trimEnd() + '\n' !== renderPrBriefDocument(metadata.dashboard.pull_request)
+  )
+    throw new Error('Unsafe or noncanonical PR brief body.');
+  return { metadata, markdown };
 }
 
 function checkedPath(root: string, candidate: string) {

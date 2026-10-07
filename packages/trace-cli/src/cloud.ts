@@ -15,6 +15,7 @@ import {
   checksum,
   isSafeTraceRelativePath,
   parseArtifact,
+  prBriefAttributionIssue,
   syncManifestSchema,
   type SyncArtifactManifest,
   type SyncManifest,
@@ -400,6 +401,11 @@ export async function collectSyncArtifacts(root: string, snapshot?: GitSnapshot)
   const configuredPolicy = config.sync_policy;
   const syncEnabled = configuredPolicy?.enabled === true;
   const allow = new Set(configuredPolicy?.allow ?? []);
+  const remote = await run('git', ['config', '--get', 'remote.origin.url'], { cwd: root })
+    .then((r) => r.stdout.trim())
+    .catch(() => '');
+  const expectedProvider = normalizeGitHubRemote(remote) ? 'github' : 'git';
+  const expectedRepository = normalizeGitHubRemote(remote) ?? `local/${root.split(/[\\/]/).pop()}`;
   const eligible: Array<{ manifest: SyncArtifactManifest; content: string }> = [];
   const excluded: Array<{ path: string; reason: string }> = [];
   for (const path of await markdownFiles(traceRoot)) {
@@ -445,11 +451,17 @@ export async function collectSyncArtifacts(root: string, snapshot?: GitSnapshot)
                       ? 'code snippets are disabled'
                       : bytes > 262_144
                         ? 'artifact exceeds 256 KiB'
-                        : metadata.artifact_type === 'analysis'
-                          ? analysisAttributionIssue(metadata, target)
-                          : ['daily_report', 'weekly_report'].includes(metadata.artifact_type)
-                            ? reportAttributionIssue(metadata, target)
-                            : null;
+                        : metadata.artifact_type === 'pr_brief'
+                          ? metadata.repository.provider !== expectedProvider
+                            ? 'PR brief repository provider differs from sync target'
+                            : !target || target.workingTree !== 'clean'
+                              ? 'PR brief requires a clean Git context'
+                              : prBriefAttributionIssue(metadata, target, expectedRepository)
+                          : metadata.artifact_type === 'analysis'
+                            ? analysisAttributionIssue(metadata, target)
+                            : ['daily_report', 'weekly_report'].includes(metadata.artifact_type)
+                              ? reportAttributionIssue(metadata, target)
+                              : null;
       if (reason) excluded.push({ path: relativePath, reason });
       else
         eligible.push({
@@ -492,7 +504,19 @@ export async function buildManifest(
     );
   if (target.branch !== branch || target.headCommit !== headCommit)
     throw new Error('Git branch or HEAD changed before sync; regenerate the analysis and dry-run.');
-  const { eligible, excluded } = await collectSyncArtifacts(root, target);
+  const plan = await collectSyncArtifacts(root, target);
+  const excluded = [...plan.excluded];
+  const eligible = plan.eligible.filter((item) => {
+    if (item.manifest.type !== 'pr_brief') return true;
+    const issue = prBriefAttributionIssue(
+      parseArtifact(item.content).metadata,
+      target,
+      binding.repository,
+    );
+    if (!issue) return true;
+    excluded.push({ path: item.manifest.path, reason: issue });
+    return false;
+  });
   if (!sameSnapshot(target, await gitSnapshot(root)))
     throw new Error('Git state changed while planning sync; regenerate the analysis and dry-run.');
   const acknowledgedState = await readFile(join(root, '.trace', 'state', 'sync.json'), 'utf8')

@@ -21,12 +21,12 @@ Not syncable: `config`, `open_pr_state`, `sync_state`.
 
 ## What the CLI generates
 
-| Artifact        | Command                     | Path                              | Dashboard projection                   |
-| --------------- | --------------------------- | --------------------------------- | -------------------------------------- |
-| `analysis`      | `trace analyze`             | `analyses/analysis-<hash>.md`     | yes                                    |
-| `daily_report`  | `trace report daily --yes`  | `reports/daily/<date>.md`         | yes                                    |
-| `weekly_report` | `trace report weekly --yes` | `reports/weekly/<date>.md`        | yes                                    |
-| `pr_brief`      | `trace pr --write --yes`    | `pull-requests/<provider>-<n>.md` | no (so it is excluded from sync today) |
+| Artifact        | Command                     | Path                              | Dashboard projection                        |
+| --------------- | --------------------------- | --------------------------------- | ------------------------------------------- |
+| `analysis`      | `trace analyze`             | `analyses/analysis-<hash>.md`     | yes                                         |
+| `daily_report`  | `trace report daily --yes`  | `reports/daily/<date>.md`         | yes                                         |
+| `weekly_report` | `trace report weekly --yes` | `reports/weekly/<date>.md`        | yes                                         |
+| `pr_brief`      | `trace pr --write --yes`    | `pull-requests/<provider>-<n>.md` | yes; clean, stable current HEAD/branch only |
 
 No CLI command generates `decision`, `risk`, `debt`, `conflict`, `rule`, `index`, `open_pr_state`, `sync_state`. Do not fabricate them. If the user explicitly asks you to author one, follow the schema exactly, set `execution_origin: local`, keep source out, run `trace validate`, and say it is hand-authored.
 

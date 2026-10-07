@@ -700,9 +700,42 @@ test.describe('authenticated product journey', () => {
         artifact.metadata.dashboard!.head_commit,
         seeded.repositoryId,
       ]);
+      const prResult = JSON.parse(
+        command(process.execPath, [cli, 'pr', '7', '--write', '--yes', '--json']),
+      );
+      const prContent = await readFile(prResult.artifact.path, 'utf8');
+      const prArtifact = parseArtifact(prContent);
+      await client.query(
+        `INSERT INTO synced_artifacts (organization_id, operation_id, repository_id, artifact_id, artifact_type, path, size_bytes, sensitivity, schema_version, checksum, content, metadata, projection, generated_at)
+        SELECT organization_id, operation_id, repository_id, $1, 'pr_brief', 'pull-requests/github-7.md', octet_length($3::text), 'internal', schema_version, $2, $3, $4::jsonb, $5::jsonb, now() FROM synced_artifacts WHERE repository_id=$6 AND artifact_type='weekly_report' LIMIT 1`,
+        [
+          prArtifact.metadata.id,
+          prResult.artifact.checksum,
+          prContent,
+          JSON.stringify(prArtifact.metadata),
+          JSON.stringify(prArtifact.metadata.dashboard),
+          seeded.repositoryId,
+        ],
+      );
       await page
         .context()
         .addCookies([{ name: 'trace_session', value: seeded.cookie, url: appBaseUrl }]);
+      await page.goto('/app/changes');
+      await expect(page.getByText('PR #7 — Local review brief', { exact: true })).toBeVisible();
+      await expect(page.getByText('LOCAL DRAFT', { exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'PR #7 — Local review brief', exact: true }).click();
+      await expect(page.getByRole('dialog')).toContainText('Local review summary');
+      await expect(
+        page
+          .getByRole('dialog')
+          .locator('.change-drawer__grid > div')
+          .filter({ hasText: 'Base branch' }),
+      ).toContainText('Not available');
+      await page.getByRole('button', { name: 'Close change details' }).click();
+      await expect(page.locator('#changes-dashboard-page')).toContainText(
+        'working-tree changes observed',
+      );
+      await expect(page.locator('#changes-dashboard-page')).not.toContainText('schema_version');
       await page.goto('/app/reports');
       await page
         .getByRole('searchbox', { name: 'Search reports library' })
