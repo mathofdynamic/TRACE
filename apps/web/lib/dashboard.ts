@@ -1,3 +1,4 @@
+import { prBriefChange } from './pr-brief-change';
 import type { EngineeringReport } from '@trace/schema';
 import { readEngineeringReportMetadata } from './report-artifact';
 import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm';
@@ -66,6 +67,7 @@ export type DashboardAttention = {
 };
 
 export type DashboardChange = {
+  source?: 'github' | 'local-brief';
   id: string;
   repositoryId: string;
   repositoryName: string;
@@ -588,6 +590,14 @@ async function getPostgresDashboardSummary(
       relatedFindingIds: stringArray(projectionRecord.relatedFindingIds),
     };
   });
+  for (const artifact of syncedRows) {
+    if (artifact.artifactType !== 'pr_brief') continue;
+    const brief = prBriefChange(
+      artifact,
+      repositoryById.get(artifact.repositoryId)?.fullName ?? 'Repository',
+    );
+    if (brief) latestChanges.push(brief);
+  }
   const latestReports = syncedRecords.filter((record) =>
     ['daily_report', 'weekly_report'].includes(record.artifactType),
   );

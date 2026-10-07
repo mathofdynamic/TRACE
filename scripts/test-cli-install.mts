@@ -107,6 +107,16 @@ if (supportsPeriodReports) {
   }
   assert.deepEqual(JSON.parse(run(executable, ['validate', '--json'])), []);
 }
+// Existing published archives predate the new PR projection. Candidates must pass it.
+const requirePrProjection = process.env.TRACE_ACCEPTANCE_PUBLISHED_RELEASE !== 'true';
+const pr = JSON.parse(run(executable, ['pr', '7', '--write', '--yes', '--json']));
+assert.equal(pr.artifact.dryRun, false);
+const prContent = await readFile(pr.artifact.path, 'utf8');
+if (requirePrProjection) {
+  assert(prContent.includes('pull_request:'));
+  assert(!prContent.includes('```'));
+  assert(!prContent.includes(checkout));
+}
 const status = JSON.parse(run(executable, ['status', '--json']));
 assert.equal(status.trace.valid, true);
 assert.equal(status.dashboard.connected, false);
@@ -115,6 +125,11 @@ assert.equal(plan.dryRun, true);
 assert.equal(plan.connected, false);
 assert.equal(plan.sourceCodeIncluded, false);
 assert.equal(plan.codeSnippetsIncluded, false);
+if (requirePrProjection)
+  assert(
+    plan.eligible.some((item: { type: string }) => item.type === 'pr_brief'),
+    'Fresh PR brief must be eligible',
+  );
 assert(plan.eligible.length > 0, 'Fresh analysis must be eligible for source-free planning');
 if (supportsPeriodReports)
   for (const kind of ['daily_report', 'weekly_report']) {

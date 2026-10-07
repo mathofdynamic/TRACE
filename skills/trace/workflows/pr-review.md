@@ -5,7 +5,7 @@
    The CLI uses supplied local context; it does not fetch GitHub PR facts or parse a PR URL.
 3. Keep verified provider facts separate from interpretation; cite evidence.
 4. If a durable brief is authorized, use `trace pr <number> --base <ref> --base-sha <sha> --write --yes`.
-5. Run `trace validate`. The current PR brief has no dashboard projection and is excluded from sync; do not add one manually.
+5. Run `trace validate`. Generated briefs synchronize only from clean, stable current HEAD/branch. Preview sync and check its privacy flags; regenerate old projection-free briefs instead of editing them.
 
 Dirty checkout output is local exploratory work only; DO NOT sync it. Any later
 publication must follow SKILL.md: clean committed checkout, fresh clean analysis,

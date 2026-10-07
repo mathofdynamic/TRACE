@@ -17,6 +17,11 @@ import type { NormalizedChangeSet } from '@trace/core';
 import { evaluateRules, initialRules, mergeEffectiveRules, validateRule } from '@trace/rules';
 import {
   parseArtifact,
+  prBriefProjectionSchema,
+  prBriefInputCheck,
+  prBriefTitle,
+  prBriefSummary,
+  renderPrBriefDocument,
   serializeArtifact,
   type ArtifactMetadata,
   engineeringReportSchema,
@@ -450,6 +455,7 @@ async function prCommand(args: string[]): Promise<CliResult> {
     const initialization = await initializationIssue(root);
     if (initialization) return initialization;
   }
+  const before = await gitSnapshot(root).catch(() => null);
   const changeSet = await changes(args);
   const numberArg = args.find((arg) => /^\d+$/.test(arg));
   const input: PullRequestInput = {
@@ -461,7 +467,7 @@ async function prCommand(args: string[]): Promise<CliResult> {
     baseRef: args.find((arg, index) => args[index - 1] === '--base') ?? 'unknown',
     headRef: changeSet.headRef ?? 'working-tree',
     baseSha: args.find((arg, index) => args[index - 1] === '--base-sha') ?? 'unknown',
-    headSha: changeSet.commits[0]?.sha ?? 'working-tree',
+    headSha: before?.headCommit ?? 'working-tree',
     trigger: 'manual',
   };
   const analysis = await analyzeChanges({
@@ -485,27 +491,69 @@ async function prCommand(args: string[]): Promise<CliResult> {
   if (!args.includes('--yes')) {
     return { code: 2, value: { error: 'Refusing to write without --yes.', dryRun: true, brief } };
   }
-  const metadata = {
-    schema_version: '0.1' as const,
-    id: `pr-${input.provider}-${input.number || 'local'}`,
-    artifact_type: 'pr_brief' as const,
+  const after = await gitSnapshot(root).catch(() => null);
+  const clean = Boolean(
+    before &&
+      after &&
+      before.workingTree === 'clean' &&
+      sameSnapshot(before, after) &&
+      before.branch &&
+      before.headCommit,
+  );
+  const prNumber = Number(numberArg);
+  if (!Number.isSafeInteger(prNumber) || prNumber <= 0)
+    return { code: 2, value: { error: 'PR artifact writes require a positive PR number.' } };
+  const projection = prBriefProjectionSchema.parse({
+    number: prNumber,
+    provider: input.provider,
+    owner: input.owner,
+    repository: input.repository,
+    change_scope: 'working_tree',
+    changed_files: changeSet.changedFiles.length,
+    findings: analysis.findings.length,
+    material_findings: analysis.findings.filter((f) => ['medium', 'high'].includes(f.severity))
+      .length,
+    input: {
+      branch: before?.branch || undefined,
+      head_commit: before?.headCommit,
+      working_tree: clean ? 'clean' : 'dirty',
+      stable: Boolean(before && after && sameSnapshot(before, after)),
+    },
+  });
+  const title = prBriefTitle(projection);
+  const summary = prBriefSummary(projection);
+  const now = new Date().toISOString();
+  const metadata: ArtifactMetadata = {
+    schema_version: '0.1',
+    id: `pr-${input.provider}-${prNumber}`,
+    artifact_type: 'pr_brief',
     repository: { provider: input.provider, owner: input.owner, name: input.repository },
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    created_at: now,
+    updated_at: now,
     generator: 'trace-cli/0.2.0',
-    execution_origin: 'local' as const,
-    source_refs: changeSet.evidence,
-    evidence: changeSet.evidence,
-    review_status: 'draft' as const,
-    sensitivity: 'internal' as const,
-    sync_policy: 'repository_authoritative' as const,
+    execution_origin: 'local',
+    source_refs: before?.headCommit ? [{ type: 'commit', locator: before.headCommit }] : [],
+    evidence: [{ type: 'check', locator: prBriefInputCheck, metadata: projection.input }],
+    review_status: 'draft',
+    sensitivity: 'internal',
+    sync_policy: clean ? 'repository_authoritative' : 'local_only',
+    dashboard: {
+      title,
+      summary,
+      branch: projection.input.branch,
+      head_commit: projection.input.head_commit,
+      status: 'draft',
+      items: [],
+      pull_request: projection,
+    },
   };
+  const safeMarkdown = renderPrBriefDocument(projection);
   const artifact = await writeArtifact({
     repositoryRoot: root,
     traceRoot: join(root, '.trace'),
     relativePath: `pull-requests/${input.provider}-${input.number || 'local'}.md`,
     metadata,
-    markdown,
+    markdown: safeMarkdown,
     dryRun: args.includes('--dry-run'),
   });
   return { code: 0, value: { brief, artifact } };

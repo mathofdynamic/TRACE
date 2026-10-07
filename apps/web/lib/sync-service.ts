@@ -5,6 +5,7 @@ import type { d1Schema, TraceD1Database } from '@trace/db';
 import {
   checksum,
   parseArtifact,
+  prBriefAttributionIssue,
   syncArtifactUploadSchema,
   syncManifestSchema,
   type SyncManifest,
@@ -414,6 +415,9 @@ export async function stageSyncArtifact(
     metadata.sync_policy === 'local_only' ||
     metadata.sensitivity === 'confidential' ||
     metadata.sensitivity === 'restricted' ||
+    (metadata.artifact_type === 'pr_brief' &&
+      (metadata.repository.provider !== 'github' ||
+        prBriefAttributionIssue(metadata, manifest.git, manifest.repository))) ||
     !metadata.dashboard
   ) {
     return reject('policy_rejected', 'Artifact metadata is not approved for dashboard sync.');

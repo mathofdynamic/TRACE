@@ -839,7 +839,11 @@ function ChangeDetailDrawer({
               <div className="change-drawer__column change-drawer__column--left">
                 {change.intent ? (
                   <section className="change-drawer__section">
-                    <span className="eyebrow">Architectural intent</span>
+                    <span className="eyebrow">
+                      {change.source === 'local-brief'
+                        ? 'Local review summary'
+                        : 'Architectural intent'}
+                    </span>
                     <p className="change-drawer__lead">{change.intent}</p>
                   </section>
                 ) : null}
