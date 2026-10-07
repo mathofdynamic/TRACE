@@ -44,6 +44,7 @@ describe('safe trace artifacts', () => {
     root = await mkdtemp(join(tmpdir(), 'trace-schema-'));
     await expect(
       writeArtifact({
+        repositoryRoot: root,
         traceRoot: root,
         relativePath: '../outside.md',
         metadata,
@@ -58,6 +59,7 @@ describe('safe trace artifacts', () => {
   it('writes deterministic front matter atomically and refuses silent overwrite', async () => {
     root = await mkdtemp(join(tmpdir(), 'trace-schema-'));
     const first = await writeArtifact({
+      repositoryRoot: root,
       traceRoot: root,
       relativePath: 'decisions/decision-test-001.md',
       metadata,
@@ -67,6 +69,7 @@ describe('safe trace artifacts', () => {
     expect(first.checksum).toHaveLength(64);
     await expect(
       writeArtifact({
+        repositoryRoot: root,
         traceRoot: root,
         relativePath: 'decisions/decision-test-001.md',
         metadata,
@@ -79,6 +82,7 @@ describe('safe trace artifacts', () => {
     root = await mkdtemp(join(tmpdir(), 'trace-schema-'));
     const traceRoot = join(root, '.trace');
     const options = {
+      repositoryRoot: root,
       traceRoot,
       relativePath: 'decisions/test.md',
       metadata,
@@ -96,6 +100,7 @@ describe('safe trace artifacts', () => {
     for (const dryRun of [true, false]) {
       await expect(
         writeArtifact({
+          repositoryRoot: root,
           traceRoot,
           relativePath: 'decisions/test.md',
           metadata,
@@ -115,6 +120,7 @@ describe('safe trace artifacts', () => {
     await symlink(outside, linkedRoot, 'junction');
     await expect(
       writeArtifact({
+        repositoryRoot: root,
         traceRoot: linkedRoot,
         relativePath: 'test.md',
         metadata,
@@ -127,6 +133,7 @@ describe('safe trace artifacts', () => {
     await symlink(outside, join(linkedRoot, 'decisions'), 'junction');
     await expect(
       writeArtifact({
+        repositoryRoot: root,
         traceRoot: linkedRoot,
         relativePath: 'decisions/test.md',
         metadata,
@@ -147,6 +154,7 @@ describe('safe trace artifacts', () => {
       await symlink(outside, link, 'junction');
       await expect(
         writeArtifact({
+          repositoryRoot: root,
           traceRoot: join(link, '.trace'),
           relativePath: 'decisions/test.md',
           metadata,
@@ -157,6 +165,36 @@ describe('safe trace artifacts', () => {
       expect(await readdir(outside)).toEqual([]);
     },
   );
+
+  it('allows a trusted repository reached through an alias while rejecting links inside it', async () => {
+    root = await mkdtemp(join(tmpdir(), 'trace-schema-'));
+    const repository = join(root, 'repository');
+    await mkdir(repository);
+    const alias = join(root, 'alias');
+    await symlink(repository, alias, 'junction');
+    const options = {
+      repositoryRoot: alias,
+      traceRoot: join(alias, '.trace'),
+      relativePath: 'decisions/test.md',
+      metadata,
+      markdown: '# Test',
+    };
+    const preview = await writeArtifact({ ...options, dryRun: true });
+    await expect(access(join(repository, '.trace'))).rejects.toMatchObject({ code: 'ENOENT' });
+    const artifact = await writeArtifact(options);
+    expect(artifact.path).toBe(preview.path);
+    expect(await validateTraceDirectory(join(repository, '.trace'))).toEqual([]);
+    const outside = join(root, 'outside');
+    await mkdir(outside);
+    await symlink(outside, join(repository, 'link'), 'junction');
+    await expect(
+      writeArtifact({ ...options, traceRoot: join(alias, 'link', '.trace') }),
+    ).rejects.toThrow(/Symlink/);
+    expect(await readdir(outside)).toEqual([]);
+    await expect(
+      writeArtifact({ ...options, traceRoot: join(root, 'outside', '.trace') }),
+    ).rejects.toThrow(/escapes/);
+  });
 
   it('accepts only bounded source-free sync manifests and safe .trace paths', () => {
     const artifact = {

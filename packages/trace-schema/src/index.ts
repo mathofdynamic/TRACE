@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { lstat, mkdir, readFile, realpath, rename, writeFile } from 'node:fs/promises';
-import { dirname, isAbsolute, join, parse as parsePath, relative, resolve, sep } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { parse, stringify } from 'yaml';
 import { z } from 'zod';
 
@@ -284,13 +284,13 @@ function checkedPath(root: string, candidate: string) {
   return target;
 }
 
-async function assertNoSymlinkEscape(target: string) {
-  // Walk from the filesystem root so an existing symlink above a missing
-  // artifact root cannot redirect mkdir/write outside the checked path.
-  let current = parsePath(target).root;
-  const parts = relative(current, target).split(sep).filter(Boolean);
-  // Missing components are valid during read-only previews.
-  for (const part of ['', ...parts]) {
+async function assertNoSymlinkEscape(repositoryRoot: string, target: string) {
+  // The caller supplies the existing trusted repository boundary. Canonicalize
+  // platform/workspace aliases above it, but reject links inside it.
+  const canonicalRepository = await realpath(repositoryRoot);
+  let current = canonicalRepository;
+  const parts = relative(repositoryRoot, target).split(sep).filter(Boolean);
+  for (const part of parts) {
     current = join(current, part);
     try {
       const stats = await lstat(current);
@@ -300,9 +300,12 @@ async function assertNoSymlinkEscape(target: string) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
   }
+  return current;
 }
 
 export async function writeArtifact(options: {
+  // Existing trusted repository; filesystem aliases above it are permitted.
+  repositoryRoot: string;
   traceRoot: string;
   relativePath: string;
   metadata: ArtifactMetadata;
@@ -310,9 +313,10 @@ export async function writeArtifact(options: {
   overwrite?: boolean;
   dryRun?: boolean;
 }) {
-  const root = resolve(options.traceRoot);
-  const target = checkedPath(root, options.relativePath);
-  await assertNoSymlinkEscape(target);
+  const repository = resolve(options.repositoryRoot);
+  const root = checkedPath(repository, relative(repository, resolve(options.traceRoot)));
+  const checkedTarget = checkedPath(root, options.relativePath);
+  const target = await assertNoSymlinkEscape(repository, checkedTarget);
   const content = serializeArtifact(options.metadata, options.markdown);
   if (options.dryRun) return { path: target, content, checksum: checksum(content), dryRun: true };
   try {

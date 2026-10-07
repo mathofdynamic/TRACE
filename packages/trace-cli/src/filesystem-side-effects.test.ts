@@ -1,5 +1,15 @@
 import { execFile } from 'node:child_process';
-import { access, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  access,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -57,6 +67,44 @@ it('rejects partial initialization without adding analysis files', async () => {
   await rm(join(root, '.trace', 'schema-version'));
   expect((await main(['analyze'])).code).toBe(2);
   await expect(access(join(root, '.trace', 'analyses'))).rejects.toMatchObject({ code: 'ENOENT' });
+});
+
+it.each(['config.yml', 'schema-version'])(
+  'rejects non-file %s markers before analysis, report and PR writes',
+  async (name) => {
+    await main(['init', '--yes']);
+    const marker = join(root, '.trace', name);
+    await rm(marker);
+    const outside = join(root, 'marker-target');
+    await mkdir(outside);
+    for (const link of [false, true]) {
+      if (link) await symlink(outside, marker, 'junction');
+      else await mkdir(marker);
+      for (const args of [
+        ['analyze'],
+        ['report', 'daily', '--yes'],
+        ['report', 'weekly', '--yes'],
+        ['pr', '1', '--write', '--yes'],
+      ]) {
+        expect((await main(args)).code).toBe(2);
+      }
+      await expect(access(join(root, '.trace', 'analyses'))).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+      expect(await readdir(join(root, '.trace', 'reports', 'daily'))).toEqual([]);
+      expect(await readdir(join(root, '.trace', 'pull-requests'))).toEqual([]);
+      await rm(marker, { recursive: true });
+    }
+  },
+);
+
+it('rejects a symlinked TRACE root even with real marker files', async () => {
+  await main(['init', '--yes']);
+  const original = join(root, 'original-trace');
+  await rename(join(root, '.trace'), original);
+  await symlink(original, join(root, '.trace'), 'junction');
+  expect((await main(['analyze'])).code).toBe(2);
+  await expect(access(join(original, 'analyses'))).rejects.toMatchObject({ code: 'ENOENT' });
 });
 
 it('keeps repeated init, PR and sync previews and failing validation read-only', async () => {
