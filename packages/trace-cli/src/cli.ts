@@ -504,13 +504,16 @@ async function prCommand(args: string[]): Promise<CliResult> {
     return { code: 2, value: { error: 'Refusing to write without --yes.', dryRun: true, brief } };
   }
   const after = await gitSnapshot(root).catch(() => null);
-  const clean = Boolean(
+  const stable = Boolean(
     before &&
       after &&
-      before.workingTree === 'clean' &&
       sameSnapshot(before, after) &&
-      before.branch &&
-      before.headCommit,
+      changeSet.workingTree === before.workingTree &&
+      changeSet.headRef === before.branch &&
+      changeSet.commits[0]?.sha === before.headCommit,
+  );
+  const clean = Boolean(
+    stable && before?.workingTree === 'clean' && before.branch && before.headCommit,
   );
   const prNumber = Number(numberArg);
   if (!Number.isSafeInteger(prNumber) || prNumber <= 0)
@@ -529,7 +532,7 @@ async function prCommand(args: string[]): Promise<CliResult> {
       branch: before?.branch || undefined,
       head_commit: before?.headCommit,
       working_tree: clean ? 'clean' : 'dirty',
-      stable: Boolean(before && after && sameSnapshot(before, after)),
+      stable,
     },
   });
   const title = prBriefTitle(projection);

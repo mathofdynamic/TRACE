@@ -137,6 +137,22 @@ it('keeps unstable input local-only', async () => {
   expect(artifact.metadata.sync_policy).toBe('local_only');
   expect(artifact.metadata.dashboard?.pull_request?.input.stable).toBe(false);
 });
+it.each(['dirty', 'branch', 'commit'] as const)(
+  'rejects transient collected %s input even when snapshots are restored',
+  async (change) => {
+    const original = analysisModule.analyzeChanges;
+    vi.spyOn(analysisModule, 'analyzeChanges').mockImplementation(async (input) => {
+      if (change === 'dirty') input.changeSet.workingTree = 'dirty';
+      if (change === 'branch') input.changeSet.headRef = 'transient-branch';
+      if (change === 'commit') input.changeSet.commits[0]!.sha = 'b'.repeat(40);
+      return original(input);
+    });
+    const { artifact } = await generate();
+    expect(artifact.metadata.sync_policy).toBe('local_only');
+    expect(artifact.metadata.dashboard?.pull_request?.input.stable).toBe(false);
+    expect((await collectSyncArtifacts(root)).eligible).toHaveLength(0);
+  },
+);
 it('rejects unsafe/malformed projections and noncanonical bodies', async () => {
   const { artifact } = await generate();
   const d = artifact.metadata.dashboard!;
