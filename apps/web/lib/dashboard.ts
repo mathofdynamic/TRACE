@@ -1,4 +1,4 @@
-import { prBriefChange } from './pr-brief-change';
+import { prBriefChange, recentDashboardChanges } from './pr-brief-change';
 import type { EngineeringReport } from '@trace/schema';
 import { readEngineeringReportMetadata } from './report-artifact';
 import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm';
@@ -785,7 +785,7 @@ async function getPostgresDashboardSummary(
         repositories.find((repository) => repository.defaultBranch)?.defaultBranch ?? null,
     },
     attention: attention.slice(0, 12),
-    latestChanges,
+    latestChanges: recentDashboardChanges(latestChanges),
     latestReports,
     conflicts,
     decisions,

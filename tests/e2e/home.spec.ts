@@ -725,6 +725,9 @@ test.describe('authenticated product journey', () => {
       await expect(page.getByText('LOCAL DRAFT', { exact: true })).toBeVisible();
       await page.getByRole('button', { name: 'PR #7 — Local review brief', exact: true }).click();
       await expect(page.getByRole('dialog')).toContainText('Local review summary');
+      await expect(page.getByRole('dialog').locator('.change-drawer__cli-box code')).toHaveText(
+        'trace pr 7',
+      );
       await expect(
         page
           .getByRole('dialog')

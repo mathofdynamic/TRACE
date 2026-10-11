@@ -108,10 +108,11 @@ If not connected, report the necessary login/selection action. Local-only analys
 
 ```bash
 trace pr --base <base-branch> --base-sha <sha> [<pr-number>] --json     # preview only
-trace pr [<pr-number>] --base <ref> --base-sha <sha> --write --yes      # writes .trace/pull-requests/<provider>-<n-or-local>.md
+trace pr <pr-number> --base <ref> --base-sha <sha> --write --yes        # writes .trace/pull-requests/<provider>-<n>.md
 ```
 
-- `trace pr` is a manual, local command. It does not read the PR from GitHub; you must pass `--base`/`--base-sha`/number or they are recorded as `unknown`/`local`.
+- Persisted briefs require a positive PR number; numberless `trace pr` is read-only local preview.
+- `trace pr` is a manual, local command. It does not read the PR from GitHub; unavailable base metadata is recorded as `unknown`. The number is caller-supplied; omitting it is supported only for a read-only local preview.
 - Generated PR briefs have a validated source-free dashboard projection. Only clean, stable current-HEAD/current-branch input is syncable; dirty/stale briefs stay local or are excluded. GitHub PR metadata is not fetched; the number is caller-supplied and counts describe working-tree observations. Regenerate legacy briefs that lack a projection; do not patch them manually.
 - There is no CLI command for PR opened/updated/merged/closed events. On request, re-run `trace pr` (and `analyze` if the checkout changed). See `references/automation.md`.
 

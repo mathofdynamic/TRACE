@@ -273,10 +273,26 @@ it('regenerates legacy and dirty briefs safely while repeated dry-runs preserve 
 it.each(['feature/foo@bar', 'release/1.0+build', 'topic=one', 'feature,csv', 'feature/تست'])(
   'generates and syncs a brief on valid Git branch %s',
   async (branch) => {
+    await git('remote', 'add', 'origin', 'https://github.com/example/project.git');
     await git('check-ref-format', '--branch', branch);
     await git('checkout', '-b', branch);
     const { artifact } = await generate();
     expect(artifact.metadata.dashboard?.branch).toBe(branch);
+    const plan = await buildManifest(
+      root,
+      {
+        server: 'https://trace.example.test',
+        repositoryId: '11111111-1111-4111-8111-111111111111',
+        repository: 'example/project',
+        workspaceId: 'fixture',
+        workspaceName: 'Fixture',
+        connectedAt: new Date().toISOString(),
+      },
+      branch,
+      await git('rev-parse', 'HEAD'),
+    );
+    expect(plan.manifest.git.branch).toBe(branch);
+    expect(plan.manifest.artifacts.some((entry) => entry.type === 'pr_brief')).toBe(true);
     expect(
       (await collectSyncArtifacts(root)).eligible.some(
         (entry) => entry.manifest.type === 'pr_brief',
@@ -381,3 +397,39 @@ it.each(['my project', 'project+demo', 'پروژه', 'project (demo)', 'my [proj
     ).toBe(true);
   },
 );
+
+it('accepts a real Git branch longer than 255 characters and includes it in the sync contract', async () => {
+  const branch = 'a'.repeat(200) + '/' + 'b'.repeat(100);
+  await git('remote', 'add', 'origin', 'https://github.com/example/project.git');
+  await git('config', 'core.longpaths', 'true');
+  await git('check-ref-format', '--branch', branch);
+  await git('checkout', '-b', branch);
+  const { artifact } = await generate();
+  expect(artifact.metadata.dashboard?.branch).toBe(branch);
+  const plan = await buildManifest(
+    root,
+    {
+      server: 'https://trace.example.test',
+      repositoryId: '11111111-1111-4111-8111-111111111111',
+      repository: 'example/project',
+      workspaceId: 'fixture',
+      workspaceName: 'Fixture',
+      connectedAt: new Date().toISOString(),
+    },
+    branch,
+    await git('rev-parse', 'HEAD'),
+  );
+  expect(plan.manifest.git.branch).toBe(branch);
+  expect(plan.manifest.artifacts.some((entry) => entry.type === 'pr_brief')).toBe(true);
+  expect(
+    (await collectSyncArtifacts(root)).eligible.some((entry) => entry.manifest.type === 'pr_brief'),
+  ).toBe(true);
+});
+it('requires a positive number for persisted briefs while preserving numberless read-only previews', async () => {
+  await main(['init', '--yes']);
+  expect((await main(['pr'])).code).toBe(0);
+  const result = await main(['pr', '--write', '--yes']);
+  expect(result.code).toBe(2);
+  expect(result.value).toMatchObject({ error: 'PR artifact writes require a positive PR number.' });
+  expect((await collectSyncArtifacts(root)).eligible).toHaveLength(0);
+});

@@ -76,7 +76,7 @@ export const dashboardProjectionSchema = z
   .object({
     title: z.string().min(1).max(240),
     summary: z.string().max(4000),
-    branch: z.string().max(255).optional(),
+    branch: z.string().optional(),
     head_commit: z
       .string()
       .regex(/^[a-f0-9]{7,64}$/i)
@@ -246,7 +246,7 @@ export const syncManifestSchema = z
     baseOperationId: z.string().uuid().nullable(),
     git: z
       .object({
-        branch: z.string().min(1).max(255),
+        branch: z.string().min(1),
         headCommit: z.string().regex(/^[a-f0-9]{7,64}$/i),
       })
       .strict(),

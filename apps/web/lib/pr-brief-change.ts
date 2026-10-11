@@ -32,3 +32,7 @@ export function prBriefChange(
     intent: d.summary,
   };
 }
+
+export function recentDashboardChanges(changes: DashboardChange[]): DashboardChange[] {
+  return [...changes].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 12);
+}

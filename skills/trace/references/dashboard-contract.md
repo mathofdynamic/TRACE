@@ -4,7 +4,7 @@ Sources: `packages/trace-schema/src/index.ts`, `packages/trace-cli/src/cloud.ts`
 
 ## Projection (`dashboard:` front-matter block, strict)
 
-`title` (1-240), `summary` (<=4000), `branch?` (<=255), `head_commit?` and `base_commit?` (hex 7-64), `status?` (<=80), `items[]` (<=100).
+`title` (1-240), `summary` (<=4000), `branch?` (Git ref; bounded by transport size limits), `head_commit?` and `base_commit?` (hex 7-64), `status?` (<=80), `items[]` (<=100).
 
 Item (strict): `id` (1-100), `title` (1-240), `detail` (<=2000), `severity?` (`info|low|medium|high`), `classification?` (`deterministic|correlated|semantic|uncertain`), `evidence[]` (<=20 strings, each <=300), `status?` (<=80).
 

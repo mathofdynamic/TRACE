@@ -10,7 +10,6 @@ const identity = z
 const ref = z
   .string()
   .min(1)
-  .max(255)
   .refine((s) => {
     // Git's check-ref-format constraints, plus --branch's leading-dash rule.
     // Keep punctuation and Unicode accepted by Git; privacy validation runs separately.

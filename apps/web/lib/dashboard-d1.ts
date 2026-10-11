@@ -1,4 +1,4 @@
-import { prBriefChange } from './pr-brief-change';
+import { prBriefChange, recentDashboardChanges } from './pr-brief-change';
 import { readEngineeringReportMetadata } from './report-artifact';
 import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 import { d1Schema, type TraceD1Database } from '@trace/db';
@@ -612,7 +612,7 @@ export async function getD1DashboardSummary(
         repositories.find((repository) => repository.defaultBranch)?.defaultBranch ?? null,
     },
     attention: attention.slice(0, 12),
-    latestChanges,
+    latestChanges: recentDashboardChanges(latestChanges),
     latestReports,
     conflicts,
     decisions,

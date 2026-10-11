@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { prBriefSummary, prBriefTitle } from '@trace/schema';
-import { prBriefChange } from './pr-brief-change';
+import { prBriefChange, recentDashboardChanges } from './pr-brief-change';
 const pr = {
   number: 7,
   provider: 'github' as const,
@@ -78,4 +78,18 @@ describe('source-free PR brief changes', () => {
       ),
     ).toBeUndefined();
   });
+});
+
+it('sorts combined GitHub and local briefs newest-first before applying the shared limit', () => {
+  const base = prBriefChange(row, 'example/project')!;
+  const changes = Array.from({ length: 25 }, (_, i) => ({
+    ...base,
+    id: String(i),
+    source: i % 2 ? ('github' as const) : ('local-brief' as const),
+    updatedAt: new Date(Date.UTC(2026, 9, 7, i)).toISOString(),
+  }));
+  const recent = recentDashboardChanges(changes);
+  expect(recent).toHaveLength(12);
+  expect(recent.map((c) => c.id)).toEqual(Array.from({ length: 12 }, (_, i) => String(24 - i)));
+  expect(changes[0]!.id).toBe('0');
 });
