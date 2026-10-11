@@ -24,6 +24,8 @@ const ref = z
       parts.every((part) => part.length > 0 && !part.startsWith('.') && !part.endsWith('.lock'))
     );
   }, 'Invalid Git branch name');
+const unsafeBranchIdentity =
+  /\b(?:gh[opsu]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16})\b/i;
 const forbidden =
   /```|[<>\r\n]|\b(?:gh[opsu]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16})\b|(?:^|\s)(?:\/[A-Za-z]|[A-Za-z]:\\)|(?:=>|\bdiff --git\b)/i;
 export function safePrBriefText(value: string, identity = false) {
@@ -37,9 +39,12 @@ export function safePrBriefValue(value: unknown): boolean {
   if (Array.isArray(value)) return value.every(safePrBriefValue);
   if (value && typeof value === 'object')
     return Object.entries(value).every(([key, entry]) =>
-      typeof entry === 'string' && (key === 'repository' || key === 'name')
-        ? safePrBriefText(entry, true)
-        : safePrBriefValue(entry),
+      typeof entry === 'string' && key === 'branch'
+        ? !unsafeBranchIdentity.test(entry) &&
+          ![...entry].some((c) => c.charCodeAt(0) <= 32 || c.charCodeAt(0) === 127)
+        : typeof entry === 'string' && (key === 'repository' || key === 'name')
+          ? safePrBriefText(entry, true)
+          : safePrBriefValue(entry),
     );
   return true;
 }

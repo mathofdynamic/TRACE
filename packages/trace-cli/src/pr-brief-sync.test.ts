@@ -500,3 +500,41 @@ it('preserves legacy generic-dashboard briefs for validation but excludes them f
     ),
   ).toBe(true);
 });
+
+it('treats code-like tokens in typed Git branch names as identity, retaining credential checks', async () => {
+  const { artifact } = await generate();
+  const projection = artifact.metadata.dashboard!.pull_request!;
+  for (const branch of ['feature/a=>b', 'feature/a>b', 'feature/a<b']) {
+    await git('check-ref-format', '--branch', branch);
+    const input = { ...projection.input, branch };
+    const metadata = {
+      ...artifact.metadata,
+      evidence: [{ ...artifact.metadata.evidence[0]!, metadata: input }],
+      dashboard: {
+        ...artifact.metadata.dashboard!,
+        branch,
+        pull_request: { ...projection, input },
+      },
+    };
+    expect(
+      parseArtifact(serializeArtifact(metadata, artifact.markdown)).metadata.dashboard?.branch,
+    ).toBe(branch);
+  }
+  expect(
+    prBriefProjectionSchema.safeParse({
+      ...projection,
+      input: { ...projection.input, branch: 'feature/ghp_123456789012345678901234567890123456' },
+    }).success,
+  ).toBe(false);
+  // Windows cannot create ref filenames containing >; schema and Git ref-format checks run there.
+  if (process.platform !== 'win32') {
+    await git('checkout', '-b', 'feature/a=>b');
+    const generated = await generate();
+    expect(generated.artifact.metadata.dashboard?.branch).toBe('feature/a=>b');
+    expect(
+      (await collectSyncArtifacts(root)).eligible.some(
+        (entry) => entry.manifest.type === 'pr_brief',
+      ),
+    ).toBe(true);
+  }
+});
