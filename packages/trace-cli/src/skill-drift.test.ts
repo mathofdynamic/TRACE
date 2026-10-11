@@ -284,6 +284,9 @@ describe('TRACE Skill drift checks', () => {
         (await value(['pr', '7', '--base', 'main', '--base-sha', 'a'.repeat(40)])).dryRun,
       ).toBe(true);
       expect((await main(['pr', '7', '--write'])).code).toBe(2);
+      await run('git', ['remote', 'add', 'origin', 'https://github.com/example/project.git'], {
+        cwd: root,
+      });
       expect((await main(['pr', '7', '--write', '--yes'])).code).toBe(0);
       expect((await collectSyncArtifacts(root)).eligible).toContainEqual(
         expect.objectContaining({ manifest: expect.objectContaining({ type: 'pr_brief' }) }),

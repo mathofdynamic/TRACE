@@ -146,7 +146,7 @@ export const artifactMetadataSchema = z
     const pr = metadata.dashboard?.pull_request;
     if (pr && metadata.artifact_type !== 'pr_brief')
       ctx.addIssue({ code: 'custom', message: 'PR projection requires a PR brief artifact' });
-    if (metadata.artifact_type === 'pr_brief' && metadata.dashboard) {
+    if (metadata.artifact_type === 'pr_brief' && metadata.dashboard && pr) {
       const d = metadata.dashboard;
       if (
         !pr ||

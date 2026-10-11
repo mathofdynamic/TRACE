@@ -84,6 +84,8 @@ export function prBriefAttributionIssue(
   target: { branch: string; headCommit: string },
   repository?: string,
 ) {
+  if (metadata.repository.provider !== 'github')
+    return 'PR brief requires a matching GitHub repository identity';
   const p = metadata.dashboard?.pull_request;
   if (!p) return 'PR brief projection is missing';
   if (p.input.working_tree !== 'clean' || !p.input.stable)

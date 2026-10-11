@@ -41,6 +41,9 @@ beforeEach(async () => {
     ],
     { cwd: root },
   );
+  await run('git', ['remote', 'add', 'origin', 'https://github.com/example/project.git'], {
+    cwd: root,
+  });
   process.chdir(root);
 });
 afterEach(async () => {
@@ -179,7 +182,7 @@ it('rejects unsafe/malformed projections and noncanonical bodies', async () => {
   ).toThrow(/noncanonical/);
 });
 it('real sync uploads only the validated brief and preserves privacy flags', async () => {
-  await git('remote', 'add', 'origin', 'https://github.com/example/project.git');
+  await git('remote', 'set-url', 'origin', 'https://github.com/example/project.git');
   const { content } = await generate();
   const target = { branch: 'main', headCommit: await git('rev-parse', 'HEAD') };
   const binding = {
@@ -243,7 +246,7 @@ it('keeps existing analysis/report sync eligible in a mixed batch and rejects ch
   expect(plan.eligible.map((entry) => entry.manifest.type)).toEqual(
     expect.arrayContaining(['analysis', 'daily_report', 'pr_brief']),
   );
-  await git('remote', 'add', 'origin', 'https://github.com/example/different.git');
+  await git('remote', 'set-url', 'origin', 'https://github.com/example/different.git');
   const changed = await collectSyncArtifacts(root);
   expect(changed.eligible.some((entry) => entry.manifest.type === 'pr_brief')).toBe(false);
   expect(changed.excluded.some((entry) => entry.reason.includes('repository'))).toBe(true);
@@ -289,7 +292,7 @@ it('regenerates legacy and dirty briefs safely while repeated dry-runs preserve 
 it.each(['@', 'feature/foo@bar', 'release/1.0+build', 'topic=one', 'feature,csv', 'feature/تست'])(
   'generates and syncs a brief on valid Git branch %s',
   async (branch) => {
-    await git('remote', 'add', 'origin', 'https://github.com/example/project.git');
+    await git('remote', 'set-url', 'origin', 'https://github.com/example/project.git');
     await git('check-ref-format', '--branch', branch);
     await git('checkout', '-b', branch);
     const { artifact } = await generate();
@@ -368,7 +371,7 @@ it('rejects missing or contradictory commit provenance even with a current proje
 });
 
 it('excludes a current brief when the saved dashboard binding names another repository', async () => {
-  await git('remote', 'add', 'origin', 'https://github.com/example/project.git');
+  await git('remote', 'set-url', 'origin', 'https://github.com/example/project.git');
   await generate();
   const headCommit = await git('rev-parse', 'HEAD');
   const plan = await buildManifest(
@@ -398,6 +401,7 @@ it.each([
   'project (demo)',
   'my [project]',
 ])('supports safe local checkout name %s without a GitHub remote', async (name) => {
+  await git('remote', 'remove', 'origin');
   const relocated = join(dirname(root), `${name}-${basename(root)}`);
   process.chdir(previous);
   await rename(root, relocated);
@@ -405,6 +409,7 @@ it.each([
   process.chdir(root);
   const { artifact } = await generate();
   expect(artifact.metadata.repository.provider).toBe('git');
+  expect(artifact.metadata.sync_policy).toBe('local_only');
   expect(artifact.metadata.repository.name).toBe(basename(root));
   expect(
     prBriefProjectionSchema.safeParse({
@@ -414,12 +419,12 @@ it.each([
   ).toBe(false);
   expect(
     (await collectSyncArtifacts(root)).eligible.some((entry) => entry.manifest.type === 'pr_brief'),
-  ).toBe(true);
+  ).toBe(false);
 });
 
 it('accepts a real Git branch longer than 255 characters and includes it in the sync contract', async () => {
   const branch = 'a'.repeat(200) + '/' + 'b'.repeat(100);
-  await git('remote', 'add', 'origin', 'https://github.com/example/project.git');
+  await git('remote', 'set-url', 'origin', 'https://github.com/example/project.git');
   await git('config', 'core.longpaths', 'true');
   await git('check-ref-format', '--branch', branch);
   await git('checkout', '-b', branch);
@@ -451,4 +456,47 @@ it('requires a positive number for persisted briefs while preserving numberless 
   expect(result.code).toBe(2);
   expect(result.value).toMatchObject({ error: 'PR artifact writes require a positive PR number.' });
   expect((await collectSyncArtifacts(root)).eligible).toHaveLength(0);
+});
+
+it('keeps non-GitHub briefs local until regenerated with a matching GitHub identity', async () => {
+  await git('remote', 'remove', 'origin');
+  const generated = await generate();
+  expect(generated.artifact.metadata.sync_policy).toBe('local_only');
+  await writeFile(
+    generated.path,
+    serializeArtifact(
+      { ...generated.artifact.metadata, sync_policy: 'repository_authoritative' },
+      generated.artifact.markdown,
+    ),
+  );
+  expect((await collectSyncArtifacts(root)).eligible).toHaveLength(0);
+  expect((await main(['sync', '--dry-run'])).value).toMatchObject({
+    eligible: [],
+    sourceCodeIncluded: false,
+    codeSnippetsIncluded: false,
+  });
+  await git('remote', 'add', 'origin', 'https://github.com/example/project.git');
+  await generate();
+  expect((await collectSyncArtifacts(root)).eligible.map((entry) => entry.manifest.type)).toEqual([
+    'pr_brief',
+  ]);
+});
+it('preserves legacy generic-dashboard briefs for validation but excludes them from sync', async () => {
+  const generated = await generate();
+  const legacy = {
+    ...generated.artifact.metadata,
+    dashboard: { ...generated.artifact.metadata.dashboard!, pull_request: undefined },
+    evidence: [],
+  };
+  await writeFile(generated.path, serializeArtifact(legacy, '# Existing generic projected brief'));
+  expect(
+    parseArtifact(await readFile(generated.path, 'utf8')).metadata.dashboard?.pull_request,
+  ).toBeUndefined();
+  expect((await main(['validate'])).code).toBe(0);
+  expect((await collectSyncArtifacts(root)).eligible).toHaveLength(0);
+  expect(
+    (await collectSyncArtifacts(root)).excluded.some((entry) =>
+      entry.reason.includes('projection'),
+    ),
+  ).toBe(true);
 });

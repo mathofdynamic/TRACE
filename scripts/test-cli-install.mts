@@ -38,6 +38,8 @@ await assert.rejects(access(join(checkout, 'node_modules')));
 // Actions checks out a detached PR merge commit. Give this disposable checkout a named branch
 // without changing its source commit; authoritative artifact sync requires branch attribution.
 if (!run('git', ['branch', '--show-current'])) run('git', ['switch', '-c', 'trace-cli-acceptance']);
+// Give only the disposable acceptance checkout the intended GitHub identity. No fetch/auth occurs.
+run('git', ['remote', 'set-url', 'origin', 'https://github.com/mathofdynamic/TRACE.git']);
 assert.equal(
   createHash('sha256')
     .update(await readFile(archive))
