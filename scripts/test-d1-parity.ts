@@ -464,6 +464,43 @@ async function main() {
         assert(prStaged.status === 200, 'D1 rejected current clean PR brief');
         const prComplete = await completeSync(requestDb, connection, prOperationId);
         assert(prComplete.status === 200, 'D1 PR completion failed');
+        for (const changedGit of [
+          { branch: 'other', headCommit: prHead },
+          { branch: 'main', headCommit: 'b'.repeat(40) },
+        ]) {
+          const reusedManifest = {
+            ...manifest,
+            syncId: randomUUID(),
+            baseOperationId: prOperationId,
+            createdAt: new Date().toISOString(),
+            git: changedGit,
+            artifacts: [prArtifact],
+          };
+          const reused = await negotiateSync(requestDb, connection, reusedManifest);
+          assert(reused.status === 200, 'D1 reuse negotiation failed');
+          const reusedBody = reused.body as { operationId: string; missing: string[] };
+          assert(reusedBody.missing.includes(prArtifact.id), 'D1 reused an unvalidated PR brief');
+          const resumed = await negotiateSync(requestDb, connection, reusedManifest);
+          assert(
+            (resumed.body as { missing: string[] }).missing.includes(prArtifact.id),
+            'D1 resumed operation reused an unvalidated brief',
+          );
+          assert(
+            (await completeSync(requestDb, connection, reusedBody.operationId)).status === 409,
+            'D1 completed a reused brief without attribution validation',
+          );
+          assert(
+            (
+              await stageSyncArtifact(requestDb, connection, {
+                operationId: reusedBody.operationId,
+                artifact: prArtifact,
+                content: prContent,
+              })
+            ).status === 422,
+            'D1 accepted reused PR brief with contradictory attribution',
+          );
+        }
+
         const prSummary = await getDashboardSummary(requestDb, userA);
         assert(
           prSummary.latestChanges.some(

@@ -373,30 +373,33 @@ it('excludes a current brief when the saved dashboard binding names another repo
   expect(plan.manifest).toMatchObject({ sourceCodeIncluded: false, codeSnippetsIncluded: false });
 });
 
-it.each(['my project', 'project+demo', 'پروژه', 'project (demo)', 'my [project]'])(
-  'supports safe local checkout name %s without a GitHub remote',
-  async (name) => {
-    const relocated = join(dirname(root), `${name}-${basename(root)}`);
-    process.chdir(previous);
-    await rename(root, relocated);
-    root = relocated;
-    process.chdir(root);
-    const { artifact } = await generate();
-    expect(artifact.metadata.repository.provider).toBe('git');
-    expect(artifact.metadata.repository.name).toBe(basename(root));
-    expect(
-      prBriefProjectionSchema.safeParse({
-        ...artifact.metadata.dashboard!.pull_request,
-        provider: 'github',
-      }).success,
-    ).toBe(false);
-    expect(
-      (await collectSyncArtifacts(root)).eligible.some(
-        (entry) => entry.manifest.type === 'pr_brief',
-      ),
-    ).toBe(true);
-  },
-);
+it.each([
+  'class action',
+  'import map',
+  'my project',
+  'project+demo',
+  'پروژه',
+  'project (demo)',
+  'my [project]',
+])('supports safe local checkout name %s without a GitHub remote', async (name) => {
+  const relocated = join(dirname(root), `${name}-${basename(root)}`);
+  process.chdir(previous);
+  await rename(root, relocated);
+  root = relocated;
+  process.chdir(root);
+  const { artifact } = await generate();
+  expect(artifact.metadata.repository.provider).toBe('git');
+  expect(artifact.metadata.repository.name).toBe(basename(root));
+  expect(
+    prBriefProjectionSchema.safeParse({
+      ...artifact.metadata.dashboard!.pull_request,
+      provider: 'github',
+    }).success,
+  ).toBe(false);
+  expect(
+    (await collectSyncArtifacts(root)).eligible.some((entry) => entry.manifest.type === 'pr_brief'),
+  ).toBe(true);
+});
 
 it('accepts a real Git branch longer than 255 characters and includes it in the sync contract', async () => {
   const branch = 'a'.repeat(200) + '/' + 'b'.repeat(100);

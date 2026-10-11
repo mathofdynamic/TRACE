@@ -25,14 +25,22 @@ const ref = z
     );
   }, 'Invalid Git branch name');
 const forbidden =
-  /```|[<>\r\n]|\b(?:gh[opsu]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16})\b|(?:^|\s)(?:\/[A-Za-z]|[A-Za-z]:\\)|\b(?:const|let|var|function|class|import|export)\s|(?:=>|\bdiff --git\b)/i;
-export function safePrBriefText(value: string) {
-  return !forbidden.test(value);
+  /```|[<>\r\n]|\b(?:gh[opsu]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16})\b|(?:^|\s)(?:\/[A-Za-z]|[A-Za-z]:\\)|(?:=>|\bdiff --git\b)/i;
+export function safePrBriefText(value: string, identity = false) {
+  return (
+    !forbidden.test(value) &&
+    (identity || !/\b(?:const|let|var|function|class|import|export)\s/i.test(value))
+  );
 }
 export function safePrBriefValue(value: unknown): boolean {
   if (typeof value === 'string') return safePrBriefText(value);
   if (Array.isArray(value)) return value.every(safePrBriefValue);
-  if (value && typeof value === 'object') return Object.values(value).every(safePrBriefValue);
+  if (value && typeof value === 'object')
+    return Object.entries(value).every(([key, entry]) =>
+      typeof entry === 'string' && (key === 'repository' || key === 'name')
+        ? safePrBriefText(entry, true)
+        : safePrBriefValue(entry),
+    );
   return true;
 }
 export const prBriefProjectionSchema = z
