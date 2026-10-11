@@ -270,7 +270,7 @@ it('regenerates legacy and dirty briefs safely while repeated dry-runs preserve 
     (await collectSyncArtifacts(root)).eligible.some((entry) => entry.manifest.type === 'pr_brief'),
   ).toBe(true);
 });
-it.each(['feature/foo@bar', 'release/1.0+build', 'topic=one', 'feature,csv', 'feature/تست'])(
+it.each(['@', 'feature/foo@bar', 'release/1.0+build', 'topic=one', 'feature,csv', 'feature/تست'])(
   'generates and syncs a brief on valid Git branch %s',
   async (branch) => {
     await git('remote', 'add', 'origin', 'https://github.com/example/project.git');

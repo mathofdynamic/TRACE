@@ -15,7 +15,6 @@ const ref = z
     // Keep punctuation and Unicode accepted by Git; privacy validation runs separately.
     const parts = s.split('/');
     return (
-      s !== '@' &&
       !s.startsWith('-') &&
       !s.endsWith('.') &&
       !s.includes('..') &&
