@@ -538,3 +538,50 @@ it('treats code-like tokens in typed Git branch names as identity, retaining cre
     ).toBe(true);
   }
 });
+
+it('keeps refs with upload-forbidden literal markers local-only before negotiation', async () => {
+  const { artifact } = await generate();
+  const projection = artifact.metadata.dashboard!.pull_request!;
+  for (const branch of ['feature/<script>alert', 'feature/```literal']) {
+    await git('check-ref-format', '--branch', branch);
+    const input = { ...projection.input, branch };
+    const metadata = {
+      ...artifact.metadata,
+      evidence: [{ ...artifact.metadata.evidence[0]!, metadata: input }],
+      dashboard: {
+        ...artifact.metadata.dashboard!,
+        branch,
+        pull_request: { ...projection, input },
+      },
+    };
+    expect(
+      parseArtifact(serializeArtifact(metadata, artifact.markdown)).metadata.dashboard?.branch,
+    ).toBe(branch);
+    expect(prBriefAttributionIssue(metadata, { branch, headCommit: input.head_commit! })).toContain(
+      'sync content policy',
+    );
+  }
+  if (process.platform !== 'win32') {
+    await git('checkout', '-b', 'feature/<script>alert');
+    const generated = await generate();
+    expect(generated.artifact.metadata.sync_policy).toBe('local_only');
+    expect((await main(['sync', '--dry-run'])).value).toMatchObject({
+      eligible: [],
+      sourceCodeIncluded: false,
+      codeSnippetsIncluded: false,
+    });
+    await writeFile(
+      generated.path,
+      serializeArtifact(
+        { ...generated.artifact.metadata, sync_policy: 'repository_authoritative' },
+        generated.artifact.markdown,
+      ),
+    );
+    expect((await collectSyncArtifacts(root)).eligible).toHaveLength(0);
+    expect(
+      (await collectSyncArtifacts(root)).excluded.some((entry) =>
+        entry.reason.includes('sync content policy'),
+      ),
+    ).toBe(true);
+  }
+});

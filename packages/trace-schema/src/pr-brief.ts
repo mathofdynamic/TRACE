@@ -80,6 +80,11 @@ export const prBriefProjectionSchema = z
   });
 export type PrBriefProjection = z.infer<typeof prBriefProjectionSchema>;
 
+// Preserve the upload content policy for literal markers even in typed ref identities.
+export function isSyncSafePrBriefBranch(branch: string | undefined) {
+  return !/<script\b|```/i.test(branch ?? '');
+}
+
 // Used at both CLI selection and server upload, against the actual sync target.
 export function prBriefAttributionIssue(
   metadata: {
@@ -93,6 +98,8 @@ export function prBriefAttributionIssue(
     return 'PR brief requires a matching GitHub repository identity';
   const p = metadata.dashboard?.pull_request;
   if (!p) return 'PR brief projection is missing';
+  if (!isSyncSafePrBriefBranch(p.input.branch))
+    return 'PR brief branch identity is excluded by sync content policy';
   if (p.input.working_tree !== 'clean' || !p.input.stable)
     return 'PR brief input is dirty or unstable';
   if (

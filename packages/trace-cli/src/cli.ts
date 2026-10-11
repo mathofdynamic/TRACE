@@ -19,6 +19,7 @@ import {
   parseArtifact,
   prBriefProjectionSchema,
   prBriefInputCheck,
+  isSyncSafePrBriefBranch,
   prBriefTitle,
   prBriefSummary,
   renderPrBriefDocument,
@@ -551,7 +552,10 @@ async function prCommand(args: string[]): Promise<CliResult> {
     evidence: [{ type: 'check', locator: prBriefInputCheck, metadata: projection.input }],
     review_status: 'draft',
     sensitivity: 'internal',
-    sync_policy: clean && input.provider === 'github' ? 'repository_authoritative' : 'local_only',
+    sync_policy:
+      clean && input.provider === 'github' && isSyncSafePrBriefBranch(projection.input.branch)
+        ? 'repository_authoritative'
+        : 'local_only',
     dashboard: {
       title,
       summary,
