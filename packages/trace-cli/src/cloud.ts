@@ -540,7 +540,7 @@ export async function buildManifest(
     repositoryId: binding.repositoryId,
     repository: binding.repository,
     executionOrigin: 'local',
-    traceVersion: '0.2.0',
+    traceVersion: '0.3.0',
     createdAt: new Date().toISOString(),
     baseOperationId,
     git: { branch, headCommit },

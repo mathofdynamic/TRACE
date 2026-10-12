@@ -4,7 +4,7 @@
 
 Configure `TRACE_AI_PROVIDER=openai-compatible`, `TRACE_AI_BASE_URL`, `TRACE_AI_MODEL`, `TRACE_AI_API_KEY` and `TRACE_AI_DATA_POLICY=metadata-only` in the process environment. The base URL must be HTTPS without URL credentials, query or fragment. Model identifiers use bounded letters/digits and `._:/-`; credential-like names are rejected. Bearer credentials must be 16–4096 printable ASCII characters. Keys must remain outside `.trace`, tracked files, artifacts and logs. No CLI device credential is reused. Configuration examples and installation guidance are in packages/trace-cli/README.md.
 
-The older published CLI 0.2.0 archive predates this fix. Installed help must explicitly describe `TRACE_AI_DATA_POLICY=metadata-only`; the version number alone is not a capability check. Use the reviewed source/candidate or a release containing this contract.
+The older published CLI 0.2.0 archive predates this fix. Installed help must explicitly describe `TRACE_AI_DATA_POLICY=metadata-only`; the version number alone is not a capability check. Use CLI 0.3.0 or reviewed source containing this contract.
 
 ## Two distinct boundaries
 
