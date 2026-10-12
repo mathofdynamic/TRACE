@@ -47,6 +47,14 @@ export type ModelProvider = {
   ): Promise<StructuredGenerationResult<T>>;
 };
 
+function safeSemanticText(value: string) {
+  // A single prose line: no markup operators, URLs, paths, escapes or control characters.
+  if (!value.trim() || !/^[\p{L}\p{N}\p{Pd} .,!?():%;"'’“”]+$/u.test(value)) return false;
+  return !/^(?:-\s|[0-9]{1,9}[.)]\s)|\b(?:https?|ftp|file|mailto):|\bwww\.|\b(?:gh[opsu]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16})\b|\b(?:function|class|def)\s+\w+\s*[({:]|\b(?:import|export)\s|\b(?:return|throw)\s+[^;]+;|\b[\w$]+(?:\.[\w$]+)*\([^)]*\)|\b(?:print|exec|eval|console\.\w+)\s*\(|\b(?:SELECT\s+.+\s+FROM|(?:DROP|CREATE|ALTER)\s+TABLE|(?:INSERT|DELETE)\s+(?:INTO|FROM))\b|diff --git/i.test(
+    value,
+  );
+}
+
 export const semanticAnalysisSchema = z
   .object({
     summary: z.string().min(1).max(2000),
@@ -101,13 +109,7 @@ export const semanticAnalysisSchema = z
       ...value.conflictCandidates.map((x) => x.statement),
       ...value.questions,
     ].filter((x): x is string => typeof x === 'string');
-    if (
-      texts.some((x) =>
-        /[`<>\r\n]|\[[^\]]*\]\(|(?:^|\s)(?:\/[A-Za-z]|[A-Za-z]:\\)|\b(?:gh[opsu]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16})\b|\b(?:const|let|var)\s+\w+\s*=|\b(?:function|class)\s+\w+\s*[({]|\b(?:import|export)\s|=>|diff --git/i.test(
-          x,
-        ),
-      )
-    )
+    if (texts.some((x) => !safeSemanticText(x)))
       ctx.addIssue({ code: 'custom', message: 'Semantic output must be source-free plain text.' });
   });
 

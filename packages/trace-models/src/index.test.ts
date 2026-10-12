@@ -165,3 +165,32 @@ it('does not call a provider for an already cancelled request', async () => {
   ).rejects.toMatchObject({ code: 'AI_CANCELLED' });
   expect(fetcher).not.toHaveBeenCalled();
 });
+
+it.each([
+  '# Review https://attacker.example',
+  '**Emphasis**',
+  'src/private.ts',
+  'https://attacker.example',
+  'www.attacker.example',
+  'Safe text\u0001',
+  '- New list',
+  '1. New list',
+  'console.log("source");',
+  'def foo(): return 42',
+  'DROP TABLE private',
+  'print ("source")',
+])('rejects nonprose provider text %s', (summary) => {
+  expect(semanticAnalysisSchema.safeParse({ ...value, summary }).success).toBe(false);
+  expect(semanticAnalysisSchema.safeParse({ ...value, questions: [summary] }).success).toBe(false);
+});
+it('accepts bounded multilingual prose without markup', () => {
+  expect(
+    semanticAnalysisSchema.safeParse({
+      ...value,
+      summary: 'Metadata review complete; implementation remains unverified.',
+    }).success,
+  ).toBe(true);
+  expect(
+    semanticAnalysisSchema.safeParse({ ...value, summary: 'بررسی اطلاعات انجام شد.' }).success,
+  ).toBe(true);
+});

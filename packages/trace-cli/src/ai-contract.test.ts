@@ -185,6 +185,8 @@ it.each([
   { ...semantic, summary: secret },
   { ...semantic, summary: 'const privateCode = 42;' },
   { ...semantic, summary: '/tmp/private/path' },
+  { ...semantic, summary: '# Review https://attacker.example' },
+  { ...semantic, summary: 'console.log(42);' },
   {
     ...semantic,
     affectedBehaviors: [{ statement: 'Unverified observation.', evidenceIds: ['invented'] }],

@@ -26,7 +26,7 @@ TRACE Cloud may receive a schema-validated source-free plain-text summary and sa
 
 No configuration or invalid configuration returns exit 2. Missing configuration lists required variable names without printing values. Provider auth, unavailable, unsupported model/config, rate limit, timeout, cancellation, size-limit or malformed/unsafe response failures return exit 1 with static actionable codes. No fake fallback, partial semantic artifact, raw provider error or response is emitted. Existing artifacts are preserved on failure.
 
-The CLI makes one attempt. Request and response bytes are each bounded to 64 KiB; a 30-second abort covers the network request and body. The shared provider interface supports bounded transient retries only when explicitly requested. Structured responses reject code/Markdown/HTML/paths/credentials, unexpected structure and citations absent from the supplied evidence. Only the validated value is used; response envelopes/prompts are discarded.
+The CLI makes one attempt. Request and response bytes are each bounded to 64 KiB; a 30-second abort covers the network request and body. The shared provider interface supports bounded transient retries only when explicitly requested. Structured responses require a single prose line with a restricted character set and reject code/Markdown/HTML/URLs/paths/control characters/credentials, unexpected structure and citations absent from the supplied evidence. Only the validated value is used; response envelopes/prompts are discarded.
 
 Deterministic analysis stays available without configuration and makes no model call. PR/report/rules and other commands reject `--with-ai` rather than ignoring it or producing fixtures.
 
