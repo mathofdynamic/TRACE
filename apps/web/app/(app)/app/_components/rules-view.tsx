@@ -119,7 +119,7 @@ export function RulesView({
   };
 
   const copyCliCommand = (rule: DashboardSyncedRecord) => {
-    const cmd = `trace rules explain ${rule.id}`;
+    const cmd = 'trace rules effective';
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       navigator.clipboard.writeText(cmd).catch(() => {});
     }
@@ -900,10 +900,10 @@ function RuleDisclosureBody({
           <div className="aside-box aside-box--cli">
             <h4 className="aside-box__title">Local CLI Inspection</h4>
             <p className="cli-desc">
-              Inspect rule evaluation and check local compliance in your terminal:
+              Inspect the CLI built-in baseline. Synchronized dashboard rules may differ:
             </p>
             <div className="cli-code-block">
-              <code>trace rules explain {rule.id}</code>
+              <code>trace rules effective</code>
               <button
                 type="button"
                 className="cli-copy-btn"

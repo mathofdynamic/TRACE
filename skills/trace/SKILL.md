@@ -133,6 +133,17 @@ Two data planes: (A) GitHub/Cloud state (repo identity, selection, remote HEAD, 
 
 "Needs refresh" means the last synced `head_commit` differs from the remote HEAD TRACE knows. Fix: update the local checkout if the user wants (do not pull/reset without being asked), then analyze -> dry-run -> sync. A synced local commit that GitHub does not have also reads as stale; publishing is the user's decision. Full state table: `references/lifecycle.md`.
 
+## Rules
+
+```bash
+trace rules list
+trace rules effective
+trace rules validate
+trace rules test
+```
+
+These commands inspect, validate, or evaluate the CLI built-in baseline. They do not load synchronized dashboard rules or repository-authored rules. `trace rules --help` lists the supported contract; other rules subcommands return exit 2 with that usage.
+
 ## Automation boundary
 
 You are not a daemon. Triggers come from the user, Git hooks, CI, or GitHub webhooks. TRACE ships no hook installer, watcher, or CI sync today. Do not claim otherwise. Details: `references/automation.md`.

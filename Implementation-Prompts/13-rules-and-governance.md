@@ -213,15 +213,13 @@ Semantic guidance should generally inform human review rather than create hard f
 
 ## 11. CLI
 
-Add commands such as:
+The current public CLI contract is:
 
 ```text
 trace rules list
-trace rules explain <id>
 trace rules validate
-trace rules test <id> [--against <ref>]
-trace rules effective [--path <path>]
-trace rules diff
+trace rules test
+trace rules effective
 ```
 
 Local output must identify cloud-only or organization-managed rules and cached freshness.

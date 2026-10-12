@@ -580,8 +580,12 @@ async function prCommand(args: string[]): Promise<CliResult> {
   return { code: 0, value: { brief, artifact } };
 }
 
+const rulesUsage = 'rules list|effective|validate|test';
+
 async function rulesCommand(args: string[]): Promise<CliResult> {
   const subcommand = args[1] ?? 'list';
+  if (subcommand === '--help' || subcommand === '-h')
+    return { code: 0, value: { usage: `Use: trace ${rulesUsage}` } };
   const rules = mergeEffectiveRules(initialRules);
   if (subcommand === 'list' || subcommand === 'effective')
     return { code: 0, value: { source: 'built-in baseline', rules } };
@@ -597,7 +601,7 @@ async function rulesCommand(args: string[]): Promise<CliResult> {
   }
   return {
     code: 2,
-    value: { error: 'Use: trace rules list|explain|validate|test|effective|diff' },
+    value: { error: `Use: trace ${rulesUsage}` },
   };
 }
 
@@ -694,10 +698,11 @@ export async function main(args: string[]): Promise<CliResult> {
   }
   if (command === 'pr') return prCommand(args);
   if (command === 'rules') return rulesCommand(args);
+  const help = command === '--help' || command === '-h';
   return {
-    code: 2,
+    code: help ? 0 : 2,
     value: {
-      error: 'Unknown command.',
+      ...(help ? {} : { error: 'Unknown command.' }),
       commands: [
         'init',
         'login',
@@ -711,7 +716,7 @@ export async function main(args: string[]): Promise<CliResult> {
         'analyze [changes] [--with-ai]',
         'report daily',
         'pr',
-        'rules list|explain|validate|test|effective|diff',
+        rulesUsage,
         'sync [--dry-run]',
         'sync status [--accept-dashboard-base]',
         'config show',

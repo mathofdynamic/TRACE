@@ -73,6 +73,43 @@ assert.equal(
   undefined,
   'Release must have no workspace/runtime dependencies',
 );
+const rulesList = JSON.parse(run(executable, ['rules', 'list', '--json']));
+assert(Array.isArray(rulesList.rules));
+assert.equal(rulesList.source, 'built-in baseline');
+assert.deepEqual(JSON.parse(run(executable, ['rules', 'effective', '--json'])), rulesList);
+assert.deepEqual(JSON.parse(run(executable, ['rules', 'validate', '--json'])), {
+  valid: true,
+  errors: [],
+});
+assert(Array.isArray(JSON.parse(run(executable, ['rules', 'test', '--json'])).rules));
+const requireRulesHelpContract = process.env.TRACE_ACCEPTANCE_PUBLISHED_RELEASE !== 'true';
+if (requireRulesHelpContract) {
+  const rulesUsage = 'rules list|effective|validate|test';
+  assert.deepEqual(JSON.parse(run(executable, ['rules', '--help', '--json'])), {
+    usage: `Use: trace ${rulesUsage}`,
+  });
+  const help = JSON.parse(run(executable, ['--help', '--json']));
+  assert.deepEqual(
+    help.commands.filter((entry: string) => entry.startsWith('rules ')),
+    [rulesUsage],
+  );
+  for (const subcommand of ['explain', 'diff', '__unknown__']) {
+    let rejected = false;
+    try {
+      run(executable, ['rules', subcommand, '--json']);
+    } catch (error) {
+      const failure = error as { status: number; stdout: string };
+      assert.equal(failure.status, 2);
+      assert.deepEqual(JSON.parse(String(failure.stdout)), { error: `Use: trace ${rulesUsage}` });
+      rejected = true;
+    }
+    assert(rejected, 'Unsupported rules subcommand must return exit 2');
+  }
+}
+await assert.rejects(
+  access(join(checkout, '.trace')),
+  'Rules/help must not initialize the checkout',
+);
 run(executable, ['init', '--yes']);
 assert.deepEqual(JSON.parse(run(executable, ['validate', '--json'])), []);
 for (const path of ['config.yml', 'schema-version', 'README.md', 'state', 'reports/daily']) {
@@ -157,6 +194,9 @@ console.log(
       dailyReport: supportsPeriodReports,
       weeklyReport: supportsPeriodReports,
       schemaValid: true,
+      rulesContract: requireRulesHelpContract
+        ? 'pass'
+        : 'historical help verification not required',
       rootTraceIgnored: true,
       credentialsCreated: false,
       productionContact: false,
