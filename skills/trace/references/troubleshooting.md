@@ -51,6 +51,6 @@ is local exploratory work only and MUST NOT sync. Reverting edits is insufficien
 regenerate the clean analysis even when HEAD has not changed. This Skill policy
 is not currently enforced by TRACE runtime. See safety.md for the publication policy.
 
-`--with-ai` is not a configured real AI capability in this CLI release. Its
-fixture/no-provider output must not be presented as model-backed intelligence;
-check provenance and do not imply source was sent to a model.
+AI analysis requires explicit configuration; missing configuration (`AI_NOT_CONFIGURED`) or invalid/unsupported configuration (`AI_INVALID_CONFIG`) returns exit 2. Configure the documented HTTPS endpoint, model, provider credential and metadata-only consent outside `.trace`, or omit `--with-ai`.
+
+Provider failures return exit 1: `AI_AUTH_FAILED` (credential), `AI_UNSUPPORTED_MODEL` (model/request), `AI_RATE_LIMITED`, `AI_UNAVAILABLE`, `AI_TIMEOUT`, `AI_CANCELLED`, `AI_CONTEXT_LIMIT`, or `AI_INVALID_RESPONSE` (malformed/unsafe output or unrecognized evidence). No fake fallback or partial semantic artifact is written. Errors never echo keys, endpoint details or raw responses. Do not copy credentials into logs or project files.

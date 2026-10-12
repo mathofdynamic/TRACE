@@ -9,6 +9,8 @@ import { fileURLToPath } from 'node:url';
 import { parse, stringify } from 'yaml';
 import {
   analyzeChanges,
+  configuredMetadataProvider,
+  ModelProviderError,
   createPullRequestBrief,
   renderPullRequestBrief,
   type PullRequestInput,
@@ -362,6 +364,7 @@ async function analyzeCommand(args: string[]): Promise<CliResult> {
     root,
     changeSet,
     withSemantic: args.includes('--with-ai'),
+    modelProvider: args.includes('--with-ai') ? configuredMetadataProvider(process.env) : undefined,
   });
   const after = await gitSnapshot(root).catch(() => null);
   const verifiedClean =
@@ -407,13 +410,17 @@ async function analyzeCommand(args: string[]): Promise<CliResult> {
       generator: 'trace-cli/0.2.0',
       execution_origin: 'local',
       source_refs: changeSet.evidence,
-      evidence: [...changeSet.evidence, inputEvidence],
+      evidence: [
+        ...changeSet.evidence,
+        inputEvidence,
+        { type: 'check', locator: 'trace:semantic-analysis:v1', metadata: result.provenance },
+      ],
       review_status: 'draft',
       sensitivity: 'internal',
       sync_policy: verifiedClean ? 'allowlisted' : 'local_only',
       dashboard: {
         title: `Local analysis of ${changeSet.repository.name}`,
-        summary: `${result.findings.length} deterministic findings from ${result.parserCoverage.supportedFiles} supported files. Source code remains local.`,
+        summary: `${result.findings.length} deterministic findings from ${result.parserCoverage.supportedFiles} supported files. Source code remains local.${result.semantic ? ' Semantic metadata review: ' + result.semantic.summary : ''}`,
         branch: changeSet.headRef || undefined,
         head_commit: headCommit,
         status: 'completed',
@@ -427,7 +434,7 @@ async function analyzeCommand(args: string[]): Promise<CliResult> {
         })),
       },
     },
-    markdown: `# Local analysis\n\n## Known\n\n- Deterministic findings: **${result.findings.length}**.\n- Supported files: **${result.parserCoverage.supportedFiles}**.\n- Working tree: **${changeSet.workingTree}**.\n\n## Provenance\n\n- Engine: ${result.provenance.engine}.\n- Parser: ${result.provenance.parser}.\n- Source code sent to a model: **${result.provenance.sourceCodeSentToProvider ? 'yes' : 'no'}**.\n\n## Findings\n\n${result.findings.map((finding) => `- **${finding.title}** — ${finding.detail}`).join('\n') || '- No deterministic findings.'}\n`,
+    markdown: `# Local analysis\n\n## Known\n\n- Deterministic findings: **${result.findings.length}**.\n- Supported files: **${result.parserCoverage.supportedFiles}**.\n- Working tree: **${changeSet.workingTree}**.\n\n## Provenance\n\n- Engine: ${result.provenance.engine}.\n- Parser: ${result.provenance.parser}.\n- Semantic review: **${result.provenance.semanticEnabled ? 'enabled (metadata-only)' : 'disabled'}**.\n- Provider: ${result.provenance.semanticProvider ?? 'none'}. Model: ${result.provenance.semanticModel ?? 'none'}.\n- Source code synchronized to TRACE Cloud: **no**.\n- Source code sent to a model: **${result.provenance.sourceCodeSentToProvider ? 'yes' : 'no'}**.\n\n${result.semantic ? '## Semantic metadata review\n\n' + result.semantic.summary + '\n\n' : ''}## Findings\n\n${result.findings.map((finding) => `- **${finding.title}** — ${finding.detail}`).join('\n') || '- No deterministic findings.'}\n`,
   });
   return {
     code: 0,
@@ -437,6 +444,7 @@ async function analyzeCommand(args: string[]): Promise<CliResult> {
         parserCoverage: result.parserCoverage,
         findings: result.findings,
         conflicts: result.conflicts,
+        semantic: result.semantic,
         warnings: result.warnings,
         provenance: result.provenance,
         input: inputEvidence.metadata,
@@ -486,7 +494,6 @@ async function prCommand(args: string[]): Promise<CliResult> {
   const analysis = await analyzeChanges({
     root,
     changeSet,
-    withSemantic: args.includes('--with-ai'),
   });
   const brief = createPullRequestBrief(input, analysis);
   const markdown = renderPullRequestBrief(brief);
@@ -605,8 +612,16 @@ async function rulesCommand(args: string[]): Promise<CliResult> {
   };
 }
 
-export async function main(args: string[]): Promise<CliResult> {
+async function dispatch(args: string[]): Promise<CliResult> {
   const [command, subcommand] = args;
+  if (args.includes('--with-ai') && command !== 'analyze')
+    return {
+      code: 2,
+      value: {
+        error:
+          'AI review is supported only by trace analyze --with-ai. Other commands remain deterministic.',
+      },
+    };
   if (command === '--version' || command === '-v') return { code: 0, value: 'trace 0.2.0' };
   if (command === 'init') return init(args);
   if (command === 'login') return { code: 0, value: await loginDashboard(args) };
@@ -703,6 +718,7 @@ export async function main(args: string[]): Promise<CliResult> {
     code: help ? 0 : 2,
     value: {
       ...(help ? {} : { error: 'Unknown command.' }),
+      ai: '--with-ai requires an explicitly configured OpenAI-compatible provider and TRACE_AI_DATA_POLICY=metadata-only. Only source-free counts and opaque evidence IDs are sent directly to that endpoint; TRACE Cloud receives no source or snippets.',
       commands: [
         'init',
         'login',
@@ -724,6 +740,19 @@ export async function main(args: string[]): Promise<CliResult> {
       ],
     },
   };
+}
+
+export async function main(args: string[]): Promise<CliResult> {
+  try {
+    return await dispatch(args);
+  } catch (error) {
+    if (error instanceof ModelProviderError)
+      return {
+        code: ['AI_NOT_CONFIGURED', 'AI_INVALID_CONFIG'].includes(error.code) ? 2 : 1,
+        value: { error: error.message, errorCode: error.code },
+      };
+    throw error;
+  }
 }
 
 const invokedPath = process.argv[1] ? await realpath(process.argv[1]).catch(() => '') : '';

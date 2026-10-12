@@ -82,7 +82,9 @@ trace analyze --dry-run --json    # preview only; no files or directories create
 trace validate --json
 ```
 
-`--with-ai` exists, but the current CLI supplies no configured semantic provider. It uses a development fixture/no-provider path, not real model-backed AI analysis. Do not recommend the flag as an AI capability. Inspect `analysis.provenance`: current output reports provider `fake` and `sourceCodeSentToProvider: false`; never present it as semantic intelligence or claim source was sent to a model. Plain analysis is deterministic.
+Only use AI review when the installed help explicitly describes `TRACE_AI_DATA_POLICY=metadata-only`; the older published CLI 0.2.0 archive predates this contract. A version number alone is insufficient. Use a reviewed source/candidate build or a later release carrying this fix.
+
+`trace analyze --with-ai` performs a real, explicitly configured metadata-only model review. It requires `TRACE_AI_PROVIDER=openai-compatible`, `TRACE_AI_BASE_URL` (HTTPS), `TRACE_AI_MODEL`, `TRACE_AI_API_KEY` (secure process environment, never `.trace`) and `TRACE_AI_DATA_POLICY=metadata-only`. No vendor/model/endpoint is chosen by the CLI. Missing configuration returns exit 2; provider failures return exit 1 with safe actionable codes and never substitute fixture output. Only aggregate counts, working-tree state and opaque evidence IDs/kinds go directly to the configured endpoint; no source, diffs, paths, symbols, commit messages or repository identity. This is not source-level implementation review. TRACE Cloud receives only validated source-free summaries/provenance; both sync privacy flags remain false. Do not enable it without task authorization for that configured provider and metadata boundary. Other CLI commands remain deterministic and reject `--with-ai`. See `references/safety.md` and `DOC/ai-analysis.md` in the repository.
 
 ## "Update TRACE" workflow
 

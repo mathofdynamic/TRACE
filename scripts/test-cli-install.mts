@@ -29,7 +29,15 @@ const run = (command: string, args: string[], cwd = checkout) =>
     cwd,
     encoding: 'utf8',
     shell: windows,
-    env: { ...process.env, TRACE_CONFIG_HOME: config },
+    env: {
+      ...process.env,
+      TRACE_CONFIG_HOME: config,
+      TRACE_AI_PROVIDER: '',
+      TRACE_AI_BASE_URL: '',
+      TRACE_AI_MODEL: '',
+      TRACE_AI_API_KEY: '',
+      TRACE_AI_DATA_POLICY: '',
+    },
     maxBuffer: 16 * 1024 * 1024,
   }).trim();
 assert.equal(run('git', ['status', '--porcelain']), '', 'Acceptance needs a clean checkout');
@@ -115,6 +123,21 @@ assert.deepEqual(JSON.parse(run(executable, ['validate', '--json'])), []);
 for (const path of ['config.yml', 'schema-version', 'README.md', 'state', 'reports/daily']) {
   await access(join(checkout, '.trace', path));
 }
+if (requireRulesHelpContract) {
+  let rejected = false;
+  try {
+    run(executable, ['analyze', '--with-ai', '--json']);
+  } catch (error) {
+    const failure = error as { status: number; stdout: string };
+    assert.equal(failure.status, 2);
+    const result = JSON.parse(String(failure.stdout));
+    assert.equal(result.errorCode, 'AI_NOT_CONFIGURED');
+    assert(result.error.includes('TRACE_AI_DATA_POLICY'));
+    rejected = true;
+  }
+  assert(rejected, 'AI request without explicit configuration must fail');
+  await assert.rejects(access(join(checkout, '.trace/analyses')));
+}
 const analysis = JSON.parse(run(executable, ['analyze', '--json']));
 assert.equal(analysis.analysis.provenance.sourceCodeSentToProvider, false);
 const artifact = await readFile(analysis.artifact.path, 'utf8');
@@ -194,6 +217,9 @@ console.log(
       dailyReport: supportsPeriodReports,
       weeklyReport: supportsPeriodReports,
       schemaValid: true,
+      aiContract: requireRulesHelpContract
+        ? 'explicit configuration required; deterministic default verified'
+        : 'historical contract not required',
       rulesContract: requireRulesHelpContract
         ? 'pass'
         : 'historical help verification not required',

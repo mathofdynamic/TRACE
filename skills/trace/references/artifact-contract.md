@@ -43,3 +43,7 @@ analysis of that clean committed checkout, validation and the privacy dry-run.
 Recheck cleanliness and matching HEAD immediately before sync. Dirty analysis
 is local exploratory work only and MUST NOT sync. Reverting edits is insufficient:
 regenerate the clean analysis even when HEAD has not changed. Runtime enforces clean-input branch/HEAD attribution for analyses. The period-report implementation adds the same publication gate for daily/weekly reports; regenerate legacy/unverified reports before sync. See safety.md for the publication policy.
+
+## Semantic provenance
+
+Analysis records `trace:semantic-analysis:v1` check evidence with semantic enabled/disabled, selected adapter and requested model, endpoint SHA-256 fingerprint (not its URL), metadata-only input scope, engine/parser versions, start/completion timestamps, and separate AI-provider/TRACE Cloud source flags. The validated plain-text summary is eligible only under the existing clean/current attribution and privacy policy. Prompts, source, diffs, keys and raw provider responses never enter this artifact. Semantic inference is not deterministic implementation evidence.

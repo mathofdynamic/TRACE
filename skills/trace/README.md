@@ -27,4 +27,4 @@ PR brief projections and clean-input attribution are documented and tested; GitH
 
 Dirty analyses remain local exploratory work; synchronization requires a clean
 committed checkout and freshly regenerated clean analysis. The current CLI
-`--with-ai` flag has no configured real semantic provider and is not an AI feature.
+`trace analyze --with-ai` requires explicit provider/model/HTTPS endpoint configuration and metadata-only consent. It performs real model-backed metadata review; no source is sent. See SKILL.md and the repository DOC/ai-analysis.md.
