@@ -51,6 +51,17 @@ SHA256SUMS in ignored `dist/cli-release/`. Only tested exact-source artifacts sh
 be released. Windows/Linux CI installs the package into a fresh prefix and uses a
 fresh TRACE checkout for acceptance, without production contact.
 
+## Rules
+
+```text
+trace rules list
+trace rules effective
+trace rules validate
+trace rules test
+```
+
+These commands use the CLI built-in baseline, not synchronized or repository-authored rules. `trace rules --help` lists the supported subcommands. Other rules subcommands return exit 2 with accurate usage. Help and rules commands do not initialize or persist `.trace`.
+
 ## Period reports (CLI 0.2.0)
 
 CLI 0.2.0 adds verified period engineering reports.

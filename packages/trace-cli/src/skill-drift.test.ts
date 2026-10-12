@@ -160,7 +160,32 @@ describe('TRACE Skill drift checks', () => {
       expect((await main(['rules', subcommand])).code).toBe(0);
     for (const subcommand of ['explain', 'diff'])
       expect((await main(['rules', subcommand])).code).toBe(2);
-    expect(await read('references/automation.md')).toContain('trace rules explain');
+    expect(await read('references/automation.md')).not.toMatch(/trace rules (?:explain|diff)\b/);
+    const usage = (await main(['--help'])).value as { commands: string[] };
+    expect(usage.commands.find((entry) => entry.startsWith('rules '))).toBe(
+      'rules list|effective|validate|test',
+    );
+    const commandDocs = [
+      await read('SKILL.md'),
+      await read('references/automation.md'),
+      await readFile(new URL('../README.md', import.meta.url), 'utf8'),
+      await readFile(
+        new URL('../../../Implementation-Prompts/13-rules-and-governance.md', import.meta.url),
+        'utf8',
+      ),
+    ];
+    for (const text of commandDocs)
+      for (const subcommand of ['list', 'effective', 'validate', 'test'])
+        expect(text).toContain(`trace rules ${subcommand}`);
+    const publicFiles = [
+      'packages/trace-cli/README.md',
+      'Implementation-Prompts/13-rules-and-governance.md',
+      'apps/web/app/(app)/app/_components/rules-view.tsx',
+    ];
+    for (const name of publicFiles) {
+      const text = await readFile(new URL('../../../' + name, import.meta.url), 'utf8');
+      expect(text, name).not.toMatch(/trace rules (?:explain|diff)\b/);
+    }
   });
 
   it('mutation-checks documentation commands and flags instead of dispatch implementation formatting', async () => {
@@ -170,6 +195,7 @@ describe('TRACE Skill drift checks', () => {
       'trace analyze --invented-flag',
       'trace report hourly',
       'trace rules explain',
+      'trace rules diff',
     ]) {
       const mutated = new Map(files);
       mutated.set('SKILL.md', files.get('SKILL.md')! + '\n`' + bad + '`\n');

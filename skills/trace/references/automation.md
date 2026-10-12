@@ -8,7 +8,11 @@ Loading this Skill causes nothing to run. The CLI executes only when an agent, h
 
 ## Commands that do NOT exist (verified against CLI source)
 
-`trace watch`, `trace daemon`, `trace auto`, `trace monitor`, `trace hooks install`. Also `trace rules explain` and `trace rules diff` are advertised in the usage text but return a usage error; only `list`, `effective`, `validate`, `test` work. Never put these in instructions, scripts, or hooks. If a future release adds them, verify against the CLI first.
+`trace watch`, `trace daemon`, `trace auto`, `trace monitor`, `trace hooks install`. Never put these in instructions, scripts, or hooks. If a future release adds them, verify against the CLI first.
+
+## Supported rules commands
+
+The supported commands are `trace rules list`, `trace rules effective`, `trace rules validate`, and `trace rules test`. Use `trace rules --help` for current usage. Other rules subcommands return exit 2.
 
 ## Trigger categories
 
