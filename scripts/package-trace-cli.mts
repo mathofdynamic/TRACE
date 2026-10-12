@@ -74,6 +74,10 @@ await writeFile(
   ) + '\n',
 );
 await copyFile(join(root, 'packages/trace-cli/README.md'), join(staging, 'README.md'));
+// Normalize staged modes so restrictive local umasks cannot change release checksums.
+for (const file of ['package.json', 'README.md', 'THIRD_PARTY_NOTICES.txt']) {
+  await chmod(join(staging, file), 0o644);
+}
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const packed = JSON.parse(
   execFileSync(npm, ['pack', '--json', '--pack-destination', output], {
