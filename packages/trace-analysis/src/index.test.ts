@@ -1,3 +1,4 @@
+import { createFakeProvider } from '@trace/models';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -43,6 +44,7 @@ describe('TRACE analysis pipeline', () => {
     const result = await analyzeChanges({
       root,
       withSemantic: true,
+      modelProvider: createFakeProvider(),
       changeSet: {
         repository: { provider: 'git', name: 'fixture', root },
         commits: [],

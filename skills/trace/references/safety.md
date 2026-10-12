@@ -43,7 +43,7 @@ publication_policy:
   clean_worktree_required: true
   fresh_clean_analysis_required: true
   all_eligible_analysis_verified_clean: true
-  real_cli_semantic_provider: false
+  real_cli_semantic_provider: true
 ```
 
 Dirty working-tree analysis is local exploratory work only; DO NOT sync it.
@@ -59,8 +59,9 @@ Sync rejects a dirty checkout. Analysis eligibility requires recorded clean inpu
 and matching current branch/HEAD; historical and legacy/unverified analyses stay
 local with explicit exclusion reasons. Reverting edits does not repair the saved
 input state: regenerate clean analysis. No historical files are deleted.
-`--with-ai` currently uses a fixture/no-provider path, not real AI capability;
-provenance must not be presented as model-backed intelligence.
+`trace analyze --with-ai` requires explicit environment configuration and `TRACE_AI_DATA_POLICY=metadata-only`. The direct AI-provider boundary sends aggregate counts, working-tree state and opaque evidence IDs/kinds only. No source, diff bodies, paths, symbols, commit messages, repository identity or credentials enter the request body. The credential is used only as the authorization header for the explicitly configured HTTPS endpoint; redirects are rejected. Provider retention of this metadata is governed by that provider's policy. TRACE does not persist prompts/raw responses/credentials.
+
+The TRACE Cloud boundary is separate: validated source-free summary and safe provenance may sync, with `sourceCodeIncluded=false` and `codeSnippetsIncluded=false`. Metadata-only inference cannot prove source implementation behavior. Configuration failures and provider failures never fall back to fake output. Other CLI commands reject the AI flag.
 
 The gate applies to every eligible analysis in the dry-run batch, including older
 HEADs. Regenerating current HEAD does not rehabilitate older dirty or unverified

@@ -159,6 +159,8 @@ Implement an extensible check interface and initial checks for:
 
 Every result must identify rule/check ID and evidence.
 
+Current CLI AI review is explicitly configured metadata-only analysis; other commands remain deterministic. See `DOC/ai-analysis.md`.
+
 ## 9. Model-provider layer
 
 Implement `packages/trace-models` with:
@@ -233,8 +235,8 @@ Upgrade local commands so users can:
 
 ```text
 trace analyze changes
-trace report daily --with-ai
-trace pr <number-or-local-range> --with-ai
+trace report daily
+trace pr <number>
 ```
 
 AI use must be explicit or configured. Dry-run and JSON output remain supported.

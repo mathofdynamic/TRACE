@@ -131,7 +131,7 @@ function publicationPolicy(text: string) {
     clean_worktree_required: true,
     fresh_clean_analysis_required: true,
     all_eligible_analysis_verified_clean: true,
-    real_cli_semantic_provider: false,
+    real_cli_semantic_provider: true,
   });
   return policy;
 }
@@ -186,6 +186,30 @@ describe('TRACE Skill drift checks', () => {
       const text = await readFile(new URL('../../../' + name, import.meta.url), 'utf8');
       expect(text, name).not.toMatch(/trace rules (?:explain|diff)\b/);
     }
+  });
+
+  it('protects explicit metadata-only AI configuration and provenance guidance', async () => {
+    const skill = await read('SKILL.md');
+    for (const key of [
+      'TRACE_AI_PROVIDER',
+      'TRACE_AI_BASE_URL',
+      'TRACE_AI_MODEL',
+      'TRACE_AI_API_KEY',
+      'TRACE_AI_DATA_POLICY',
+    ])
+      expect(skill).toContain(key);
+    for (const name of [
+      'SKILL.md',
+      'README.md',
+      'references/safety.md',
+      'references/troubleshooting.md',
+    ]) {
+      const text = await read(name);
+      expect(text).not.toMatch(
+        /uses a (?:fixture|development fixture)|reports provider `fake`|has no configured real semantic provider/,
+      );
+    }
+    expect(await read('references/artifact-contract.md')).toContain('trace:semantic-analysis:v1');
   });
 
   it('mutation-checks documentation commands and flags instead of dispatch implementation formatting', async () => {
@@ -338,9 +362,9 @@ describe('TRACE Skill drift checks', () => {
       expect(
         (await value(['inspect', (dirty.artifact as { path: string }).path])).dashboard,
       ).toMatchObject({ head_commit: head });
-      const withAi = await value(['analyze', '--with-ai']);
-      expect(withAi.analysis).toMatchObject({
-        provenance: { semanticProvider: 'fake', sourceCodeSentToProvider: false },
+      expect(await main(['analyze', '--with-ai'])).toMatchObject({
+        code: 2,
+        value: { errorCode: 'AI_NOT_CONFIGURED' },
       });
       expect((await main(['config', 'show'])).code).toBe(0);
       expect((await main(['rules', 'test'])).code).toBe(0);

@@ -27,8 +27,7 @@ trace validate
 This is local-only, needs no database or cloud login, and writes `.trace` project
 memory without overwriting existing initialization. Keep runtime output under the
 repository's existing ignore policy. Dirty checkout analysis is exploratory only;
-never sync it as an authoritative committed record. `--with-ai` currently has no
-configured real semantic provider.
+never sync it as an authoritative committed record. `--with-ai` requires explicit configuration for the metadata-only review described below.
 
 Only when dashboard synchronization is intended, approve the normal device flow:
 
@@ -92,3 +91,21 @@ clean-input publication guards and the dashboard document/provenance contract.
 - Both privacy flags remain false. Release publication requires the existing
   checksum-verified fresh Windows/Linux installation acceptance, now including
   real daily/weekly generation, validation and safe local sync planning.
+
+## Explicit AI metadata review
+
+This contract applies to source/candidate builds carrying the #70 fix. The existing published CLI 0.2.0 archive predates it; do not treat its legacy AI flag as a real provider feature. Verify installed help describes `TRACE_AI_DATA_POLICY=metadata-only`, or use a reviewed source build until a release containing this contract is published.
+
+`trace analyze --with-ai` uses the existing OpenAI-compatible adapter with no CLI vendor, endpoint or model defaults. Set these process environment variables through secure environment injection:
+
+- `TRACE_AI_PROVIDER=openai-compatible`
+- `TRACE_AI_BASE_URL`: your approved HTTPS API base endpoint (no URL credentials/query/fragment)
+- `TRACE_AI_MODEL`: your explicit supported model identifier
+- `TRACE_AI_API_KEY`: bearer credential, 16–4096 printable ASCII characters; never `.trace`, tracked files or shell history
+- `TRACE_AI_DATA_POLICY=metadata-only`: explicit consent to the described metadata boundary
+
+Only counts, working-tree state and opaque evidence IDs/kinds go directly to that endpoint. No source, diffs, file paths, symbols, commit messages or repository identity are sent. This is metadata inference, not source-level code review. Provider retention is outside TRACE's control. Validated source-free summaries and safe provenance may synchronize to TRACE Cloud; both Cloud source/snippet flags remain false. Prompts, raw responses and credentials are never persisted.
+
+Missing/invalid configuration returns exit 2. Auth, unsupported model, rate limit, unavailable provider, timeout, cancellation, size-limit or malformed/unsafe output failures return exit 1 with sanitized actionable codes; no fixture fallback. Requests/responses are bounded to 64 KiB with a 30-second timeout. CLI uses one attempt, with no automatic paid retries. Other commands reject `--with-ai`. Deterministic analysis remains the default.
+
+See `DOC/ai-analysis.md` for provenance and CI acceptance. Normal CI uses mocked contracts and never needs a paid API call. No live-provider acceptance is claimed by mocked tests.

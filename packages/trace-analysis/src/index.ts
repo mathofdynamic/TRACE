@@ -5,11 +5,12 @@ import ts from 'typescript';
 import type { EvidenceClassification, NormalizedChangeSet } from '@trace/core';
 import { validateTraceDirectory } from '@trace/schema';
 import {
-  createFakeProvider,
+  ModelProviderError,
   semanticAnalysisSchema,
   type ModelProvider,
   type SemanticAnalysis,
 } from '@trace/models';
+export { configuredMetadataProvider, ModelProviderError } from '@trace/models';
 
 export type AnalysisStage =
   | 'normalize'
@@ -428,6 +429,14 @@ export type AnalysisResult = {
     engine: string;
     parser: string;
     semanticProvider?: string;
+    semanticEnabled: boolean;
+    semanticModel?: string;
+    providerEndpointFingerprint?: string;
+    providerInput: 'metadata-only-v1' | 'none';
+    startedAt: string;
+    completedAt: string;
+    sourceCodeIncluded: false;
+    codeSnippetsIncluded: false;
     sourceCodeSentToProvider: boolean;
   };
 };
@@ -622,6 +631,11 @@ function verifyFindings(
 }
 
 export async function analyzeChanges(options: AnalysisOptions): Promise<AnalysisResult> {
+  if (options.withSemantic && !options.modelProvider)
+    throw new ModelProviderError('AI_NOT_CONFIGURED');
+  if (options.withSemantic && options.modelProvider?.dataPolicy.sourceCodeSent !== false)
+    throw new ModelProviderError('AI_INVALID_CONFIG');
+  const startedAt = new Date().toISOString();
   const timings: StageTiming[] = [];
   const workspace = new RepositoryWorkspace({
     root: options.root,
@@ -678,28 +692,52 @@ export async function analyzeChanges(options: AnalysisOptions): Promise<Analysis
   );
   let semantic: SemanticAnalysis | undefined;
   let semanticProvider: string | undefined;
+  let semanticModel: string | undefined;
   let sourceCodeSentToProvider = false;
   if (options.withSemantic) {
-    const provider = options.modelProvider ?? createFakeProvider();
+    const provider = options.modelProvider!;
+    const evidence = [
+      { id: 'trace:change-summary:v1', kind: 'aggregate' },
+      ...context.items.map((item) => ({ id: item.id, kind: item.kind })),
+    ];
     const semanticResult = await timed(timings, 'semantic', () =>
       provider.generateStructured({
-        task: 'Summarize the change and identify only evidence-backed semantic observations.',
+        task: 'Review only the supplied source-free metadata. No source, diffs, file names, symbols, commit messages or repository identity are supplied. Do not claim to review implementation behavior. Return plain-text JSON with: summary (string), intent (null or {statement, confidence: high|medium|low, evidenceIds}), affectedBehaviors ([{statement,evidenceIds}]), incompleteWork ([{statement,confidence,evidenceIds}]), conflictCandidates ([{statement,evidenceIds}]), questions ([string]). Cite only supplied evidence IDs. Use empty arrays/null when unsupported. No code, Markdown, links, secrets or paths.',
         context: {
-          changeSet: normalized,
-          contextManifest: context.items.map((item) => ({
-            id: item.id,
-            label: item.label,
-            reason: item.reason,
-          })),
-          findings: findings.map(({ id, title, evidenceIds }) => ({ id, title, evidenceIds })),
+          inputScope: 'metadata-only-v1',
+          workingTree: normalized.workingTree,
+          counts: {
+            changedFiles: normalized.changedFiles.length,
+            additions: normalized.additions,
+            deletions: normalized.deletions,
+            productionFiles: normalized.changedFiles.filter(
+              (x) => !/\.(?:test|spec)\./.test(x.path),
+            ).length,
+            testFiles: normalized.changedFiles.filter((x) => /\.(?:test|spec)\./.test(x.path))
+              .length,
+            deterministicFindings: findings.length,
+          },
+          evidence,
         },
         schema: semanticAnalysisSchema,
         signal: options.signal,
       }),
     );
-    semantic = semanticResult.value;
-    semanticProvider = semanticResult.provider;
-    sourceCodeSentToProvider = semanticResult.dataPolicy.sourceCodeSent;
+    const parsed = semanticAnalysisSchema.safeParse(semanticResult.value);
+    if (!parsed.success || semanticResult.dataPolicy.sourceCodeSent)
+      throw new ModelProviderError('AI_INVALID_RESPONSE');
+    const citations = [
+      parsed.data.intent,
+      ...parsed.data.affectedBehaviors,
+      ...parsed.data.incompleteWork,
+      ...parsed.data.conflictCandidates,
+    ].flatMap((x) => x?.evidenceIds ?? []);
+    const known = new Set(evidence.map((x) => x.id));
+    if (citations.some((id) => !known.has(id))) throw new ModelProviderError('AI_INVALID_RESPONSE');
+    semantic = parsed.data;
+    semanticProvider = provider.name;
+    semanticModel = provider.model;
+    sourceCodeSentToProvider = false;
   } else {
     timings.push({ stage: 'semantic', durationMs: 0, status: 'skipped' });
   }
@@ -764,6 +802,16 @@ export async function analyzeChanges(options: AnalysisOptions): Promise<Analysis
       engine: 'trace-analysis@0.1',
       parser: `typescript@${ts.version}`,
       semanticProvider,
+      semanticEnabled: options.withSemantic === true,
+      semanticModel,
+      providerEndpointFingerprint: options.withSemantic
+        ? options.modelProvider?.endpointFingerprint
+        : undefined,
+      providerInput: options.withSemantic ? 'metadata-only-v1' : 'none',
+      startedAt,
+      completedAt: new Date().toISOString(),
+      sourceCodeIncluded: false,
+      codeSnippetsIncluded: false,
       sourceCodeSentToProvider,
     },
   };
