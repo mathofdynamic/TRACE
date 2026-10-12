@@ -29,9 +29,13 @@ const unsafeBranchIdentity =
 const forbidden =
   /```|[<>\r\n]|\b(?:gh[opsu]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16})\b|(?:^|\s)(?:\/[A-Za-z]|[A-Za-z]:\\)|(?:=>|\bdiff --git\b)/i;
 export function safePrBriefText(value: string, identity = false) {
+  if (identity)
+    return (
+      !unsafeBranchIdentity.test(value) &&
+      !/```|[<\r\n]|(?:^|\s)(?:\/[A-Za-z]|[A-Za-z]:\\)/.test(value)
+    );
   return (
-    !forbidden.test(value) &&
-    (identity || !/\b(?:const|let|var|function|class|import|export)\s/i.test(value))
+    !forbidden.test(value) && !/\b(?:const|let|var|function|class|import|export)\s/i.test(value)
   );
 }
 export function safePrBriefValue(value: unknown): boolean {

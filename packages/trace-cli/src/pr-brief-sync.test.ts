@@ -393,6 +393,8 @@ it('excludes a current brief when the saved dashboard binding names another repo
 });
 
 it.each([
+  ...(process.platform === 'win32' ? [] : ['project=>demo']),
+  'diff --git archive',
   'class action',
   'import map',
   'my project',
@@ -584,4 +586,18 @@ it('keeps refs with upload-forbidden literal markers local-only before negotiati
       ),
     ).toBe(true);
   }
+});
+
+it('keeps typed local identity token handling separate from credential and markup rejection', async () => {
+  const { artifact } = await generate();
+  const p = { ...artifact.metadata.dashboard!.pull_request!, provider: 'git' as const };
+  for (const repository of ['project=>demo', 'diff --git archive'])
+    expect(prBriefProjectionSchema.safeParse({ ...p, repository }).success).toBe(true);
+  for (const repository of [
+    'project<script>',
+    'project/child',
+    'project\\child',
+    'ghp_123456789012345678901234567890123456',
+  ])
+    expect(prBriefProjectionSchema.safeParse({ ...p, repository }).success).toBe(false);
 });
