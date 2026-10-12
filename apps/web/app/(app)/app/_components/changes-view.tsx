@@ -787,7 +787,7 @@ function ChangeDetailDrawer({
   }, [isOpen, onClose]);
 
   const copyCliCommand = () => {
-    const cmd = `trace pr inspect ${change.number}`;
+    const cmd = `trace pr ${change.number}`;
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       navigator.clipboard.writeText(cmd).catch(() => {});
     }
@@ -839,7 +839,11 @@ function ChangeDetailDrawer({
               <div className="change-drawer__column change-drawer__column--left">
                 {change.intent ? (
                   <section className="change-drawer__section">
-                    <span className="eyebrow">Architectural intent</span>
+                    <span className="eyebrow">
+                      {change.source === 'local-brief'
+                        ? 'Local review summary'
+                        : 'Architectural intent'}
+                    </span>
                     <p className="change-drawer__lead">{change.intent}</p>
                   </section>
                 ) : null}
@@ -859,7 +863,15 @@ function ChangeDetailDrawer({
                     </div>
                     <div>
                       <span className="detail-label">Base branch</span>
-                      <code title={change.baseBranch ?? 'main'}>{change.baseBranch ?? 'main'}</code>
+                      <code
+                        title={
+                          change.baseBranch ??
+                          (change.source === 'local-brief' ? 'Not available' : 'main')
+                        }
+                      >
+                        {change.baseBranch ??
+                          (change.source === 'local-brief' ? 'Not available' : 'main')}
+                      </code>
                     </div>
                     <div>
                       <span className="detail-label">Head commit SHA</span>
@@ -964,7 +976,7 @@ function ChangeDetailDrawer({
                 <section className="change-drawer__section">
                   <span className="eyebrow">Local review command</span>
                   <div className="change-drawer__cli-box">
-                    <code>trace pr inspect {change.number}</code>
+                    <code>trace pr {change.number}</code>
                     <button
                       type="button"
                       className="trace-button trace-button--secondary trace-button--small"

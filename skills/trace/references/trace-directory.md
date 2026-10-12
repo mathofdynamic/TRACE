@@ -10,7 +10,7 @@ Canonical initialization is `trace init --yes`. Analysis, reports and explicit P
   analyses/          created lazily by `trace analyze`
   reports/daily/     created by init; files via `trace report daily --yes`
   reports/weekly/    created by init; files via `trace report weekly --yes`
-  pull-requests/     created by init; files via `trace pr --write --yes`
+  pull-requests/     created by init; files via `trace pr <number> --write --yes`
   decisions/ risks/ debt/ indexes/   created by init; no CLI command writes artifacts here today
   state/             created by init
     dashboard.json   non-secret repository binding (written by `trace connect`)

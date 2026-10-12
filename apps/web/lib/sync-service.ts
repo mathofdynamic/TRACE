@@ -5,6 +5,7 @@ import type { d1Schema, TraceD1Database } from '@trace/db';
 import {
   checksum,
   parseArtifact,
+  prBriefAttributionIssue,
   syncArtifactUploadSchema,
   syncManifestSchema,
   type SyncManifest,
@@ -179,6 +180,7 @@ export async function negotiateSync(
         missing: manifest.artifacts
           .filter((artifact) => {
             if (uploaded.has(artifact.id)) return false;
+            if (artifact.type === 'pr_brief') return true;
             const current = reusableById.get(artifact.id);
             return (
               !current || current.path !== artifact.path || current.checksum !== artifact.sha256
@@ -266,7 +268,12 @@ export async function negotiateSync(
   const missing = manifest.artifacts
     .filter((artifact) => {
       const current = currentById.get(artifact.id);
-      return !current || current.path !== artifact.path || current.checksum !== artifact.sha256;
+      return (
+        artifact.type === 'pr_brief' ||
+        !current ||
+        current.path !== artifact.path ||
+        current.checksum !== artifact.sha256
+      );
     })
     .map((artifact) => artifact.id);
   const [activeOperationCount] = await db
@@ -414,6 +421,9 @@ export async function stageSyncArtifact(
     metadata.sync_policy === 'local_only' ||
     metadata.sensitivity === 'confidential' ||
     metadata.sensitivity === 'restricted' ||
+    (metadata.artifact_type === 'pr_brief' &&
+      (metadata.repository.provider !== 'github' ||
+        prBriefAttributionIssue(metadata, manifest.git, manifest.repository))) ||
     !metadata.dashboard
   ) {
     return reject('policy_rejected', 'Artifact metadata is not approved for dashboard sync.');
@@ -506,7 +516,11 @@ export async function completeSync(
       : [];
     const previousById = new Map(previous.map((artifact) => [artifact.artifactId, artifact]));
     const snapshot = manifest.artifacts.map((expected) => {
-      const candidate = uploadById.get(expected.id) ?? previousById.get(expected.id);
+      // PR attribution must be checked against each operation's immutable manifest.
+      // Never reuse a prior brief without passing the upload validation again.
+      const candidate =
+        uploadById.get(expected.id) ??
+        (expected.type === 'pr_brief' ? undefined : previousById.get(expected.id));
       return candidate && candidate.path === expected.path && candidate.checksum === expected.sha256
         ? candidate
         : null;
