@@ -126,6 +126,6 @@ jobs:
             gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$tag" -f "sha=$GITHUB_SHA" > "$RUNNER_TEMP/trace-release-tag.json"
           fi
           gh release upload "$tag" "$archive" release/SHA256SUMS --repo "$GITHUB_REPOSITORY" --clobber
-          cp packages/trace-cli/README.md "$RUNNER_TEMP/trace-cli-release-notes.md"
+          cp "DOC/releases/cli-${version}.md" "$RUNNER_TEMP/trace-cli-release-notes.md"
           printf '\nSource: %s\nWindows/Linux acceptance: https://github.com/%s/actions/runs/%s\n' "$GITHUB_SHA" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" >> "$RUNNER_TEMP/trace-cli-release-notes.md"
           gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "TRACE CLI ${version}" --notes-file "$RUNNER_TEMP/trace-cli-release-notes.md" --draft=false

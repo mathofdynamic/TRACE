@@ -76,6 +76,23 @@ const manifest = JSON.parse(
 );
 assert.equal(manifest.name, '@mathofdynamic/trace-cli');
 assert.equal(manifest.version, expectedVersion);
+assert.equal(manifest.scripts, undefined, 'Release must have no lifecycle/install scripts');
+assert.deepEqual(
+  (
+    await readdir(
+      join(prefix, windows ? 'node_modules' : 'lib/node_modules', '@mathofdynamic/trace-cli'),
+    )
+  ).sort(),
+  ['README.md', 'THIRD_PARTY_NOTICES.txt', 'dist', 'package.json'],
+  'Release must contain only the reviewed bundle, metadata and documentation',
+);
+assert.deepEqual(
+  await readdir(
+    join(prefix, windows ? 'node_modules' : 'lib/node_modules', '@mathofdynamic/trace-cli/dist'),
+  ),
+  ['cli.js'],
+  'Release must contain no native addons or runtime state',
+);
 assert.equal(
   manifest.dependencies,
   undefined,
@@ -90,7 +107,11 @@ assert.deepEqual(JSON.parse(run(executable, ['rules', 'validate', '--json'])), {
   errors: [],
 });
 assert(Array.isArray(JSON.parse(run(executable, ['rules', 'test', '--json'])).rules));
-const requireRulesHelpContract = process.env.TRACE_ACCEPTANCE_PUBLISHED_RELEASE !== 'true';
+// Historical 0.1/0.2 archives predate these contracts; published 0.3+ must pass them.
+const [major, minor] = expectedVersion!.split('.').map(Number);
+const requireCurrentContract =
+  major! > 0 || minor! >= 3 || process.env.TRACE_ACCEPTANCE_PUBLISHED_RELEASE !== 'true';
+const requireRulesHelpContract = requireCurrentContract;
 if (requireRulesHelpContract) {
   const rulesUsage = 'rules list|effective|validate|test';
   assert.deepEqual(JSON.parse(run(executable, ['rules', '--help', '--json'])), {
@@ -142,6 +163,7 @@ const analysis = JSON.parse(run(executable, ['analyze', '--json']));
 assert.equal(analysis.analysis.provenance.sourceCodeSentToProvider, false);
 const artifact = await readFile(analysis.artifact.path, 'utf8');
 assert(artifact.includes(run('git', ['rev-parse', 'HEAD'])));
+assert(artifact.includes(`trace-cli/${expectedVersion}`));
 assert(artifact.includes('Working tree: **clean**'));
 assert(artifact.includes('Source code sent to a model: **no**'));
 assert.deepEqual(JSON.parse(run(executable, ['validate', '--json'])), []);
@@ -172,8 +194,8 @@ if (supportsPeriodReports) {
   }
   assert.deepEqual(JSON.parse(run(executable, ['validate', '--json'])), []);
 }
-// Existing published archives predate the new PR projection. Candidates must pass it.
-const requirePrProjection = process.env.TRACE_ACCEPTANCE_PUBLISHED_RELEASE !== 'true';
+// Both candidates and published 0.3+ archives must include the PR projection.
+const requirePrProjection = requireCurrentContract;
 const pr = JSON.parse(run(executable, ['pr', '7', '--write', '--yes', '--json']));
 assert.equal(pr.artifact.dryRun, false);
 const prContent = await readFile(pr.artifact.path, 'utf8');

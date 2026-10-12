@@ -148,6 +148,10 @@ describe('TRACE Skill drift checks', () => {
   it('declares the CLI, schema, and sync protocol versions it targets', async () => {
     const skill = await read('SKILL.md');
     const version = String((await main(['--version'])).value).replace('trace ', '');
+    const manifest = JSON.parse(
+      await readFile(new URL('../package.json', import.meta.url), 'utf8'),
+    );
+    expect(version).toBe(manifest.version);
     expect(skill).toContain(`CLI \`${version}\``);
     expect(skill).toContain(`artifact schema \`${schemaVersion}\``);
     expect(skill).toContain(`sync protocol \`${syncProtocolVersion}\``);

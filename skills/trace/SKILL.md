@@ -5,7 +5,7 @@ description: Operate a TRACE-enabled repository through the `trace` CLI - initia
 
 # Working with TRACE
 
-Written against: TRACE CLI `0.2.0`, artifact schema `0.1`, sync protocol `0.1`.
+Written against: TRACE CLI `0.3.0`, artifact schema `0.1`, sync protocol `0.1`.
 Check with `trace --version` and `.trace/schema-version`. If versions differ, review the installed CLI contract before applying these instructions; do not guess.
 
 ## Purpose
@@ -82,7 +82,7 @@ trace analyze --dry-run --json    # preview only; no files or directories create
 trace validate --json
 ```
 
-Only use AI review when the installed help explicitly describes `TRACE_AI_DATA_POLICY=metadata-only`; the older published CLI 0.2.0 archive predates this contract. A version number alone is insufficient. Use a reviewed source/candidate build or a later release carrying this fix.
+Only use AI review when the installed help explicitly describes `TRACE_AI_DATA_POLICY=metadata-only`; the older published CLI 0.2.0 archive predates this contract. A version number alone is insufficient. Use CLI 0.3.0 or a reviewed source build carrying this contract.
 
 `trace analyze --with-ai` performs a real, explicitly configured metadata-only model review. It requires `TRACE_AI_PROVIDER=openai-compatible`, `TRACE_AI_BASE_URL` (HTTPS), `TRACE_AI_MODEL`, `TRACE_AI_API_KEY` (secure process environment, never `.trace`) and `TRACE_AI_DATA_POLICY=metadata-only`. No vendor/model/endpoint is chosen by the CLI. Missing configuration returns exit 2; provider failures return exit 1 with safe actionable codes and never substitute fixture output. Only aggregate counts, working-tree state and opaque evidence IDs/kinds go directly to the configured endpoint; no source, diffs, paths, symbols, commit messages or repository identity. This is not source-level implementation review. TRACE Cloud receives only validated source-free summaries/provenance; both sync privacy flags remain false. Do not enable it without task authorization for that configured provider and metadata boundary. Other CLI commands remain deterministic and reject `--with-ai`. See `references/safety.md` and `DOC/ai-analysis.md` in the repository.
 

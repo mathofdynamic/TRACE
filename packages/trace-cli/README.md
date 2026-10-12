@@ -5,7 +5,7 @@ source-free artifacts. Install Node.js 22.14+ and Git, then install the versione
 package from the official GitHub release (no monorepo build or pnpm required):
 
 ```text
-npm install --global https://github.com/mathofdynamic/TRACE/releases/download/cli-v0.2.0/mathofdynamic-trace-cli-0.2.0.tgz
+npm install --global https://github.com/mathofdynamic/TRACE/releases/download/cli-v0.3.0/mathofdynamic-trace-cli-0.3.0.tgz
 trace --version
 ```
 
@@ -74,7 +74,11 @@ See [Engineering reports](../../DOC/engineering-reports.md) for data coverage,
 clean-input publication guards and the dashboard document/provenance contract.
 
 
-## Release notes — 0.2.0
+## Release notes — 0.3.0
+
+See [the 0.3.0 release notes](https://github.com/mathofdynamic/TRACE/releases/tag/cli-v0.3.0) for the complete release contract.
+
+## Historical release notes — 0.2.0
 
 - Daily and trailing seven-day engineering reports aggregate committed period
   history, changed areas and detectable package version transitions.
@@ -94,7 +98,7 @@ clean-input publication guards and the dashboard document/provenance contract.
 
 ## Explicit AI metadata review
 
-This contract applies to source/candidate builds carrying the #70 fix. The existing published CLI 0.2.0 archive predates it; do not treat its legacy AI flag as a real provider feature. Verify installed help describes `TRACE_AI_DATA_POLICY=metadata-only`, or use a reviewed source build until a release containing this contract is published.
+CLI 0.3.0 includes this contract. The historical CLI 0.2.0 archive predates it; do not treat its legacy AI flag as a real provider feature. Verify installed help describes `TRACE_AI_DATA_POLICY=metadata-only`.
 
 `trace analyze --with-ai` uses the existing OpenAI-compatible adapter with no CLI vendor, endpoint or model defaults. Set these process environment variables through secure environment injection:
 
